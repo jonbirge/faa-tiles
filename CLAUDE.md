@@ -25,6 +25,13 @@ and is the input to all tiling.
 - Use `pwsh.exe` not `powershell.exe` (see the user's global CLAUDE.md).
 - `.venv/Scripts/python.exe` — note `Scripts/`, not `bin/`.
 
+**The user tests in their own browser, continuously, while you work.** They are
+the live verification loop. Make the change, say what to look at, stop. Do not
+stage a browser-pane reproduction to confirm something renders — they will see it
+first. Reserve the pane for what they cannot easily observe: numeric
+measurements, instrumented counters, palette validation, or chasing a specific
+failure they reported.
+
 **Do not run the full test suite on your own initiative.** Not before a commit,
 not after a refactor, not "because it touched a lot of files". *Offering* is
 welcome — say when you think a full run is worth it and let the user call it.
