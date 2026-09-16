@@ -132,8 +132,8 @@ It serves correct MIME types for `.webp`/`.png`/`.jpg`, sends `no-cache` for
 `index.html` and `metadata.json` so a re-tile is visible on reload, and logs
 only failed requests rather than every one of thousands of tiles.
 
-Under Claude Code, `.claude/launch.json` defines `tileset` (port 8000) and
-`tileset-colorado` (port 8001) so the browser pane can start either directly.
+Under Claude Code, `.claude/launch.json` defines `tileset` on port 8000 so the
+browser pane can start it directly.
 
 ### Choosing the zoom range
 
@@ -161,6 +161,9 @@ nearest tile edge.
 ```bash
 .venv/Scripts/cesiumtiles chart.tif ./colorado --bbox -109.06 36.99 -102.04 41.00
 ```
+
+Tilesets are large; treat any you make this way as scratch and delete them when
+you are done.
 
 Use `--bbox-crs` to give the rectangle in some other frame, e.g.
 `--bbox-crs EPSG:3857` with metre coordinates, or **`--bbox-crs source`** for the
