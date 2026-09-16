@@ -11,8 +11,12 @@ Useful variants:
     # See what would happen without writing 280 MB of tiles.
     .venv/Scripts/python scripts/build_vfr_tileset.py --dry-run
 
-    # A quarter of the size, at the cost of some ringing on fine linework.
-    .venv/Scripts/python scripts/build_vfr_tileset.py --lossy
+    # Lossless tiles, roughly 4x the size. The default is WebP q95, which was
+    # reviewed on the real chart and showed no discernible ringing.
+    .venv/Scripts/python scripts/build_vfr_tileset.py --lossless
+
+    # Skip the model entirely and tile the chart at its native z9.
+    .venv/Scripts/python scripts/build_vfr_tileset.py --no-upsample
 
     # Quick iteration: stop at zoom 7 (about 90 seconds of work, not 60).
     .venv/Scripts/python scripts/build_vfr_tileset.py --max-zoom 7 --out tileset-draft
@@ -27,7 +31,10 @@ The pipeline has three stages. Stage 1 is skipped if its output already exists.
                   pixels but no georeferencing.
   2. neatline     Work out where the map graphic actually ends, so the printed
                   margin, border and scale bar do not get pasted onto the globe.
-  3. cesiumtiles  Cut the cropped chart into a z/x/y pyramid plus a viewer.
+  3. upsample     Double the resolution with Real-CUGAN, which raises the
+                  native zoom from z9 to z10. Chosen over APISR and waifu2x on
+                  a side-by-side of all three over the whole chart.
+  4. cesiumtiles  Cut the result into a z/x/y pyramid.
 """
 
 from __future__ import annotations
@@ -39,8 +46,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from cesiumtiles import build_tileset  # noqa: E402
 from geotransfer import copy_geo_metadata  # noqa: E402
+from upsample import DEFAULT_MODEL, load_model, upsample_raster  # noqa: E402
 
 # --------------------------------------------------------------------------
 # Inputs. Both come from the FAA's VFR Wall Planning Chart product; the RGB
@@ -76,6 +86,7 @@ NEATLINE_LCC = (-2065471.156, -1353550.704, 2560432.418, 1453780.3)  # W, S, E, 
 
 TITLE = "U.S. VFR Wall Planning Chart"
 DEFAULT_OUT = REPO / "tileset"
+UPSAMPLED_DIR = REPO / "upsampled"
 
 
 def detect_neatline(source: Path, run_limit: int = 150, step: int = 8, decimation: int = 8):
@@ -171,13 +182,21 @@ def parse_args(argv=None):
                         "stored constant; do this for a new chart edition")
     p.add_argument("--no-crop", action="store_true",
                    help="tile the whole sheet, printed margin and scale bar included")
-    p.add_argument("--lossy", action="store_true",
-                   help="lossy WebP: roughly a quarter the size, but lossy "
-                        "compression rings around hairlines and text, which is "
-                        "most of what an aeronautical chart is made of")
+    p.add_argument("--no-upsample", action="store_true",
+                   help="tile the chart at its native resolution, skipping the "
+                        "super-resolution stage and topping out at z9")
+    p.add_argument("--model", default=str(DEFAULT_MODEL),
+                   help="upsampling weights, or 'waifu2x' (default: Real-CUGAN)")
+    p.add_argument("--keep-upsampled", action="store_true",
+                   help="keep the intermediate GeoTIFF; it is ~1 GB and nothing "
+                        "downstream needs it")
+    p.add_argument("--lossless", action="store_true",
+                   help="lossless WebP, roughly 4x the size. The default is q95, "
+                        "which was reviewed on the real chart and showed no "
+                        "discernible ringing even on hairlines and type")
     p.add_argument("--quality", type=int, default=95,
-                   help="quality for --lossy, 1-100 (default: %(default)s). "
-                        "95 is visually close; below about 90 the linework suffers")
+                   help="lossy WebP quality, 1-100 (default: %(default)s). "
+                        "Below about 90 the linework starts to suffer")
     p.add_argument("--format", dest="tile_format", default="webp",
                    choices=["webp", "png", "jpeg"],
                    help="webp is ~25%% smaller than png at the same fidelity; "
@@ -210,7 +229,7 @@ def main(argv=None) -> int:
     args = parse_args(argv)
 
     # -- stage 1: georeference the RGB render -----------------------------
-    print("[1/3] georeferencing")
+    print("[1/4] georeferencing")
     if COMBINED.exists():
         print(f"  {COMBINED.name} already exists, reusing it")
     else:
@@ -224,7 +243,7 @@ def main(argv=None) -> int:
         print(f"  wrote {COMBINED.name}")
 
     # -- stage 2: decide the crop -----------------------------------------
-    print("[2/3] neatline")
+    print("[2/4] neatline")
     if args.no_crop:
         bbox = None
         print("  cropping disabled; the printed margin will be tiled too")
@@ -235,22 +254,37 @@ def main(argv=None) -> int:
         bbox = NEATLINE_LCC
         print(f"  using stored constant: {bbox}")
 
-    # -- stage 3: tile -----------------------------------------------------
-    print("[3/3] tiling")
+    # -- stage 3: upsample -------------------------------------------------
+    print("[3/4] upsampling")
     if args.dry_run:
         print("  --dry-run: stopping here")
         print(f"    output   {args.out}")
         print(f"    format   {args.tile_format}"
-              f"{' lossy q' + str(args.quality) if args.lossy else ' lossless'}")
+              f"{' lossless' if args.lossless else ' lossy q' + str(args.quality)}")
+        print(f"    upsample {'off' if args.no_upsample else args.model}")
         print(f"    scheme   {args.scheme}")
         print(f"    zooms    {args.min_zoom}..{args.max_zoom or 'auto'}")
         print(f"    bbox     {bbox if bbox else 'none (whole sheet)'}")
         return 0
 
+    # The crop is applied by whichever stage reads the source first, so it is
+    # only ever done once.
+    if args.no_upsample:
+        tiling_source, tiling_bbox = COMBINED, bbox
+        print("  skipped; tiling at native resolution")
+    else:
+        tiling_source = UPSAMPLED_DIR / f"{args.out.name}.tif"
+        upsample_raster(COMBINED, tiling_source, load_model(args.model, args.threads
+                                                            if isinstance(args.threads, int) else 0),
+                        bbox=bbox)
+        tiling_bbox = None
+
+    # -- stage 4: tile -----------------------------------------------------
+    print("[4/4] tiling")
     result = build_tileset(
-        COMBINED,
+        tiling_source,
         args.out,
-        bbox=bbox,
+        bbox=tiling_bbox,
         # The neatline is a rectangle in the chart's own projection, not in
         # lon/lat, so the crop has to be expressed there.
         bbox_crs="source",
@@ -258,7 +292,7 @@ def main(argv=None) -> int:
         min_zoom=args.min_zoom,
         max_zoom=args.max_zoom,
         tile_format=args.tile_format,
-        lossless=not args.lossy,
+        lossless=args.lossless,
         quality=args.quality,
         # lanczos on both the warp and the overview cascade. The alternatives
         # GDAL offers (bilinear, cubic, average, mode, ...) are all available,
@@ -273,6 +307,10 @@ def main(argv=None) -> int:
     )
 
     print()
+    # The intermediate is ~1 GB and nothing downstream reads it.
+    if not args.no_upsample and not args.keep_upsampled:
+        tiling_source.unlink(missing_ok=True)
+
     print(result.summary())
     print()
     print(f"preview it with:  .venv/Scripts/cesiumtiles-serve {args.out}")
