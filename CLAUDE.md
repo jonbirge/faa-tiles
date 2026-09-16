@@ -26,7 +26,7 @@ and is the input to all tiling.
 - `.venv/Scripts/python.exe` — note `Scripts/`, not `bin/`.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 115 tests, ~30s
+.venv/Scripts/python -m pytest                        # 119 tests, ~30s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -64,9 +64,30 @@ costs a lot of context for no gain.
 6. **Max zoom for this chart is 9.** Native 262.48 m/px in LCC warps to ~329.8 m
    in Mercator, which lands at zoom 8.89 → z9. Computed independently by
    `scheme.zoom_for_resolution()` and by GDAL's own auto-detection; they agree.
-   Full pyramid is 5,577 tiles / 285 MB, built in ~62s.
+   Full pyramid is **7,190 tiles / 285 MB**, built in ~56s on 24 cores.
+   (5,577 is the count *with* `--skip-blank`; don't quote that as the default.)
+
+7. **Parallelism is real but caps at ~3.8x on 24 cores.** Measured on a
+   2,455-tile crop: 1 thread 135.1s, 4 threads 64.4s, 8 threads 47.6s, ALL_CPUS
+   35.3s. Only the top zoom parallelises well — z9 alone runs at 141 tiles/s
+   while z0-z8 manages 25 tiles/s, because the overview cascade is inherently
+   sequential. **Converting the source to a tiled COG does not help** (34.6s vs
+   36.0s); the stripped source layout is not the bottleneck, so don't spend time
+   on that idea again.
 
 ## Gotchas that have already bitten
+
+- **`gdal.Run` enables any boolean key that is present, whatever its value.**
+  Passing `skip-blank=False` *enables* skipping. Flags we do not want must be
+  omitted from the options dict entirely. This shipped as a bug once and
+  silently changed the tile count; `tests/test_tiles.py` now guards it.
+- **`gdal raster tile` spawns child `gdal.exe` processes** for large jobs, each
+  handling a tile range. Its input must therefore be openable *by name from
+  another process*: an anonymous `gdal.Warp("", ...)` dataset raises
+  "Source dataset cannot be cloned", and a `/vsimem/` path is invisible to the
+  child. Cropping writes a real temp `.vrt` for this reason — do not "optimise"
+  it back to an in-memory dataset. Small jobs hide the problem by not spawning
+  at all.
 
 - **Writing large Python files via Bash heredocs fails here.** A `cat > f <<'EOF'`
   with a few hundred lines of Python silently produced no file and a bash syntax
@@ -89,8 +110,9 @@ costs a lot of context for no gain.
   `mercantile` at runtime; `mercantile` is a **dev-only** dependency used as an
   independent oracle in `tests/test_scheme.py`, so agreement is evidence.
 - `TilesetResult` counts and bounds are read back **off disk** after a build,
-  never assumed from the request — GDAL skips tiles that miss the source's
-  curved footprint, so requested ≠ produced.
+  never assumed from the request. Requested != produced in both directions:
+  `--skip-blank` omits tiles, and GDAL decides for itself which tiles a source
+  reaches.
 - Reported `bounds` in `metadata.json` snap **outward to whole tiles**, because
   that is what Cesium's imagery `rectangle` needs. `data_bounds` holds the
   unsnapped extent. A test asserting a crop shrinks `bounds` on a given side
@@ -103,8 +125,12 @@ costs a lot of context for no gain.
 
 ## Repo hygiene
 
-- Not a git repo yet. `.gitignore` already excludes `.venv/`, `*.tif`, `*.psd`,
-  `sources/`, `tileset/`, `tileset-*/`.
+- Git repo on `master`, no remote. The user commits to `master` directly; there
+  is no PR workflow here. `.gitignore` excludes `.venv/`, `*.tif`, `*.psd`,
+  `sources/`, `tileset/`, `tileset-*/`, which keeps `.git` at ~130 KB.
+- `core.autocrlf` is on while the files are LF, so git warns on every commit.
+  Harmless solo; a `.gitattributes` would silence it if this ever gains a
+  collaborator or Linux CI.
 - The source rasters are large (62 MB, 250 MB, and a 1.2 GB PSD in `sources/`).
   Never `cat`/`Read` them, and don't let them into a commit.
 - `tileset/` (285 MB) and `tileset-colorado/` (8 MB) are build output; regenerate

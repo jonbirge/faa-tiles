@@ -10,7 +10,9 @@ emitting Cesium-flavoured metadata and a viewer.
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -175,8 +177,25 @@ def _creation_options(driver: str, lossless: bool, quality: int) -> list[str]:
     return []
 
 
-def _crop(dataset, bbox, bbox_crs, source_lonlat):
-    """Clip the source to ``bbox`` exactly, using a warp cutline. Returns a VRT."""
+def _discard(path: str | None) -> None:
+    """Remove a scratch VRT, ignoring a file that is already gone."""
+    if path:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def _crop(dataset, source_path: Path, bbox, bbox_crs, source_lonlat) -> tuple[str, tuple]:
+    """Clip the source to ``bbox`` exactly, using a warp cutline.
+
+    Returns the path of a VRT on disk rather than an open dataset. For large
+    jobs ``gdal raster tile`` parallelises by spawning child ``gdal`` processes,
+    each handling a range of tiles, so its input has to be something a separate
+    process can open: an anonymous dataset fails outright (and silently drops to
+    one thread on jobs small enough not to spawn), and a ``/vsimem`` path is
+    invisible outside this process. A real file keeps cropping fully parallel.
+    """
     west, south, east, north = bbox
     if east <= west or north <= south:
         raise ValueError(
@@ -207,9 +226,11 @@ def _crop(dataset, bbox, bbox_crs, source_lonlat):
         min(requested[2], extent[2]),
         min(requested[3], extent[3]),
     )
+    handle, vrt_path = tempfile.mkstemp(prefix="cesiumtiles-crop-", suffix=".vrt")
+    os.close(handle)
     cropped = gdal.Warp(
-        "",
-        dataset,
+        vrt_path,
+        str(source_path),
         format="VRT",
         outputBounds=clipped,
         dstSRS=dataset.GetProjection(),
@@ -220,7 +241,9 @@ def _crop(dataset, bbox, bbox_crs, source_lonlat):
     )
     if cropped is None:
         raise TileBuildError("cropping the source failed")
-    return cropped, clipped
+    cropped.FlushCache()
+    del cropped  # close the handle; workers reopen the VRT by name
+    return vrt_path, clipped
 
 
 def build_tileset(
@@ -280,15 +303,21 @@ def build_tileset(
 
     source_lonlat = _reproject_bounds(_to_lonlat(dataset.GetProjection()), _source_extent(dataset))
 
+    # gdal raster tile clones its input per worker thread, which it can only do
+    # for a dataset that has a name, so always hand it a path rather than an
+    # open dataset.
     if bbox is None:
-        tiling_input, data_bounds_lonlat = dataset, source_lonlat
+        tiling_input, data_bounds_lonlat = str(source.resolve()), source_lonlat
+        scratch_vrt = None
     else:
-        tiling_input, clipped = _crop(dataset, bbox, bbox_crs, source_lonlat)
+        tiling_input, clipped = _crop(dataset, source.resolve(), bbox, bbox_crs, source_lonlat)
         data_bounds_lonlat = _reproject_bounds(_to_lonlat(dataset.GetProjection()), clipped)
+        scratch_vrt = tiling_input
 
-    native = _native_zoom(tiling_input, grid)
+    native = _native_zoom(gdal.Open(tiling_input), grid)
     resolved_max = native if max_zoom is None else max_zoom
     if min_zoom > resolved_max:
+        _discard(scratch_vrt)
         raise ValueError(f"min_zoom ({min_zoom}) exceeds max_zoom ({resolved_max})")
 
     options = {
@@ -302,14 +331,19 @@ def build_tileset(
         "num-threads": str(threads),
         "creation-option": _creation_options(driver, lossless, quality),
         "webviewer": ["none"],
-        "skip-blank": skip_blank,
-        "resume": resume,
-        "quiet": quiet,
     }
+    # gdal.Run treats any boolean key that is present as enabled, whatever value
+    # it carries, so a flag we do not want must be left out entirely.
+    for flag, wanted in (("skip-blank", skip_blank), ("resume", resume), ("quiet", quiet)):
+        if wanted:
+            options[flag] = True
     # JPEG cannot carry alpha, so the warp must not add one.
     options["no-alpha" if driver == "JPEG" else "add-alpha"] = True
 
-    gdal.Run("raster", "tile", input=tiling_input, output=str(tile_dir), **options)
+    try:
+        gdal.Run("raster", "tile", input=tiling_input, output=str(tile_dir), **options)
+    finally:
+        _discard(scratch_vrt)
 
     per_zoom, total_bytes, extent_by_zoom = _scan_tiles(tile_dir, suffix)
     if not per_zoom:

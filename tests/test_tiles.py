@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -243,3 +244,84 @@ def test_refuses_to_clobber_a_populated_directory(tmp_path, source):
     with pytest.raises(FileExistsError):
         build_tileset(source, out, quiet=True)
     build_tileset(source, out, overwrite=True, quiet=True)
+
+
+# -- parallelism regressions -------------------------------------------
+
+
+def test_boolean_flags_are_omitted_when_false(tmp_path, source, monkeypatch):
+    """gdal.Run enables any boolean key that is present, whatever its value.
+
+    Passing skip-blank=False therefore used to *enable* skipping, silently
+    contradicting the default and leaving holes the viewer would 404 on.
+    """
+    from osgeo import gdal
+
+    seen = {}
+    real = gdal.Run
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(gdal, "Run", spy)
+    build_tileset(source, tmp_path / "out", quiet=False, max_zoom=4)
+
+    assert "skip-blank" not in seen
+    assert "resume" not in seen
+    assert "quiet" not in seen
+    assert seen["add-alpha"] is True
+
+
+def test_boolean_flags_are_passed_when_true(tmp_path, source, monkeypatch):
+    from osgeo import gdal
+
+    seen = {}
+    real = gdal.Run
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(gdal, "Run", spy)
+    build_tileset(source, tmp_path / "out", skip_blank=True, quiet=True, max_zoom=4)
+
+    assert seen["skip-blank"] is True
+    assert seen["quiet"] is True
+
+
+def test_cropped_input_is_a_real_file_not_an_anonymous_dataset(tmp_path, source, monkeypatch):
+    """A crop must be tileable in parallel.
+
+    gdal raster tile spawns child processes for large jobs, so its input has to
+    be openable by name from another process. An in-memory or anonymous dataset
+    fails outright on a big job and quietly drops to one thread on a small one.
+    """
+    from osgeo import gdal
+
+    seen = {}
+    real = gdal.Run
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(gdal, "Run", spy)
+    build_tileset(source, tmp_path / "out", bbox=(-105.5, 39.25, -104.5, 40.0), quiet=True)
+
+    handed_over = seen["input"]
+    assert isinstance(handed_over, str), "input must be a path, not a dataset object"
+    assert handed_over.endswith(".vrt")
+    # It must have been a real on-disk file, and cleaned up afterwards.
+    assert not handed_over.startswith("/vsimem"), "a /vsimem path is invisible to child processes"
+    assert not Path(handed_over).exists(), "scratch VRT should be removed after the build"
+
+
+def test_uncropped_input_is_also_a_path(tmp_path, source, monkeypatch):
+    from osgeo import gdal
+
+    seen = {}
+    real = gdal.Run
+    monkeypatch.setattr(gdal, "Run", lambda *a, **k: (seen.update(k), real(*a, **k))[1])
+    build_tileset(source, tmp_path / "out", quiet=True, max_zoom=4)
+    assert seen["input"] == str(Path(source).resolve())

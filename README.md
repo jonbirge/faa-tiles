@@ -113,10 +113,12 @@ zooming past it in Cesium just magnifies the top level, which is expected.
 
 `--min-zoom` defaults to 0 so Cesium always has a complete pyramid to descend.
 
-Only tiles that actually overlap the source are written — the chart's LCC
-footprint is curved in Web Mercator, so the corners of its bounding rectangle
-are skipped. For the full chart that is 5,577 tiles rather than the 7,190 a
-naive bounding-box count would predict.
+Every tile in the covered rectangle is written by default, including the fully
+transparent ones along the chart's curved Lambert Conformal Conic edges — 7,190
+for the full chart. Blank tiles cost almost nothing (the pyramid is 285.0 MB
+either way), and keeping them means Cesium never requests a URL that 404s.
+`--skip-blank` drops the count to 5,577 if you would rather have the smaller
+tree and can tolerate the misses.
 
 ### Cropping
 
@@ -150,7 +152,7 @@ for its imagery rectangle.
 
 ### Format sizes
 
-Measured on real chart tiles, extrapolated to the full 5,577-tile pyramid:
+Measured on real chart tiles, extrapolated to the full 7,190-tile pyramid:
 
 | Format | KB/tile | Full tileset |
 | --- | --- | --- |
@@ -158,6 +160,27 @@ Measured on real chart tiles, extrapolated to the full 5,577-tile pyramid:
 | WebP lossless (default) | 49.9 | **285 MB** |
 | WebP q95 | 11.4 | ~64 MB |
 | WebP q90 | 8.6 | ~48 MB |
+
+### Parallelism
+
+Tiling runs in parallel: GDAL spawns worker processes, each taking a range of
+tiles. Measured on a 24-core machine over a 2,455-tile western-US crop:
+
+| Threads | Wall time | Speed-up |
+| --- | --- | --- |
+| 1 | 135.1 s | 1.0x |
+| 4 | 64.4 s | 2.1x |
+| 8 | 47.6 s | 2.8x |
+| `ALL_CPUS` (24) | 35.3 s | 3.8x |
+
+Scaling flattens well before 24 cores because only the top zoom parallelises
+well. Splitting that same job by level: **z9 alone is 12.8 s for 1,804 tiles**
+(141 tiles/s), while **z0-z8 is 25.9 s for 651 tiles** (25 tiles/s). The
+overview cascade is inherently sequential — each level is built from the one
+below — so it dominates wall time and caps the overall speed-up.
+
+Converting the source to a tiled COG with overviews does **not** help (34.6 s
+vs 36.0 s measured); the stripped source layout is not the bottleneck.
 
 ### How it works
 
