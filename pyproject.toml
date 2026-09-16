@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geotransfer"
+version = "0.1.0"
+description = "Copy GeoTIFF georeferencing onto a plain TIFF of identical size"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["rasterio>=1.5,<2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+geotransfer = "geotransfer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+# We deliberately open files that lack georeferencing; that warning is expected.
+filterwarnings = ["ignore::rasterio.errors.NotGeoreferencedWarning"]
