@@ -26,7 +26,7 @@ instead:
    margin. Erring inward costs a kilometre of map that a neighbouring sheet
    overlaps anyway; erring outward pastes a strip of collar onto the globe.
 
-The four curves bound a pixel polygon, written to ``scripts/sectional_areas.json``
+The four curves bound a pixel polygon, written to ``scripts/sectionals_areas.json``
 as that chart's ``include``. Hand-authored keys are never touched: ``exclude``
 polygons (enlarged insets drawn over the map), ``open_sides`` (sides to leave
 unfitted because an inset near them fools the fit), and ``"manual": true``, which
@@ -54,8 +54,12 @@ from cesiumtiles.mosaic import MapArea, MosaicSource, _map_points, prepare_sourc
 gdal.UseExceptions()
 ogr.UseExceptions()
 
-SECTIONALS = REPO / "sectionals"
-MANIFEST = Path(__file__).resolve().parent / "sectional_areas.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from chart_series import series  # noqa: E402
+
+SECTIONAL_SERIES = series("sectionals")
+SECTIONALS = SECTIONAL_SERIES.directory
+MANIFEST = SECTIONAL_SERIES.manifest
 
 DECIMATE = 4          # measure on a 1/4-scale image
 WINDOWS = 48          # bands per side
@@ -294,7 +298,8 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.exists() else {}
-    names = args.charts or sorted(p.name for p in SECTIONALS.glob("*.tif"))
+    names = args.charts or sorted(p.name for p in SECTIONALS.glob("*.tif")
+                                  if SECTIONAL_SERIES.wants_tif(p.name))
 
     if not args.no_detect:
         for name in names:
@@ -310,7 +315,7 @@ def main(argv=None) -> int:
                 entry["include"] = [{"pixel": points}]
             print(f"{name}: " + ("; ".join(notes) or "no collar found"), flush=True)
         ordered = {k: manifest[k] for k in sorted(manifest)}
-        MANIFEST.write_text(json.dumps(ordered, indent=1) + "\n", encoding="utf-8")
+        MANIFEST.write_text(json.dumps(ordered, indent=1) + "\n", encoding="utf-8", newline="\n")
         print(f"wrote {MANIFEST}")
 
     print(f"\npaper just inside each edge (flagged above {PAPER_WARNING:.0%}):")

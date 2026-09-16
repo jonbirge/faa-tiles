@@ -19,7 +19,8 @@ The data: the FAA U.S. VFR Wall Planning Chart. `vfr_geotiff_original.tif` is
 palette-indexed but georeferenced; `vfr_wall_planning.tif` is RGB but has no geo
 metadata; `vfr_wall_planning_geo.tif` is the `geotransfer` output combining them
 and is the input to all tiling. The sectional series lives in `sectionals/`
-(55 GeoTIFFs, from `scripts/fetch_sectionals.py`).
+(55 GeoTIFFs), and the IFR low enroute series in `ifr-low/` (37 GeoTIFFs),
+both from `scripts/fetch_charts.py SERIES`.
 
 ## Environment
 
@@ -267,17 +268,22 @@ for it gone; the document `<title>` stays.
   Resource Timing sizes as zero. Those are counted as `opaque` and the byte
   totals shown as `n/a (cross-origin)`, never as zero.
 
-## Sectional mosaic
+## Chart series mosaics
 
-`fetch_sectionals.py` -> `detect_sectional_areas.py` -> `build_sectional_tileset.py`.
+`fetch_charts.py SERIES` -> `detect_sectional_areas.py` or `detect_ifr_areas.py`
+-> `build_chart_tileset.py SERIES`. **`scripts/chart_series.py` is the one place a
+series is described**: its index URL, which zips and GeoTIFFs it wants (regexes),
+exclusions, download directory, manifest (`scripts/<series>_areas.json`) and
+tileset directory. Add a series there, not by copying scripts.
+
+The sectionals came first, and the notes below are mostly theirs.
 Decided with the user, with measurements: **z12** (the "finest pixel" rule gives
 z13, driven only by the 1:250k Honolulu inset, at 4x the tiles), **WebP q90**,
 **overlaps by file name, later on top** (an acknowledged placeholder), map areas
-**detected once, reviewed, committed** as `scripts/sectional_areas.json`, and
+**detected once, reviewed, committed** as `scripts/sectionals_areas.json`, and
 lower zooms **box-filtered from children**. **Guam and Samoa are excluded**
-(the user's call): `EXCLUDE` in `fetch_sectionals.py` names the Mariana and
-Samoan Islands inset GeoTIFFs, which are not extracted and which the build also
-skips. Exclusion is per GeoTIFF, not per zip, because both ship inside
+(the user's call): the series' `exclude` names the Mariana and Samoan Islands
+inset GeoTIFFs, which are not extracted and which the build also skips. Exclusion is per GeoTIFF, not per zip, because both ship inside
 `Hawaiian_Islands.zip` with Hawaiian Islands and Honolulu.
 
 - **Per tile, not VRT + `gdal raster tile`.** Each z12 tile warps only the sheets
@@ -331,6 +337,16 @@ Detection lessons, each learnt from a wrong outline:
   2% and silently dropped a wedge of ocean off Big Sur. The user spotted it.
   Los Angeles is now hand-traced and `manual`. When a sheet's collar is not a
   plain band on each side, trace it rather than tune the fitter.
+- **IFR low (`ifr-low`) is CONUS L-01 to L-36 only, no insets** (the user's
+  call). L-06 ships as two halves, `ENR_L06N`/`ENR_L06S`, which the first
+  pattern missed: the fetch reported 36 ok while one zip extracted nothing.
+  Compare sheet counts against zip counts after a fetch.
+- **IFR map areas come from the frame rule, not the collar.** The map is mostly
+  white, so `detect_sectional_areas.py` cannot work on them. The frame is a
+  fully dark run 6-10 px thick across the middle of the sheet (L-12's is 6;
+  legend column rules are 5), and L-34's right rule reads only 0.94 dark
+  because something crosses it. L-23 frames a Wilmington-Bimini inset strip
+  beside its map; the widest framed panel is taken and the other dropped.
 - **The Phoenix GeoTIFF has a blank white row through its map** near 35.6 N.
   That is the FAA's file, not the mask; it shows because Phoenix sorts after Las
   Vegas. A better overlap rule is the fix, not a mask.
@@ -361,5 +377,5 @@ Detection lessons, each learnt from a wrong outline:
 - **Do not leave extra tilesets lying around.** The user asked for this: build a
   scratch tileset if a test needs one, then delete it in the same turn. Only
   `tileset/` should persist. (An earlier `tileset-colorado/` demo outlived its
-  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~5.7 GB, 508k tiles) is
-  the other real product and is expected to persist too.
+  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~5.7 GB, 508k tiles) and `tileset-ifr-low/` (~0.9 GB, 239k tiles) are
+  the other real products and are expected to persist too.

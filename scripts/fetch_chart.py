@@ -1,15 +1,15 @@
-"""Download one FAA sectional zip and extract the GeoTIFF(s) from it.
+"""Download one FAA chart zip and extract the GeoTIFF(s) a series wants from it.
 
-    python scripts/fetch_sectional.py URL OUT_DIR [--exclude NAME ...]
+    python scripts/fetch_chart.py SERIES URL [--out DIR]
 
-This is the worker half of ``fetch_sectionals.py``, which runs a team of these
-in parallel. It stands alone so a single chart can be re-fetched by hand.
+This is the worker half of ``fetch_charts.py``, which runs a team of these in
+parallel. It stands alone so a single chart can be re-fetched by hand.
 
-The zip is streamed to a temp file in ``OUT_DIR`` (same drive, so the final
-rename is atomic), every ``.tif`` member is copied out with its folder path
-dropped, and the zip is deleted. Each TIFF is written as ``.part`` and renamed
-only once complete, so an interrupted run never leaves a truncated chart that
-looks finished. Standard library only.
+The zip is streamed to a temp file in the output directory (same drive, so the
+final rename is atomic), the ``.tif`` members the series keeps are copied out
+with their folder path dropped, and the zip is deleted. Each TIFF is written as
+``.part`` and renamed only once complete, so an interrupted run never leaves a
+truncated chart that looks finished. Standard library only.
 """
 
 from __future__ import annotations
@@ -23,6 +23,9 @@ import time
 import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from chart_series import Series, series  # noqa: E402
 
 ATTEMPTS = 3
 TIMEOUT_S = 60
@@ -48,9 +51,8 @@ def download(url: str, dest: Path) -> int:
     raise AssertionError("unreachable")
 
 
-def extract_tifs(zip_path: Path, out_dir: Path, exclude=()) -> list[Path]:
-    """Copy every .tif member of ``zip_path`` flat into ``out_dir``, except
-    those whose file name is in ``exclude``."""
+def extract_tifs(zip_path: Path, out_dir: Path, chart_series: Series) -> list[Path]:
+    """Copy the .tif members ``chart_series`` wants flat into ``out_dir``."""
     written, seen = [], 0
     with zipfile.ZipFile(zip_path) as zf:
         for info in zf.infolist():
@@ -58,7 +60,7 @@ def extract_tifs(zip_path: Path, out_dir: Path, exclude=()) -> list[Path]:
             if info.is_dir() or not name.lower().endswith((".tif", ".tiff")):
                 continue
             seen += 1
-            if name in exclude:
+            if not chart_series.wants_tif(name):
                 continue
             target = out_dir / name
             part = target.with_name(target.name + ".part")
@@ -71,36 +73,36 @@ def extract_tifs(zip_path: Path, out_dir: Path, exclude=()) -> list[Path]:
     return written
 
 
-def fetch(url: str, out_dir: Path, exclude=()) -> list[Path]:
+def fetch(url: str, out_dir: Path, chart_series: Series) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=".", suffix=".zip", dir=out_dir)
     os.close(fd)
     zip_path = Path(tmp)
     try:
         download(url, zip_path)
-        tifs = extract_tifs(zip_path, out_dir, exclude)
+        return extract_tifs(zip_path, out_dir, chart_series)
     finally:
         zip_path.unlink(missing_ok=True)
-    return tifs
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("series", help="chart series name, as in chart_series.py")
     ap.add_argument("url")
-    ap.add_argument("out_dir", type=Path)
-    ap.add_argument("--exclude", nargs="*", default=[], metavar="NAME",
-                    help="GeoTIFF file names inside the zip to skip")
+    ap.add_argument("--out", type=Path, help="output directory (default: the series directory)")
     args = ap.parse_args(argv)
+    chart_series = series(args.series)
+    out = args.out or chart_series.directory
 
     zip_name = PurePosixPath(args.url).name
     start = time.monotonic()
     try:
-        tifs = fetch(args.url, args.out_dir, set(args.exclude))
+        tifs = fetch(args.url, out, chart_series)
     except Exception as exc:
         print(f"FAIL {zip_name}: {exc}", file=sys.stderr, flush=True)
         return 1
     mb = sum(t.stat().st_size for t in tifs) / 1e6
-    names = ", ".join(t.name for t in tifs)
+    names = ", ".join(t.name for t in tifs) or "nothing wanted"
     print(f"ok   {zip_name} -> {names} ({mb:.0f} MB, {time.monotonic() - start:.0f}s)", flush=True)
     return 0
 

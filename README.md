@@ -483,17 +483,18 @@ The sectional series is 55 sheets that overlap at their edges, each in its own
 Lambert Conformal Conic, each inside a printed collar. Three scripts build it:
 
 ```bash
-.venv/Scripts/python scripts/fetch_sectionals.py          # current edition -> ./sectionals
+.venv/Scripts/python scripts/fetch_charts.py sectionals          # current edition -> ./sectionals
 .venv/Scripts/python scripts/detect_sectional_areas.py --sheet review/
-.venv/Scripts/python scripts/build_sectional_tileset.py   # -> ./tileset-sectionals
+.venv/Scripts/python scripts/build_chart_tileset.py sectionals   # -> ./tileset-sectionals
 ```
 
 - **Fetching** picks the newest edition directory that is not in the future
   (the FAA posts the next one early) and runs `WORKERS` downloaders at once.
-  Charts in its `EXCLUDE` set are not extracted, and the build skips them too:
-  currently the Guam (Mariana Islands) and American Samoa insets. They ship in
-  `Hawaiian_Islands.zip` alongside sheets we keep, so that zip still downloads.
-- **Map areas** live in `scripts/sectional_areas.json`, one pixel polygon per
+  Each series in `scripts/chart_series.py` says which zips and GeoTIFFs it
+  wants; anything else is not extracted, and the build skips it too. The
+  sectional series excludes the Guam (Mariana Islands) and American Samoa
+  insets, which ship in `Hawaiian_Islands.zip` alongside sheets we keep.
+- **Map areas** live in `scripts/sectionals_areas.json`, one pixel polygon per
   sheet. They are detected (walk in from each edge until the paper collar
   ends, fit a line or arc, move inward past the worst reading) and then
   reviewed; the script prints how much paper is left just inside each edge and
@@ -523,13 +524,36 @@ Still open:
   tester no longer warns about these, but the requests still happen.
 - **No upsampling** yet; the wall chart's Real-CUGAN stage is not in this path.
 
+### Tile the IFR low enroute set — *done*
+
+The CONUS low enroute charts, L-01 to L-36, build the same way:
+
+```bash
+.venv/Scripts/python scripts/fetch_charts.py ifr-low          # -> ./ifr-low
+.venv/Scripts/python scripts/detect_ifr_areas.py --sheet review/
+.venv/Scripts/python scripts/build_chart_tileset.py ifr-low   # -> ./tileset-ifr-low
+```
+
+- **Scope:** only `ENR_L01`-`ENR_L36`. Alaska, Pacific and area charts are left
+  out, and so are the inset TIFFs some zips carry. L-06 is published as two
+  halves, `ENR_L06N` and `ENR_L06S`, so the series has 37 sheets.
+- **Map areas are found differently.** An IFR chart's map is mostly white, so
+  the sectional detector's "walk in until the paper ends" has nothing to find.
+  Instead every sheet frames its map with a heavy black rule, 6-10 px, while
+  legend tables use 1-5 px rules; the map is the rectangle just inside the
+  thick rules on each axis. Where a sheet frames a second panel beside the map
+  (L-23's Wilmington-Bimini inset strip), the widest panel is the map and the
+  other is reported and dropped.
+- **Same engine and choices** as the sectionals: z12, WebP q90, overlaps by
+  file name.
+
 ### Automate fetching and building every current FAA chart
 
 The FAA republishes on a **56-day cycle**, so this should be a scheduled job
 rather than something run by hand:
 
 - Fetch the current edition list, download the VFR and IFR products, and unpack
-  the GeoTIFFs. *Done for sectionals* (`scripts/fetch_sectionals.py`).
+  the GeoTIFFs. *Done for sectionals and IFR low* (`scripts/fetch_charts.py`).
 - Detect each sheet's neatline, upsample, mosaic where a series overlaps, and
   tile — the pipeline above, driven by a manifest rather than constants.
 - Track edition dates so an unchanged chart is skipped instead of rebuilt.
