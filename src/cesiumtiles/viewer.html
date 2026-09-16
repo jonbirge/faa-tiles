@@ -35,6 +35,28 @@
   #panel button:hover { background: rgba(255, 255, 255, 0.18); }
   #panel button:active { background: rgba(255, 255, 255, 0.26); }
   #source { width: 100%; box-sizing: border-box; }
+  #source option { background: #1d2026; color: #e8e8e8; }
+  #connect {
+    font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color: #e8e8e8; background: #1d2026; width: 420px;
+    border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 14px 16px;
+  }
+  #connect::backdrop { background: rgba(0, 0, 0, 0.45); }
+  #connect h3 {
+    margin: 0 0 10px; font-size: 10px; font-weight: 600; color: #7f8794;
+    text-transform: uppercase; letter-spacing: 0.09em;
+  }
+  #connect button, #connect input, #connect select {
+    color: #e8e8e8; background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px;
+    padding: 5px; font: inherit;
+  }
+  #connect select option { background: #1d2026; }
+  #connect-url { width: 100%; box-sizing: border-box; }
+  #connect .hint { color: #8d95a0; margin: 6px 0 0; }
+  #connect .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  #connect .actions button { min-width: 84px; cursor: pointer; }
+  #connect-error { color: #ff8b8b; margin-top: 8px; display: none; }
   .controls {
     display: grid; grid-template-columns: auto 1fr auto 1fr;
     gap: 4px 6px; align-items: center; margin-top: 6px;
@@ -53,20 +75,33 @@
 </head>
 <body>
 <div id="cesiumContainer"></div>
+<dialog id="connect">
+  <form id="connect-form" method="dialog">
+    <h3>Connect to URL</h3>
+    <input id="connect-url" spellcheck="false" autocomplete="off"
+           placeholder="https://host/tileset  or  https://host/{z}/{x}/{y}.png">
+    <p class="hint">A tileset directory holding metadata.json, or a {z}/{x}/{y}
+      template. A template says nothing about itself, so scheme and tile size
+      come from here and zooms are assumed.</p>
+    <div class="controls">
+      <label for="scheme">scheme</label>
+      <select id="scheme">
+        <option value="mercator">mercator</option>
+        <option value="geographic">geographic</option>
+      </select>
+      <label for="tilesize">px</label>
+      <input id="tilesize" type="number" min="32" max="2048" step="1" value="256">
+    </div>
+    <div id="connect-error"></div>
+    <div class="actions">
+      <button type="button" id="connect-cancel">Cancel</button>
+      <button type="submit" id="connect-go">Connect</button>
+    </div>
+  </form>
+</dialog>
 <div id="panel">
   <h2>Source</h2>
-  <input id="source" spellcheck="false"
-         placeholder="tileset directory, or a {z}/{x}/{y} URL">
-  <div class="controls">
-    <label for="scheme">scheme</label>
-    <select id="scheme">
-      <option value="mercator">mercator</option>
-      <option value="geographic">geographic</option>
-    </select>
-    <label for="tilesize">px</label>
-    <input id="tilesize" type="number" min="32" max="2048" step="1">
-  </div>
-  <button id="load">Load source</button>
+  <select id="source" aria-label="tileset"></select>
   <div id="note"></div>
   <div id="error"></div>
 
@@ -91,9 +126,9 @@
     </select>
     <label for="msaa">MSAA</label>
     <select id="msaa">
-      <option value="1">off</option>
+      <option value="1" selected>none</option>
       <option value="2">2x</option>
-      <option value="4" selected>4x</option>
+      <option value="4">4x</option>
       <option value="8">8x</option>
     </select>
   </div>
@@ -449,8 +484,6 @@ function start(initialMeta) {
     }
     window.tilesetMetadata = meta;   // kept current, not captured at startup
     rows(el("facts"), facts(meta));
-    el("scheme").value = meta.scheme;
-    el("tilesize").value = meta.tilesize;
     // Only the first load frames the tileset. Swapping sources deliberately
     // leaves the camera alone, so two tilesets can be compared at a fixed
     // viewpoint -- moving the camera would defeat the comparison.
@@ -474,27 +507,127 @@ function start(initialMeta) {
     box.textContent = message || "";
   }
 
-  el("load").addEventListener("click", async () => {
+  // Resolve and switch to a source. Throws on failure and leaves the current
+  // tileset in place, so a bad pick never blanks the globe.
+  async function loadSpec(spec) {
     problem(""); note("");
-    const spec = el("source").value;
+    const loaded = await resolveSource(spec, {
+      scheme: el("scheme").value,
+      minzoom: TEMPLATE_MIN_ZOOM,
+      maxzoom: TEMPLATE_MAX_ZOOM,
+      tilesize: Number(el("tilesize").value) || 256,
+    });
+    if (loaded.templateOnly) {
+      note("no metadata.json: assuming z" + TEMPLATE_MIN_ZOOM + "-" +
+           TEMPLATE_MAX_ZOOM + " and a whole-world extent");
+    }
+    meta = loaded;
+    meta.source_spec = spec;
+    bust = 0;
+    tracker.reset();
+    rebuild(false);   // keep the viewpoint, so A/B comparison is possible
+  }
+
+  // -- the source menu -------------------------------------------------
+  // Local tilesets come from the server's one-level scan (/tilesets.json);
+  // URLs connected this session are listed after them; a separator and
+  // "Connect to URL..." close the menu. It is rebuilt rather than patched, so
+  // the order is always local, connected, separator, connect.
+  const CONNECT = "\u0000connect";
+  let localSources = [];
+  const connectedSources = [];
+
+  function remember(spec) {
+    if (!localSources.some((s) => s.path === spec) && !connectedSources.includes(spec)) {
+      connectedSources.push(spec);
+    }
+  }
+
+  function renderMenu() {
+    const select = el("source");
+    select.textContent = "";
+    const add = (value, label, disabled) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.disabled = !!disabled;
+      select.appendChild(option);
+    };
+    for (const s of localSources) {
+      add(s.path, s.valid === false
+        ? s.path + "  (unreadable metadata.json)"
+        : s.name + "  \u2014  " + s.path);
+    }
+    for (const url of connectedSources) add(url, url);
+    if (!localSources.length && !connectedSources.length) add("", "no tilesets found", true);
+    add("", "\u2500".repeat(24), true);
+    add(CONNECT, "Connect to URL...");
+    select.value = meta.source_spec || "";
+  }
+
+  async function refreshMenu() {
     try {
-      const loaded = await resolveSource(spec, {
-        scheme: el("scheme").value,
-        minzoom: TEMPLATE_MIN_ZOOM,
-        maxzoom: TEMPLATE_MAX_ZOOM,
-        tilesize: Number(el("tilesize").value) || 256,
-      });
-      if (loaded.templateOnly) {
-        note("no metadata.json: assuming z" + TEMPLATE_MIN_ZOOM + "-" +
-             TEMPLATE_MAX_ZOOM + " and a whole-world extent");
-      }
-      meta = loaded;
-      meta.source_spec = spec;
-      bust = 0;
-      tracker.reset();
-      rebuild(false);   // keep the viewpoint, so A/B comparison is possible
+      const response = await fetch("tilesets.json", { cache: "no-store" });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      localSources = await response.json();
+    } catch (err) {
+      // Not our server, or a saved copy of the page: offer what it opened with.
+      localSources = INITIAL_SOURCE ? [{ path: INITIAL_SOURCE, name: meta.name || INITIAL_SOURCE }] : [];
+    }
+    if (meta.source_spec) remember(meta.source_spec);
+    renderMenu();
+  }
+
+  el("source").addEventListener("change", async () => {
+    const picked = el("source").value;
+    if (picked === CONNECT) {
+      renderMenu();   // show the current source again while the dialog is up
+      openConnect();
+      return;
+    }
+    try {
+      await loadSpec(picked);
     } catch (err) {
       problem(err.message);
+    }
+    renderMenu();
+  });
+
+  function connectError(message) {
+    const box = el("connect-error");
+    box.style.display = message ? "block" : "none";
+    box.textContent = message || "";
+  }
+
+  function openConnect() {
+    connectError("");
+    el("scheme").value = meta.scheme || "mercator";
+    el("tilesize").value = meta.tilesize || 256;
+    el("connect").showModal();
+    el("connect-url").select();
+  }
+
+  el("connect-cancel").addEventListener("click", () => el("connect").close());
+
+  el("connect-form").addEventListener("submit", async (event) => {
+    event.preventDefault();   // stay open until the source actually loads
+    const url = el("connect-url").value.trim();
+    if (!url) { connectError("enter a URL"); return; }
+    const go = el("connect-go");
+    go.disabled = true;
+    go.textContent = "Connecting...";
+    try {
+      await loadSpec(url);
+      remember(url);
+      renderMenu();
+      el("connect").close();
+    } catch (err) {
+      // fetch rejects with a bare TypeError for network and CORS failures alike.
+      connectError(err.message + (err instanceof TypeError
+        ? " -- unreachable, or the server does not allow cross-origin requests" : ""));
+    } finally {
+      go.disabled = false;
+      go.textContent = "Connect";
     }
   });
 
@@ -593,14 +726,16 @@ function start(initialMeta) {
 
   }
 
-  el("source").value = meta.source_spec || INITIAL_SOURCE || ".";
+  meta.source_spec = meta.source_spec || INITIAL_SOURCE || ".";
+  renderMenu();
+  refreshMenu();
   rebuild(true);
   setInterval(refresh, 400);
 
   // Exposed deliberately: makes the page inspectable from the dev console.
   window.viewer = viewer;
   window.tileTracker = tracker;
-  window.loadSource = (spec) => { el("source").value = spec; el("load").click(); };
+  window.loadSource = async (spec) => { await loadSpec(spec); remember(spec); renderMenu(); };
   return viewer;
 }
 
@@ -625,7 +760,7 @@ function fail(message) {
   })
   .then(start)
   .catch((err) => fail(
-    "No tileset found. Enter a directory or a {z}/{x}/{y} URL above. (" + err.message + ")"));
+    "No tileset found to open. Build one, or serve a directory that holds one. (" + err.message + ")"));
 </script>
 </body>
 </html>

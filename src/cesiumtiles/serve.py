@@ -24,33 +24,40 @@ from pathlib import Path
 
 from cesiumtiles.viewer import render_viewer
 
-__all__ = ["TileRequestHandler", "discover_tileset", "serve_tileset", "main"]
+__all__ = ["TileRequestHandler", "discover_tileset", "list_tilesets", "serve_tileset", "main"]
 
 DEFAULT_PORT = 8000
 
 
-def discover_tileset(root: Path) -> tuple[str, dict | None]:
-    """Find what the tile tester should open with, under ``root``.
+def list_tilesets(root: Path) -> list[tuple[str, dict | None]]:
+    """Every tileset at ``root`` or one directory below it, as ``(spec, metadata)``.
 
-    Either ``root`` is itself a tileset, or it is a parent holding several. The
-    returned spec is relative to the web root, which is what the page resolves
-    against.
+    A tileset is a directory holding a ``metadata.json``. The scan is one level
+    deep, not recursive: ``root`` itself, then its immediate subdirectories in
+    name order. Specs are relative to the web root, which is what the page
+    resolves against. Metadata that fails to parse is reported as ``None``
+    rather than hiding the directory, so a half-written tileset still shows up.
     """
-    own = root / "metadata.json"
-    if own.is_file():
+    found = []
+    candidates = [(".", root)] + [
+        ("./" + child.name, child) for child in sorted(p for p in root.iterdir() if p.is_dir())
+    ]
+    for spec, directory in candidates:
+        meta = directory / "metadata.json"
+        if not meta.is_file():
+            continue
         try:
-            return ".", json.loads(own.read_text(encoding="utf-8"))
+            found.append((spec, json.loads(meta.read_text(encoding="utf-8"))))
         except ValueError:
-            return ".", None
+            found.append((spec, None))
+    return found
 
-    for child in sorted(p for p in root.iterdir() if p.is_dir()):
-        meta = child / "metadata.json"
-        if meta.is_file():
-            try:
-                return "./" + child.name, json.loads(meta.read_text(encoding="utf-8"))
-            except ValueError:
-                return "./" + child.name, None
-    return "", None
+
+def discover_tileset(root: Path) -> tuple[str, dict | None]:
+    """Find what the tile tester should open with, under ``root``: the first
+    tileset ``list_tilesets`` finds, or ``("", None)`` if there is none."""
+    found = list_tilesets(root)
+    return found[0] if found else ("", None)
 
 
 class TileRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -64,6 +71,7 @@ class TileRequestHandler(http.server.SimpleHTTPRequestHandler):
     # the browser is enough to see the change.
     viewer_source = ""
     viewer_metadata = None
+    root: Path | None = None
 
     # Explicit, so we do not depend on the machine's registry/mime.types.
     extensions_map = {
@@ -96,6 +104,25 @@ class TileRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):  # noqa: N802 - name fixed by BaseHTTPRequestHandler
+        if self.path.split("?")[0] == "/tilesets.json" and self.root is not None:
+            # Scanned per request, so a tileset built while the server runs
+            # appears in the tester's menu on the next page load.
+            listing = [
+                {
+                    "path": spec,
+                    "name": (meta or {}).get("name") or (Path(spec).name if spec != "." else self.root.name),
+                    "tiles": (meta or {}).get("tiles"),
+                    "valid": meta is not None,
+                }
+                for spec, meta in list_tilesets(self.root)
+            ]
+            body = json.dumps(listing).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path.split("?")[0] in ("/", "/index.html"):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -150,6 +177,7 @@ def serve_tileset(
         "cors": cors,
         "viewer_source": spec,
         "viewer_metadata": metadata,
+        "root": root,
     })
     handler = functools.partial(handler_class, directory=str(root))
 

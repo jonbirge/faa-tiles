@@ -445,8 +445,15 @@ def test_viewer_is_a_general_tile_tester(tmp_path, source):
     result = build_tileset(source, tmp_path / "out", quiet=True)
     html = render_viewer(_meta(result))
 
-    assert 'id="source"' in html and 'id="load"' in html
-    for control in ('id="scheme"', 'id="tilesize"'):
+    # The source is a menu of the served tilesets, not a free-text box.
+    assert '<select id="source"' in html
+    assert '<input id="source"' not in html and 'id="load"' not in html
+    assert 'fetch("tilesets.json"' in html
+    # Its last entry opens a dialog for an external server, which is where the
+    # scheme and tile size for a bare template are chosen.
+    assert "Connect to URL..." in html
+    assert '<dialog id="connect">' in html
+    for control in ('id="connect-url"', 'id="scheme"', 'id="tilesize"'):
         assert control in html
     # No zoom inputs: a directory's metadata.json carries its real range, and a
     # raw template falls back to named constants instead.
@@ -462,6 +469,13 @@ def test_viewer_is_a_general_tile_tester(tmp_path, source):
     # reported as unavailable rather than silently counted as zero bytes.
     assert "opaque" in html
     assert "cross-origin" in html
+
+
+def test_viewer_msaa_defaults_to_none(tmp_path, source):
+    result = build_tileset(source, tmp_path / "out", quiet=True)
+    html = render_viewer(_meta(result))
+    assert '<option value="1" selected>none</option>' in html
+    assert '<option value="4">4x</option>' in html
 
 
 def test_viewer_has_no_title_heading(tmp_path, source):

@@ -9,7 +9,7 @@ import urllib.request
 
 import pytest
 
-from cesiumtiles.serve import serve_tileset
+from cesiumtiles.serve import list_tilesets, serve_tileset
 
 
 def _free_port() -> int:
@@ -105,3 +105,57 @@ def test_reports_a_port_clash_helpfully(tileset):
     finally:
         first.shutdown()
         first.server_close()
+
+
+# -- the tileset menu ----------------------------------------------------
+
+
+def _write_tileset(directory, name=None):
+    directory.mkdir(parents=True)
+    meta = {"minzoom": 0, "maxzoom": 3, "tiles": 1}
+    if name:
+        meta["name"] = name
+    (directory / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
+
+
+def test_lists_tilesets_one_level_deep(tmp_path):
+    _write_tileset(tmp_path / "b_second", "Second")
+    _write_tileset(tmp_path / "a_first", "First")
+    _write_tileset(tmp_path / "group" / "nested")          # two deep: not listed
+    (tmp_path / "not_a_tileset").mkdir()
+    (tmp_path / "broken").mkdir()
+    (tmp_path / "broken" / "metadata.json").write_text("{not json", encoding="utf-8")
+
+    found = list_tilesets(tmp_path)
+    assert [spec for spec, _ in found] == ["./a_first", "./b_second", "./broken"]
+    assert found[0][1]["name"] == "First"
+    assert found[2][1] is None   # listed, so a half-written tileset is visible
+
+
+def test_root_that_is_itself_a_tileset_comes_first(tmp_path):
+    _write_tileset(tmp_path / "root")
+    _write_tileset(tmp_path / "root" / "child")
+    assert [spec for spec, _ in list_tilesets(tmp_path / "root")] == [".", "./child"]
+
+
+def test_serves_the_tileset_menu(tmp_path):
+    _write_tileset(tmp_path / "charts", "Charts")
+    _write_tileset(tmp_path / "unnamed")
+    port = _free_port()
+    srv = serve_tileset(tmp_path, port=port, background=True)
+    try:
+        r = _get(f"http://127.0.0.1:{port}/tilesets.json")
+        assert r.headers["Content-Type"] == "application/json"
+        assert r.headers["Cache-Control"] == "no-cache"
+        listing = json.loads(r.read())
+        assert listing == [
+            {"path": "./charts", "name": "Charts", "tiles": 1, "valid": True},
+            {"path": "./unnamed", "name": "unnamed", "tiles": 1, "valid": True},
+        ]
+        # Scanned per request: a tileset built while serving shows up.
+        _write_tileset(tmp_path / "later", "Later")
+        again = json.loads(_get(f"http://127.0.0.1:{port}/tilesets.json").read())
+        assert [entry["path"] for entry in again] == ["./charts", "./later", "./unnamed"]
+    finally:
+        srv.shutdown()
+        srv.server_close()

@@ -124,13 +124,20 @@ rests on the colour alone.
 ### Pointing it at other tiles
 
 The viewer is a general tile tester, not tied to the tileset it ships beside.
-The **Source** box takes either:
+The **Source** menu lists every tileset the server can see: the served directory
+itself if it holds a `metadata.json`, and each immediate subdirectory that does
+(one level deep, not recursive). Picking one loads it. The server rescans on
+every page load, so a tileset built while it runs appears after a reload.
 
-- a **tileset directory** — `.`, `../other-tileset`, or an absolute URL — which
-  is read through its `metadata.json`, so scheme, zooms, extent and size all
-  come across automatically; or
-- a raw **`{z}/{x}/{y}` URL template**, used as given, with the scheme, tile size
-  and zoom range taken from the controls beside it.
+Below a separator, **Connect to URL...** opens a dialog for anything else:
+
+- a **tileset directory** URL, read through its `metadata.json`, so scheme,
+  zooms, extent and size all come across automatically; or
+- a raw **`{z}/{x}/{y}` URL template**, used as given, with the scheme and tile
+  size taken from the dialog and a z0-18 range assumed.
+
+A URL that loads is added to the menu for the rest of the session; one that
+fails keeps the dialog open with the reason.
 
 Swapping sources **leaves the camera where it is**, so two tilesets can be
 compared at a fixed viewpoint — flip between `./tileset` and `./tileset-lossy`
@@ -138,9 +145,9 @@ and only the imagery changes. If the new tileset does not cover where you are
 looking, the panel says so and **Fly to extent** takes you there.
 
 To compare local tilesets, serve their common parent:
-`.venv/Scripts/cesiumtiles-serve .`. The server finds the tilesets beneath it and
-opens the first; load the others by name. The tester is always at `/`, whichever
-directory you serve.
+`.venv/Scripts/cesiumtiles-serve .`. The server finds the tilesets beneath it,
+opens the first, and lists the rest in the menu. The tester is always at `/`,
+whichever directory you serve.
 
 A remote server must allow cross-origin requests. If it also omits
 `Timing-Allow-Origin`, the browser withholds transfer sizes, and the panel
@@ -195,7 +202,10 @@ server.shutdown()
 
 It serves correct MIME types for `.webp`/`.png`/`.jpg`, sends `no-cache` for
 `index.html` and `metadata.json` so a re-tile is visible on reload, and logs
-only failed requests rather than every one of thousands of tiles.
+only failed requests rather than every one of thousands of tiles. It also
+answers `/tilesets.json` with the tilesets it found, which is what fills the
+tester's menu; on any other server the menu falls back to the tileset the page
+opened with.
 
 Under Claude Code, `.claude/launch.json` defines `tileset` on port 8000 so the
 browser pane can start it directly.
@@ -592,7 +602,7 @@ reconstruction rather than invention.
 .venv/Scripts/python -m pytest
 ```
 
-141 tests, all against small synthetic rasters built in a temp directory — none
+145 tests, all against small synthetic rasters built in a temp directory — none
 need the chart files. The tile arithmetic in `cesiumtiles.scheme` is checked
 against [mercantile](https://github.com/mapbox/mercantile), a separate
 implementation of the same grid, so agreement is evidence rather than tautology.

@@ -71,7 +71,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 141 tests, ~45s
+.venv/Scripts/python -m pytest                        # 145 tests, ~45s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -240,12 +240,26 @@ bytes, average tile size, cache hits), with a reset button.
 
 ## The viewer is a general tile tester
 
-Not tied to its own tileset. The **Source** box takes a tileset directory
-(resolved through that directory's `metadata.json`, whose `url_template` is
-relative to *it*, not to the page) or a raw `{z}/{x}/{y}` template (used as
-given, with the form controls supplying scheme/zooms/tile size). There is no
-title heading — the user asked for it gone; the document `<title>` stays.
+Not tied to its own tileset. The **Source** control is a **menu**, not a text
+box (the user asked for this): local tilesets from the server's one-level scan,
+then URLs connected this session, then a disabled separator and **Connect to
+URL...**, which opens a `<dialog>`. The dialog takes a tileset directory URL
+(resolved through its `metadata.json`, whose `url_template` is relative to *it*,
+not to the page) or a raw `{z}/{x}/{y}` template, with scheme and tile size for
+the template chosen in the dialog. There is no title heading — the user asked
+for it gone; the document `<title>` stays.
 
+- **The menu comes from `/tilesets.json`**, served by `cesiumtiles-serve` from
+  `list_tilesets()`: the root if it holds `metadata.json`, then immediate
+  subdirectories that do, in name order, rescanned per request. A browser page
+  cannot list a directory itself. On another server (or a saved copy) the fetch
+  fails and the menu falls back to `INITIAL_SOURCE` alone.
+- **The menu is re-rendered, never patched** (`renderMenu()`), and re-selects
+  `meta.source_spec`. Choosing "Connect to URL..." puts the selection back on
+  the current source before the dialog opens, and a failed load leaves the
+  current tileset in place, so the menu never shows a source that is not loaded.
+- **MSAA defaults to none** (the user's call); the option reads "none", not
+  "off".
 - `window.tilesetMetadata` is **reassigned in `rebuild()`**, not captured once at
   startup. It went stale after a source change and reported the original
   tileset's values, which is confusing when debugging.
