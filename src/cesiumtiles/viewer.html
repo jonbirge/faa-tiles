@@ -65,10 +65,6 @@
     </select>
     <label for="tilesize">px</label>
     <input id="tilesize" type="number" min="32" max="2048" step="1">
-    <label for="minzoom">min z</label>
-    <input id="minzoom" type="number" min="0" max="24" step="1">
-    <label for="maxzoom">max z</label>
-    <input id="maxzoom" type="number" min="0" max="24" step="1">
   </div>
   <button id="load">Load source</button>
   <div id="note"></div>
@@ -101,8 +97,6 @@
       <option value="8">8x</option>
     </select>
   </div>
-  <dl id="renderfacts"></dl>
-
   <h2>Downloaded</h2>
   <dl id="traffic"></dl>
   <button id="reset">Reset counters &amp; cache</button>
@@ -130,6 +124,11 @@ const INITIAL_SOURCE = __SOURCE__;
 // route in OKLCH. Canvas parses oklch() directly, so no conversion is needed.
 //
 // Tweak these numbers to retune the ramp; nothing else depends on them.
+// A bare {z}/{x}/{y} template declares nothing about itself, so these stand in.
+// A tileset directory carries its real range in metadata.json and ignores them.
+const TEMPLATE_MIN_ZOOM = 0;
+const TEMPLATE_MAX_ZOOM = 18;
+
 const GRID_HUE_START = 264;   // deep blue
 const GRID_HUE_END = 29;      // almost red
 const GRID_LIGHT_START = 0.55;  // blue end kept darker, so it reads as deep
@@ -180,7 +179,6 @@ function rows(dl, pairs) {
 }
 
 function facts(meta) {
-  const [w, s, e, n] = extentOf(meta);
   const fallbackCrs = meta.scheme === "geographic" ? "EPSG:4326" : "EPSG:3857";
   const out = [
     ["name", meta.name || "(unnamed)"],
@@ -190,8 +188,6 @@ function facts(meta) {
   if (meta.format) out.push(["format", meta.format + " (" + (meta.convention || "xyz") + ")"]);
   if (meta.tiles) out.push(["tiles", meta.tiles.toLocaleString()]);
   if (meta.bytes) out.push(["size", (meta.bytes / 1e6).toFixed(1) + " MB"]);
-  out.push(["extent", w.toFixed(3) + ", " + s.toFixed(3)]);
-  out.push(["", e.toFixed(3) + ", " + n.toFixed(3)]);
   return out;
 }
 
@@ -371,7 +367,8 @@ function start(initialMeta) {
       credit: new Cesium.Credit(meta.name || "tiles", false),
     });
     provider.errorEvent.addEventListener(() =>
-      note("a tile request failed - a remote server may be refusing cross-origin use"));
+      note("a tile request failed - the zoom range may go deeper than this source " +
+           "has, or a remote server may be refusing cross-origin requests"));
     return new Cesium.ImageryLayer(provider);
   }
 
@@ -430,8 +427,6 @@ function start(initialMeta) {
     window.tilesetMetadata = meta;   // kept current, not captured at startup
     rows(el("facts"), facts(meta));
     el("scheme").value = meta.scheme;
-    el("minzoom").value = meta.minzoom;
-    el("maxzoom").value = meta.maxzoom;
     el("tilesize").value = meta.tilesize;
     // Only the first load frames the tileset. Swapping sources deliberately
     // leaves the camera alone, so two tilesets can be compared at a fixed
@@ -462,12 +457,13 @@ function start(initialMeta) {
     try {
       const loaded = await resolveSource(spec, {
         scheme: el("scheme").value,
-        minzoom: Number(el("minzoom").value) || 0,
-        maxzoom: Number(el("maxzoom").value) || 18,
+        minzoom: TEMPLATE_MIN_ZOOM,
+        maxzoom: TEMPLATE_MAX_ZOOM,
         tilesize: Number(el("tilesize").value) || 256,
       });
       if (loaded.templateOnly) {
-        note("no metadata.json: using the scheme and zooms set above, whole-world extent");
+        note("no metadata.json: assuming z" + TEMPLATE_MIN_ZOOM + "-" +
+             TEMPLATE_MAX_ZOOM + " and a whole-world extent");
       }
       meta = loaded;
       meta.source_spec = spec;
@@ -571,12 +567,7 @@ function start(initialMeta) {
     }
     rows(el("traffic"), traffic);
 
-    const canvas = viewer.canvas;
-    rows(el("renderfacts"), [
-      ["canvas", canvas.width + " x " + canvas.height],
-      ["css", canvas.clientWidth + " x " + canvas.clientHeight],
-      ["dpr", String(window.devicePixelRatio)],
-    ]);
+
   }
 
   el("source").value = meta.source_spec || INITIAL_SOURCE || ".";
