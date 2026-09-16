@@ -380,7 +380,15 @@ function start(initialMeta) {
     rectangle = Cesium.Rectangle.fromDegrees(extent[0], extent[1], extent[2], extent[3]);
     relayer();
     // Count only tiles belonging to the source now loaded.
-    tracker.prefix = meta.url_template.split("{z}")[0];
+    // Resource Timing reports absolute URLs, so the filter has to be absolute
+    // too. A source of "." rebases the template to "./tiles/...", which as a
+    // literal prefix matches no entry at all and silently zeroes the counters.
+    const stem = meta.url_template.split("{z}")[0];
+    try {
+      tracker.prefix = new URL(stem, document.baseURI).href;
+    } catch (err) {
+      tracker.prefix = stem;
+    }
     window.tilesetMetadata = meta;   // kept current, not captured at startup
     rows(el("facts"), facts(meta));
     el("scheme").value = meta.scheme;
