@@ -313,7 +313,7 @@ Detection lessons, each learnt from a wrong outline:
 
 ## Repo hygiene
 
-- Git repo on `master`, no remote. The user commits to `master` directly; there
+- Git repo on `master`, pushed to the **public** GitHub repo `jonbirge/faa-tiles` (`origin`); anything committed is published once pushed. The user commits to `master` directly; there
   is no PR workflow here. `.gitignore` excludes `.venv/`, `*.tif`, `*.psd`,
   `sources/`, `tileset/`, `tileset-*/`, which keeps `.git` at ~130 KB.
 - **Line endings are LF everywhere**, enforced by `.gitattributes`
