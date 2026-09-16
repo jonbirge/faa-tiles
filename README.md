@@ -1,24 +1,18 @@
-# geotransfer
+# faa-tiles
 
-Copy the georeferencing out of a GeoTIFF and onto a plain TIFF that has the
-same pixel dimensions, writing a third file that has the *image data* of the
-second and the *spatial reference* of the first.
+Two tools for getting FAA chart rasters onto a Cesium globe.
 
-The use case here: the FAA publishes the U.S. VFR Wall Planning Chart as a
+| Package | Job |
+| --- | --- |
+| `geotransfer` | Copy georeferencing from a GeoTIFF onto a plain TIFF of identical size |
+| `cesiumtiles` | Cut a GeoTIFF into a static `z/x/y` tile pyramid, with a Cesium viewer |
+
+The motivating case: the FAA publishes the U.S. VFR Wall Planning Chart as a
 georeferenced but palette-indexed GeoTIFF. A full-colour RGB render of the same
-chart at the same resolution has the better pixels but no geo metadata. This
-tool marries the two.
-
-## How it works
-
-The image file is duplicated byte-for-byte and only the GeoTIFF header tags are
-rewritten. Nothing is decoded, resampled, or recompressed, so band count,
-colour interpretation, compression and predictor all survive exactly. A 250 MB
-chart takes well under a second.
+chart at the same resolution has the better pixels but no geo metadata.
+`geotransfer` marries the two; `cesiumtiles` then serves the result.
 
 ## Setup
-
-The virtual environment lives in `.venv/`.
 
 ```bash
 py -3 -m venv .venv
@@ -28,9 +22,158 @@ py -3 -m venv .venv
 
 Runtime-only install: `-r requirements.txt`.
 
-## Use
+### About the GDAL dependency
 
-As a library:
+`cesiumtiles` needs GDAL's Python bindings (`osgeo`) for the `gdal raster tile`
+algorithm. **PyPI's `GDAL` package is source-only on Windows for every Python
+version**, so `requirements.txt` points at Christoph Gohlke's
+[geospatial-wheels](https://github.com/cgohlke/geospatial-wheels) index, which
+publishes real `cp314` win_amd64 binaries:
+
+```
+--extra-index-url https://gisidx.github.io/gwi
+```
+
+This gives GDAL **3.13.3** — newer than the 3.8.4 that Ubuntu 24.04's apt
+provides, so there is no advantage to building this under WSL. `osgeo.gdal` and
+`rasterio` coexist in one venv, each using its own GDAL build.
+
+---
+
+## `cesiumtiles` — static tile pyramids
+
+```bash
+.venv/Scripts/cesiumtiles vfr_wall_planning_geo.tif ./tileset
+```
+
+```python
+from cesiumtiles import build_tileset
+
+result = build_tileset("vfr_wall_planning_geo.tif", "./tileset")
+print(result.summary())
+```
+
+Output layout:
+
+```
+tileset/
+  tiles/{z}/{x}/{y}.webp    the pyramid
+  metadata.json             bounds, zooms, counts, url template
+  index.html                a working Cesium viewer
+```
+
+The viewer reads `metadata.json` at runtime, so re-tiling with different bounds
+or zooms needs no change to the HTML. It exposes `window.viewer` for poking at
+the scene from the dev console.
+
+### Previewing a tileset
+
+The tiles are plain static files, so any web server will do. A preview server is
+included because `python -m http.server` sends no CORS headers, which blocks the
+tiles the moment a Cesium app on a different origin or port tries to read them.
+
+```bash
+.venv/Scripts/cesiumtiles-serve tileset
+```
+
+Then open <http://127.0.0.1:8000/>. `Ctrl-C` stops it. Equivalent forms:
+
+```bash
+.venv/Scripts/python -m cesiumtiles.serve tileset --port 8000
+```
+
+```python
+from cesiumtiles import serve_tileset
+
+server = serve_tileset("tileset", port=8000, background=True)
+...
+server.shutdown()
+```
+
+| Option | Meaning |
+| --- | --- |
+| `-p`, `--port N` | Port to listen on (default 8000). |
+| `--host ADDR` | Bind address. Default `127.0.0.1`; use `0.0.0.0` to expose on the LAN. |
+| `--no-cors` | Omit `Access-Control-Allow-Origin`. |
+| `--open` | Open the viewer in a browser once the server is up. |
+
+It serves correct MIME types for `.webp`/`.png`/`.jpg`, sends `no-cache` for
+`index.html` and `metadata.json` so a re-tile is visible on reload, and logs
+only failed requests rather than every one of thousands of tiles.
+
+Under Claude Code, `.claude/launch.json` defines `tileset` (port 8000) and
+`tileset-colorado` (port 8001) so the browser pane can start either directly.
+
+### Choosing the zoom range
+
+`--max-zoom` defaults to the level at which tile pixels match the source's own
+resolution, so no detail is discarded and none is invented. For the VFR wall
+planning chart (262 m/px in Lambert Conformal Conic) that lands at **z9**;
+zooming past it in Cesium just magnifies the top level, which is expected.
+
+`--min-zoom` defaults to 0 so Cesium always has a complete pyramid to descend.
+
+Only tiles that actually overlap the source are written — the chart's LCC
+footprint is curved in Web Mercator, so the corners of its bounding rectangle
+are skipped. For the full chart that is 5,577 tiles rather than the 7,190 a
+naive bounding-box count would predict.
+
+### Cropping
+
+`--bbox WEST SOUTH EAST NORTH` crops before tiling, in lon/lat degrees by
+default. The crop is exact: it is applied as a warp cutline, so pixels outside
+the rectangle become transparent rather than being merely clipped to the
+nearest tile edge.
+
+```bash
+.venv/Scripts/cesiumtiles chart.tif ./colorado --bbox -109.06 36.99 -102.04 41.00
+```
+
+Use `--bbox-crs` to give the rectangle in some other frame, e.g.
+`--bbox-crs EPSG:3857` with metre coordinates. Note that the *reported* bounds
+in `metadata.json` snap outward to whole tiles, since that is what Cesium needs
+for its imagery rectangle.
+
+### Options
+
+| Option | Meaning |
+| --- | --- |
+| `--scheme mercator\|geographic` | `mercator` (default) is EPSG:3857 WebMercatorQuad — the standard slippy-map grid, and zero-config for Cesium's `UrlTemplateImageryProvider`. `geographic` is EPSG:4326 WorldCRS84Quad, matching Cesium's native globe tiling. |
+| `--format webp\|png\|jpeg` | Default `webp`. |
+| `--lossy` / `--quality N` | Lossy webp. Roughly 4x smaller, but can ring around hairline linework and text. |
+| `--min-zoom` / `--max-zoom` | Override the automatic range. |
+| `--resampling` / `--overview-resampling` | GDAL kernels; both default to `lanczos`. |
+| `--skip-blank` | Omit fully transparent tiles. Smaller, but the viewer will generate 404s for them. |
+| `--threads` | Worker count, or `ALL_CPUS` (default). |
+| `--resume` | Write only missing tiles. |
+| `-f`, `--overwrite` | Replace a non-empty output directory. |
+
+### Format sizes
+
+Measured on real chart tiles, extrapolated to the full 5,577-tile pyramid:
+
+| Format | KB/tile | Full tileset |
+| --- | --- | --- |
+| PNG | 66.4 | ~370 MB |
+| WebP lossless (default) | 49.9 | **285 MB** |
+| WebP q95 | 11.4 | ~64 MB |
+| WebP q90 | 8.6 | ~48 MB |
+
+### How it works
+
+Tiling is delegated to GDAL's `gdal raster tile`, which since GDAL 3.11 is the
+maintained reference implementation — `gdal2tiles` is deprecated in favour of
+it from 3.13. This package supplies what that algorithm does not: geographic
+bbox cropping, zoom defaults derived from the source resolution, and Cesium
+metadata and a viewer (GDAL emits Leaflet, OpenLayers, MapML and STAC front
+ends, but not Cesium).
+
+Counts and bounds in `TilesetResult` are read back off disk after the run
+rather than assumed from the request.
+
+---
+
+## `geotransfer` — georeferencing transfer
 
 ```python
 from geotransfer import copy_geo_metadata
@@ -42,29 +185,27 @@ copy_geo_metadata(
 )
 ```
 
-From the command line:
-
 ```bash
-.venv/Scripts/geotransfer vfr_geotiff_original.tif vfr_wall_planning.tif vfr_wall_planning_geo.tif
+.venv/Scripts/geotransfer vfr_geotiff_original.tif vfr_wall_planning.tif out.tif
 ```
 
-### Options
+The image file is duplicated byte-for-byte and only the GeoTIFF header tags are
+rewritten. Nothing is decoded, resampled or recompressed, so band count, colour
+interpretation, compression and predictor all survive exactly — a 250 MB chart
+takes well under a second.
+
+Copies CRS, affine transform (or GCPs and RPCs, if the reference is
+georeferenced that way) and the `AREA_OR_POINT` pixel-convention tag. The
+reference's colour table, band structure and nodata are **not** copied; those
+belong to the image file.
 
 | Option | Meaning |
 | --- | --- |
-| `overwrite` / `-f` | Replace `output` if it already exists. Off by default. |
-| `strict_size` / `--no-strict-size` | Size checking is on by default; the two inputs must match in width and height. Turn it off only if you know the transform still applies. |
-| `copy_nodata` / `--copy-nodata` | Also copy the reference's nodata value. Off by default, since the two files often have different band layouts. |
+| `overwrite` / `-f` | Replace `output` if it exists. |
+| `strict_size` / `--no-strict-size` | Size checking is on by default. |
+| `copy_nodata` / `--copy-nodata` | Also copy the reference's nodata value. |
 
-`read_georeference(path)` is also exported if you just want to inspect a file's
-CRS, transform, GCPs and `AREA_OR_POINT` tag.
-
-## What gets copied
-
-CRS, affine transform (or GCPs, plus RPCs, if the reference is georeferenced
-that way instead), and the `AREA_OR_POINT` pixel-convention tag. The reference's
-colour table, band structure and nodata are **not** copied — those belong to the
-image file.
+---
 
 ## Tests
 
@@ -72,17 +213,32 @@ image file.
 .venv/Scripts/python -m pytest
 ```
 
-The tests build small synthetic rasters in a temp directory; they don't need
-the chart files.
+115 tests, all against small synthetic rasters built in a temp directory — none
+need the chart files. The tile arithmetic in `cesiumtiles.scheme` is checked
+against [mercantile](https://github.com/mapbox/mercantile), a separate
+implementation of the same grid, so agreement is evidence rather than tautology.
 
 ## Layout
 
 ```
-pyproject.toml          packaging + pytest config
-requirements.txt        runtime deps
-requirements-dev.txt    runtime + test deps
+pyproject.toml            packaging + pytest config
+requirements.txt          runtime deps (incl. the GDAL wheel index)
+requirements-dev.txt      runtime + test deps
 src/geotransfer/
-    core.py             copy_geo_metadata / read_georeference
-    cli.py              argparse entry point
-tests/test_core.py
+    core.py               copy_geo_metadata / read_georeference
+    cli.py
+src/cesiumtiles/
+    scheme.py             XYZ grid maths for both tiling schemes
+    core.py               build_tileset
+    viewer.py             Cesium viewer generation
+    serve.py              local preview server (CORS, tile MIME types)
+    cli.py
+tests/
+    test_core.py          georeferencing transfer
+    test_scheme.py        tile maths vs mercantile
+    test_tiles.py         end-to-end tileset builds
+    test_serve.py         preview server behaviour
+.claude/
+    launch.json           dev-server definitions for the browser pane
+CLAUDE.md                 orientation notes for Claude Code
 ```

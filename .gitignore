@@ -19,3 +19,7 @@ dist/
 *.psd
 *.aux.xml
 sources/
+
+# Generated tilesets
+tileset/
+tileset-*/

@@ -1,2 +1,9 @@
-# Runtime dependencies. Install with:  .venv/Scripts/python -m pip install -r requirements.txt
+# Runtime dependencies.
+#
+# GDAL is not on PyPI as a Windows binary wheel, so it comes from Christoph
+# Gohlke's geospatial-wheels index. Install with:
+#     .venv/Scripts/python -m pip install -r requirements.txt
+--extra-index-url https://gisidx.github.io/gwi
+
 rasterio>=1.5,<2
+gdal>=3.11

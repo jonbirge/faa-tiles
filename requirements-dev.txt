@@ -2,3 +2,5 @@
 -r requirements.txt
 
 pytest>=8
+# Independent oracle for the XYZ tile arithmetic in cesiumtiles.scheme.
+mercantile>=1.2
