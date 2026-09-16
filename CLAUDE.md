@@ -180,7 +180,7 @@ bytes, average tile size, cache hits), with a reset button.
   the user asked for a border only). It is a second imagery layer, so
   `visibleTiles()` filters on `tile.imageryLayer === baseLayer` or every tally
   doubles. Canvas-drawn, so it never touches the traffic counters.
-- **Grid colour is a continuous blue -> orange ramp**, computed from
+- **Grid colour is a continuous deep-blue -> almost-red ramp**, computed from
   `level / maxzoom` (hue 212 + 173*f, HSL, 50% alpha) so it re-scales for any
   source. The user asked for exactly this after an earlier alternating-hue
   version. Worth remembering rather than re-deriving: a smooth ramp separates

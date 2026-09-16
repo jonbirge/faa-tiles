@@ -94,7 +94,7 @@ coloured by zoom level, with matching swatches beside the levels in the *On
 screen* list. The overlay is drawn on canvas rather than fetched, so it does not
 disturb the traffic counters.
 
-The border is a continuous ramp: **blue at z0 through to orange at the tileset's
+The border is a continuous ramp: **deep blue at z0 through to almost-red at the
 maximum zoom**, drawn at 50% transparency over a faint dark hairline that keeps
 it visible where the imagery beneath is pale. The colour is computed from
 `level / maxzoom`, so pointing the tester at a shallower or deeper source
@@ -146,8 +146,12 @@ included because `python -m http.server` sends no CORS headers, which blocks the
 tiles the moment a Cesium app on a different origin or port tries to read them.
 
 ```bash
-.venv/Scripts/cesiumtiles-serve tileset
+.venv/Scripts/cesiumtiles-serve
 ```
+
+It serves the working directory by default and finds the tilesets beneath it, so
+they are addressed as `./tileset`, `./other` and so on, and several can be
+compared in one session.
 
 Then open <http://127.0.0.1:8000/>. `Ctrl-C` stops it. Equivalent forms:
 

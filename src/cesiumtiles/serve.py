@@ -47,9 +47,9 @@ def discover_tileset(root: Path) -> tuple[str, dict | None]:
         meta = child / "metadata.json"
         if meta.is_file():
             try:
-                return child.name, json.loads(meta.read_text(encoding="utf-8"))
+                return "./" + child.name, json.loads(meta.read_text(encoding="utf-8"))
             except ValueError:
-                return child.name, None
+                return "./" + child.name, None
     return "", None
 
 
@@ -124,7 +124,7 @@ class _Server(socketserver.ThreadingTCPServer):
 
 
 def serve_tileset(
-    directory: str | Path = "tileset",
+    directory: str | Path = ".",
     *,
     host: str = "127.0.0.1",
     port: int = DEFAULT_PORT,
@@ -182,9 +182,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="cesiumtiles-serve",
         description="Serve tilesets for local preview and host the tile tester at /.",
     )
-    parser.add_argument("directory", nargs="?", default="tileset",
-                        help="a tileset directory, or a parent holding several "
-                             "(default: %(default)s)")
+    parser.add_argument("directory", nargs="?", default=".",
+                        help="directory to serve: a parent holding tilesets, or a "
+                             "single tileset (default: the working directory)")
     parser.add_argument("-p", "--port", type=int, default=DEFAULT_PORT,
                         help="port to listen on (default: %(default)s)")
     parser.add_argument("--host", default="127.0.0.1",

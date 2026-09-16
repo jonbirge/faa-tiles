@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "tileset",
+      "name": "tile-tester",
       "runtimeExecutable": ".venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "cesiumtiles.serve", "tileset", "--port", "8000"],
+      "runtimeArgs": ["-m", "cesiumtiles.serve", ".", "--port", "8000"],
       "port": 8000
     }
   ]

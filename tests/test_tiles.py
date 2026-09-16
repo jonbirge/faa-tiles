@@ -448,14 +448,17 @@ def test_grid_ramps_blue_to_orange_across_the_zoom_range(tmp_path, source):
 
     The ramp is computed from level/maxzoom rather than baked in, so pointing
     the tester at a source with a different depth re-scales it instead of
-    running off the end of a fixed list.
+    running off the end of a fixed list. Steps are taken in OKLCH: HSL lightness
+    is not perceptual, so at a fixed HSL lightness the greens crowd together and
+    the middle of the ramp becomes unreadable.
     """
     result = build_tileset(source, tmp_path / "out", quiet=True)
     html = render_viewer(_meta(result))
-    assert "GRID_HUE_START" in html and "GRID_HUE_SPAN" in html
+    assert "GRID_HUE_START" in html and "GRID_HUE_END" in html
     assert "level / span" in html
     # Borders are half transparent, per the requested look.
     assert "GRID_ALPHA = 0.5" in html
+    assert "oklch(" in html
     assert "gridColor(level, meta.maxzoom, GRID_ALPHA)" in html
 
 
