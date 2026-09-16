@@ -272,7 +272,9 @@ def build_tileset(
     ``max_zoom`` defaults to the zoom at which tile pixels match the source's own
     resolution, so no detail is thrown away and none is invented. ``bbox`` is
     ``(west, south, east, north)`` in ``bbox_crs`` -- lon/lat degrees by default
-    -- and crops the source exactly, via a warp cutline, before tiling.
+    -- and crops the source exactly, via a warp cutline, before tiling. Pass
+    ``bbox_crs="source"`` to give the rectangle in the source raster's own CRS,
+    which is what you want for trimming to a map's neatline.
 
     Tiles land in ``output_dir/tiles/{z}/{x}/{y}.<ext>`` alongside a
     ``metadata.json`` and a ready-to-serve Cesium ``index.html``.
@@ -300,6 +302,11 @@ def build_tileset(
     dataset = gdal.Open(str(source))
     if not dataset.GetProjection():
         raise TileBuildError(f"source has no CRS; georeference it first: {source}")
+
+    # A map's neatline is usually a rectangle in the projection the chart was
+    # drawn in, not in lon/lat, so cropping to it needs the source's own frame.
+    if bbox is not None and str(bbox_crs).lower() == "source":
+        bbox_crs = dataset.GetProjection()
 
     source_lonlat = _reproject_bounds(_to_lonlat(dataset.GetProjection()), _source_extent(dataset))
 

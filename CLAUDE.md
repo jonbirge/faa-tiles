@@ -26,7 +26,7 @@ and is the input to all tiling.
 - `.venv/Scripts/python.exe` — note `Scripts/`, not `bin/`.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 119 tests, ~30s
+.venv/Scripts/python -m pytest                        # 121 tests, ~30s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -74,6 +74,19 @@ costs a lot of context for no gain.
    sequential. **Converting the source to a tiled COG does not help** (34.6s vs
    36.0s); the stripped source layout is not the bottleneck, so don't spend time
    on that idea again.
+
+8. **The chart is cropped to its neatline.** The printed sheet has a white
+   margin, a heavy border and a "Nautical Miles" scale bar, all georeferenced,
+   which would otherwise land on the globe as if they were map. The crop is
+   `NEATLINE_LCC` in `scripts/build_vfr_tileset.py`: pixel box
+   (422, 221)-(18148, 11070) of 18509 x 11441, keeping 90.8% of the area.
+   **It must be expressed in the source CRS** (`--bbox-crs source`) because the
+   neatline is a rectangle in the chart's Lambert Conformal Conic, not in
+   lon/lat — its corners differ by 8.3 deg of longitude NW vs SW. Cropped build
+   is 6,552 tiles / 283.5 MB; uncropped is 7,190 / 285.0 MB.
+   `--detect-neatline` re-measures it for a new chart edition by finding where
+   chromatic pixels live (margins are white, the scale-bar panel is white with
+   black text, only the map is coloured).
 
 ## Gotchas that have already bitten
 

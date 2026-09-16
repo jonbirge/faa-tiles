@@ -12,6 +12,18 @@ georeferenced but palette-indexed GeoTIFF. A full-colour RGB render of the same
 chart at the same resolution has the better pixels but no geo metadata.
 `geotransfer` marries the two; `cesiumtiles` then serves the result.
 
+## Reproducing the chart tileset
+
+```bash
+.venv/Scripts/python scripts/build_vfr_tileset.py
+```
+
+That script is the recipe for the published tileset and a worked example of the
+library: georeference the RGB render, crop to the map neatline, tile. It is
+commented with the options worth reaching for — `--lossy`, `--max-zoom`,
+`--scheme`, `--skip-blank` — and `--dry-run` prints the plan without writing
+280 MB. Result: **6,552 tiles, 283.5 MB, ~54 s** on 24 cores.
+
 ## Setup
 
 ```bash
@@ -114,8 +126,8 @@ zooming past it in Cesium just magnifies the top level, which is expected.
 `--min-zoom` defaults to 0 so Cesium always has a complete pyramid to descend.
 
 Every tile in the covered rectangle is written by default, including the fully
-transparent ones along the chart's curved Lambert Conformal Conic edges — 7,190
-for the full chart. Blank tiles cost almost nothing (the pyramid is 285.0 MB
+transparent ones along the chart's curved Lambert Conformal Conic edges — 6,552
+for the chart cropped to its neatline (7,190 for the whole uncropped sheet). Blank tiles cost almost nothing (the pyramid is 285.0 MB
 either way), and keeping them means Cesium never requests a URL that 404s.
 `--skip-blank` drops the count to 5,577 if you would rather have the smaller
 tree and can tolerate the misses.
@@ -132,9 +144,27 @@ nearest tile edge.
 ```
 
 Use `--bbox-crs` to give the rectangle in some other frame, e.g.
-`--bbox-crs EPSG:3857` with metre coordinates. Note that the *reported* bounds
-in `metadata.json` snap outward to whole tiles, since that is what Cesium needs
-for its imagery rectangle.
+`--bbox-crs EPSG:3857` with metre coordinates, or **`--bbox-crs source`** for the
+raster's own CRS. Note that the *reported* bounds in `metadata.json` snap outward
+to whole tiles, since that is what Cesium needs for its imagery rectangle.
+
+#### Trimming to a map's neatline
+
+A printed chart carries a margin, a border and a scale bar, and they are
+georeferenced along with the map — so without a crop they get pasted onto the
+globe as if they were terrain. Cropping them off is what `--bbox-crs source` is
+for, because **a neatline is a rectangle in the projection the chart was drawn
+in, not in lon/lat**. On the VFR wall planning chart the neatline's corners
+differ by 8.3 degrees of longitude between NW and SW, so a lon/lat box would
+leave white wedges in the corners.
+
+```bash
+.venv/Scripts/cesiumtiles vfr_wall_planning_geo.tif ./tileset     --bbox-crs source --bbox -2078595.031 -1374023.013 2574081.248 1473465.213
+```
+
+`scripts/build_vfr_tileset.py` does this for you, and can re-measure the
+neatline from the image with `--detect-neatline` when a new chart edition comes
+out.
 
 ### Options
 

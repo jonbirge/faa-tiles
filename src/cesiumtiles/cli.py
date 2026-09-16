@@ -22,6 +22,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  cesiumtiles chart.tif ./tileset\n"
             "  cesiumtiles chart.tif ./colorado --bbox -109.1 36.9 -102.0 41.1\n"
             "  cesiumtiles chart.tif ./small --format webp --lossy --quality 95\n"
+            "  cesiumtiles chart.tif ./trimmed --bbox-crs source \\\n"
+            "      --bbox -2078595 -1374023 2574081 1473465\n"
         ),
     )
     parser.add_argument("source", help="georeferenced input raster (GeoTIFF)")
@@ -39,7 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--bbox-crs",
         default="EPSG:4326",
         metavar="CRS",
-        help="CRS the --bbox values are given in (default: %(default)s)",
+        help="CRS the --bbox values are given in, or 'source' for the raster's own "
+        "CRS, which is what a map neatline is rectangular in (default: %(default)s)",
     )
 
     grid = parser.add_argument_group("tile grid")

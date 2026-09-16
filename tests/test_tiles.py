@@ -325,3 +325,30 @@ def test_uncropped_input_is_also_a_path(tmp_path, source, monkeypatch):
     monkeypatch.setattr(gdal, "Run", lambda *a, **k: (seen.update(k), real(*a, **k))[1])
     build_tileset(source, tmp_path / "out", quiet=True, max_zoom=4)
     assert seen["input"] == str(Path(source).resolve())
+
+
+def test_bbox_crs_source_uses_the_rasters_own_frame(tmp_path, source):
+    """A map neatline is a rectangle in the chart's projection, not in lon/lat.
+
+    For a source that is already EPSG:4326 the two spellings must agree exactly;
+    the point of "source" is that it also works when the CRS has no EPSG code,
+    as with the FAA chart's custom Lambert Conformal Conic.
+    """
+    explicit = build_tileset(
+        source, tmp_path / "explicit", bbox=(-105.5, 39.25, -104.5, 40.0),
+        bbox_crs="EPSG:4326", quiet=True,
+    )
+    from_source = build_tileset(
+        source, tmp_path / "from_source", bbox=(-105.5, 39.25, -104.5, 40.0),
+        bbox_crs="source", quiet=True,
+    )
+    assert from_source.tile_count == explicit.tile_count
+    assert from_source.bounds_lonlat == pytest.approx(explicit.bounds_lonlat, abs=1e-9)
+
+
+def test_bbox_crs_source_is_case_insensitive(tmp_path, source):
+    result = build_tileset(
+        source, tmp_path / "out", bbox=(-105.5, 39.25, -104.5, 40.0),
+        bbox_crs="SOURCE", quiet=True,
+    )
+    assert result.tile_count > 0
