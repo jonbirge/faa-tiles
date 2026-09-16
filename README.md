@@ -371,6 +371,58 @@ a VRT rather than being materialised.
 tiling, with the neatline detection running on the original rather than the
 upsampled copy.
 
+**Which kernel.** The usual signal-processing framing does not fit this artwork.
+Sinc-family reconstruction assumes the raster is a bandlimited sampling of a
+continuous field; a chart is a *rasterised vector drawing* — piecewise-constant
+regions meeting at step edges, which have unbounded bandwidth. A sinc kernel
+therefore overshoots on both sides of every edge, which is the halo. Measured on
+a 256x256 Denver crop (flat fills, magenta airways, type and relief together),
+upsampling 2x, where "ringing" counts output pixels straying outside the range of
+the four source pixels they sit between:
+
+| kernel | ringing | worst excursion | sharpness |
+| --- | --- | --- | --- |
+| near | 0.00% | 0 | 8.18 |
+| bilinear | 0.00% | 0 | 7.00 |
+| cubic | 5.24% | 21 | 8.28 |
+| cubicspline | 2.86% | 23 | 6.12 |
+| lanczos | 10.85% | 32 | 8.90 |
+
+No GDAL kernel gives both zero ringing and sharp edges, and none can: they are
+all linear and content-agnostic, so none exploits the "flat regions, hard edges"
+prior. The only zero-ringing options either alias (near) or blur (bilinear).
+Ranked recommendations:
+
+1. **A model trained on flat-colour line art** — waifu2x, or Real-ESRGAN's
+   anime/illustration weights. Their design premise is literally "flat colour
+   regions with hard lines", which describes a chart almost exactly. Worth
+   separating from the generative item below: at 2x these reconstruct edges
+   rather than inventing content, and they are conservative where the source is
+   ambiguous.
+2. **Pattern-based pixel-art upscalers** — xBRZ, hqx, scale2x. Built for exactly
+   the stated premise and produce clean diagonals with no blur and no ringing.
+   The caveat is that they assume *aliased* input; this chart is antialiased on
+   text and thin lines, which xBRZ tolerates better than hqx but neither loves.
+3. **Vectorise and re-rasterise** — the theoretically correct answer, since the
+   chart was vector before it was raster. Trace the colour-quantised regions and
+   rasterise at 2x for edges that are exact by construction. That
+   `vfr_geotiff_original.tif` is *palette-indexed* is good evidence most of the
+   sheet really is flat-colour regions, and the palette hands you the
+   quantisation for free. It would, however, destroy the shaded relief and can
+   distort small type.
+
+**The chart is not uniformly piecewise-constant**, and that is probably the most
+useful thing to know before starting. The shaded relief is genuine continuous
+tone, where lanczos is the *right* kernel; the linework, fills and type are
+piecewise-constant, where it rings. The strongest approach is likely to segment
+the two — the palette-indexed original is a natural source for that mask — and
+resample each with what suits it.
+
+**A cheap win independent of all this:** the tiling warp currently defaults to
+`lanczos`, which measured worst for ringing. For the reprojection step, which
+resamples at roughly 1:1, `cubic` halves the ringing at nearly the same
+sharpness. Worth testing as the default.
+
 ### Tile the VFR sectional set
 
 The wall planning chart is one sheet. The sectional series is ~50 sheets that
