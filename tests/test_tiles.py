@@ -352,3 +352,29 @@ def test_bbox_crs_source_is_case_insensitive(tmp_path, source):
         bbox_crs="SOURCE", quiet=True,
     )
     assert result.tile_count > 0
+
+
+def test_viewer_rectangle_uses_the_unsnapped_extent(tmp_path, source):
+    """Cesium crashes if the imagery rectangle sits exactly on a tile boundary.
+
+    `bounds` is snapped outward to whole tiles for tile-coverage purposes, so an
+    edge coincides exactly with an imagery tile edge. Cesium's
+    _createTileImagerySkeletons then computes an empty intersection and passes
+    undefined into rectangleToNativeRectangle, throwing "can't access property
+    west" from inside the render loop. The viewer must use `data_bounds`.
+    """
+    result = build_tileset(source, tmp_path / "out", quiet=True)
+    meta = json.loads((result.output_dir / "metadata.json").read_text())
+
+    assert "data_bounds" in meta, "the viewer depends on this key"
+    dw, ds, de, dn = meta["data_bounds"]
+    bw, bs, be, bn = meta["bounds"]
+    # The true extent must sit inside the tile-snapped coverage, or the viewer
+    # would clip away imagery that exists.
+    assert bw <= dw and bs <= ds and be >= de and bn >= dn
+
+    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+    assert "extentOf" in html
+    assert "meta.data_bounds" in html
+    # The rectangle must not be built straight from the snapped bounds.
+    assert "const [w, s, e, n] = meta.bounds;" not in html

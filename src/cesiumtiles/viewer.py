@@ -57,8 +57,19 @@ _TEMPLATE = """<!DOCTYPE html>
 <script>
 const METADATA = __METADATA__;
 
+// The imagery rectangle must be the *unsnapped* data extent, never the
+// tile-snapped `bounds`. Cesium's _createTileImagerySkeletons intersects an
+// imagery tile against this rectangle, and when an edge coincides exactly with
+// a tile boundary that intersection comes back undefined, which then blows up
+// inside rectangleToNativeRectangle ("can't access property west"). Measured:
+// tile-snapped edges produce ~60 such calls while panning the chart border,
+// the data extent produces none.
+function extentOf(meta) {
+  return meta.data_bounds || meta.bounds;
+}
+
 function facts(meta) {
-  const [w, s, e, n] = meta.bounds;
+  const [w, s, e, n] = extentOf(meta);
   return [
     ["scheme", meta.scheme + " / " + meta.crs],
     ["format", meta.format + " (" + meta.convention + ")"],
@@ -82,7 +93,7 @@ function buildPanel(meta) {
 
 function start(meta) {
   buildPanel(meta);
-  const [w, s, e, n] = meta.bounds;
+  const [w, s, e, n] = extentOf(meta);
   const rectangle = Cesium.Rectangle.fromDegrees(w, s, e, n);
 
   const provider = new Cesium.UrlTemplateImageryProvider({

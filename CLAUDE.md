@@ -26,7 +26,7 @@ and is the input to all tiling.
 - `.venv/Scripts/python.exe` — note `Scripts/`, not `bin/`.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 121 tests, ~30s
+.venv/Scripts/python -m pytest                        # 122 tests, ~35s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -113,6 +113,14 @@ costs a lot of context for no gain.
   exposes `window.viewer` for this.
 - **`wsl.exe` from Git Bash mangles `/mnt/...` paths.** Prefix the command with
   `MSYS_NO_PATHCONV=1`.
+- **The Cesium imagery rectangle must be `data_bounds`, never `bounds`.**
+  `bounds` is snapped outward to whole tiles, so an edge coincides exactly with
+  an imagery tile edge; Cesium's `_createTileImagerySkeletons` then computes an
+  empty intersection and passes `undefined` into `rectangleToNativeRectangle`,
+  throwing *"can't access property west"* from inside the render loop while
+  panning the chart border. Measured: snapped edges caused ~60 bad calls, the
+  unsnapped extent caused 0. `viewer.py` has `extentOf()` for this; a test
+  guards it.
 - **Windows `SO_REUSEADDR` lets a second server hijack a bound port** (opposite
   of POSIX). `serve.py` sets `allow_reuse_address` only on non-Windows for this
   reason — don't "simplify" it back to `True`.
@@ -126,10 +134,14 @@ costs a lot of context for no gain.
   never assumed from the request. Requested != produced in both directions:
   `--skip-blank` omits tiles, and GDAL decides for itself which tiles a source
   reaches.
-- Reported `bounds` in `metadata.json` snap **outward to whole tiles**, because
-  that is what Cesium's imagery `rectangle` needs. `data_bounds` holds the
-  unsnapped extent. A test asserting a crop shrinks `bounds` on a given side
+- Reported `bounds` in `metadata.json` snap **outward to whole tiles**: that is
+  the tile coverage. `data_bounds` holds the true unsnapped extent, and is what
+  the viewer's imagery rectangle must use (see the gotcha above). A test asserting a crop shrinks `bounds` on a given side
   will fail if the crop lands inside the same edge tile — compare area instead.
+- `_reproject_bounds` densifies rectangle edges rather than transforming four
+  corners. It matters: the chart's LCC top edge bows to 51.23 N at its midpoint
+  while its highest corner is only 48.34 N, so corner-only reprojection would
+  clip a 2.9-degree band off the top.
 - Cropping uses a warp **cutline**, so it is pixel-exact (verified: alpha 0
   outside the boundary, 255 inside, at the right column) rather than snapped.
 - The viewer fetches `metadata.json` at runtime with the generation-time copy as
