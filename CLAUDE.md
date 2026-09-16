@@ -21,7 +21,13 @@ and is the input to all tiling.
 
 ## Environment
 
-- Windows 11, **Python 3.14.4**, venv at `.venv/`. 24 cores.
+- Windows 11, **Python 3.14.4**, venv at `.venv/`. 24 cores, NVIDIA GPU
+  (Windows reports an RTX 5070 Ti Laptop; the user has said 4070 Ti — reconcile
+  before picking a CUDA build, since Blackwell needs cu128 and Ada does not).
+- **Windows is not a limitation here, and assuming it is has been wrong twice.**
+  GDAL bindings install from the cgohlke index; PyTorch has `cp314` win_amd64
+  wheels including CUDA ones. Check before claiming a platform blocks something.
+  The user has Linux and macOS available too, so pick on merit, not portability.
 - Use `pwsh.exe` not `powershell.exe` (see the user's global CLAUDE.md).
 - `.venv/Scripts/python.exe` — note `Scripts/`, not `bin/`.
 
