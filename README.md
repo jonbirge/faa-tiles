@@ -388,28 +388,54 @@ the four source pixels they sit between:
 | cubicspline | 2.86% | 23 | 6.12 |
 | lanczos | 10.85% | 32 | 8.90 |
 
-No GDAL kernel gives both zero ringing and sharp edges, and none can: they are
-all linear and content-agnostic, so none exploits the "flat regions, hard edges"
-prior. The only zero-ringing options either alias (near) or blur (bilinear).
-Ranked recommendations:
+No GDAL kernel gives both zero ringing and sharp edges, and none can: **every
+one of them except `near` is a linear filter**, so each bandlimits edges by
+construction and the ringing is the Gibbs overshoot that follows. `near` avoids
+it only by aliasing instead. Choosing among them is choosing among options that
+share the defect, so the answer has to come from outside that family.
 
-1. **A model trained on flat-colour line art** — waifu2x, or Real-ESRGAN's
-   anime/illustration weights. Their design premise is literally "flat colour
-   regions with hard lines", which describes a chart almost exactly. Worth
-   separating from the generative item below: at 2x these reconstruct edges
-   rather than inventing content, and they are conservative where the source is
-   ambiguous.
-2. **Pattern-based pixel-art upscalers** — xBRZ, hqx, scale2x. Built for exactly
-   the stated premise and produce clean diagonals with no blur and no ringing.
-   The caveat is that they assume *aliased* input; this chart is antialiased on
-   text and thin lines, which xBRZ tolerates better than hqx but neither loves.
-3. **Vectorise and re-rasterise** — the theoretically correct answer, since the
-   chart was vector before it was raster. Trace the colour-quantised regions and
-   rasterise at 2x for edges that are exact by construction. That
-   `vfr_geotiff_original.tif` is *palette-indexed* is good evidence most of the
-   sheet really is flat-colour regions, and the palette hands you the
-   quantisation for free. It would, however, destroy the shaded relief and can
-   distort small type.
+**Ruled out, and why:**
+
+- **Edge-directed interpolation** (NEDI, DCCI, ICBI, EGII) — non-linear and
+  genuinely edge-aware, but built for *natural* images: smooth gradients
+  interrupted by edges. The literature is lukewarm even there, with NEDI often
+  scoring below plain bicubic, since edge direction is hard to estimate from the
+  low-resolution data. Our prior is stronger and different — piecewise-constant
+  regions — and these methods do not exploit it.
+- **Pixel-art scalers** (hqx, xBR/xBRZ, Super-xBR, scale2x) — the closest match
+  to the premise, non-linear, and they produce clean diagonals with neither blur
+  nor ringing. The blocker is that they assume **aliased** input from a small
+  palette. This chart is antialiased on type and hairlines, and its shaded relief
+  is continuous tone; both would be quantised into something worse than they
+  started. Right family, wrong source.
+- **Vectorise and re-rasterise** (potrace, or Kopf & Lischinski's *Depixelizing
+  Pixel Art*) — theoretically correct for the flat-region part, since the chart
+  was vector before it was raster, and the palette-indexed original hands you the
+  quantisation. But it destroys the shaded relief and can distort small type.
+
+**Recommended: a learned model trained on line art.** That content class — flat
+regions, hard antialiased lines, limited palette — is the closest well-studied
+analogue to cartographic artwork, and unlike the pixel-art scalers these handle
+antialiased input natively. In order of interest:
+
+1. **waifu2x (cunet)** — the most conservative, and the one measurement in the
+   literature that bears directly on charts favours it: Real-ESRGAN was found to
+   reduce **line continuity by 18–23% against waifu2x at 3x**. Continuity is what
+   an airway, a boundary or a road *is*; a model that breaks thin lines is
+   disqualifying regardless of how sharp the result looks.
+2. **Real-CUGAN** — anime-trained with 2x/3x/4x and, usefully here, tunable
+   enhancement strength (five weights at 2x). The right setting for this job is
+   the weakest one that still cleans artifacts.
+3. **APISR** (CVPR 2024) — current state of the art on this content class at only
+   1.03M parameters, so cheap to evaluate.
+
+**All three are trained on anime, not maps**, and two differences matter enough
+to test before committing: charts carry **dense small type**, which anime does
+not, so glyph deformation needs checking; and the **shaded relief** is continuous
+tone that an illustration model may posterise into bands. Evaluate on a crop
+holding type, hairlines and relief together, and measure rather than eyeball —
+`scripts/upsample_test.py` already has the ringing and sharpness harness, and
+wants a line-continuity check adding to it.
 
 **The chart is not uniformly piecewise-constant**, and that is probably the most
 useful thing to know before starting. The shaded relief is genuine continuous
