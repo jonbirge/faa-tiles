@@ -277,7 +277,8 @@ def build_tileset(
     which is what you want for trimming to a map's neatline.
 
     Tiles land in ``output_dir/tiles/{z}/{x}/{y}.<ext>`` alongside a
-    ``metadata.json`` and a ready-to-serve Cesium ``index.html``.
+    ``metadata.json``. No viewer is written into the tileset; serve it with
+    ``cesiumtiles-serve``, which hosts the tile tester itself.
     """
     source = Path(source)
     output_dir = Path(output_dir)
@@ -384,8 +385,6 @@ def build_tileset(
 
 
 def _write_metadata(result: TilesetResult, source: Path, data_bounds, suffix: str, title):
-    from cesiumtiles.viewer import write_viewer
-
     west, south, east, north = result.bounds_lonlat
     metadata = {
         "name": title or source.stem,
@@ -408,4 +407,6 @@ def _write_metadata(result: TilesetResult, source: Path, data_bounds, suffix: st
     }
     path = result.output_dir / "metadata.json"
     path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    write_viewer(result.output_dir, metadata)
+    # No viewer is written here: a tileset on disk stays pure data. The
+    # tile tester is served by `cesiumtiles-serve`, which can therefore sit
+    # above several tilesets and switch between them.

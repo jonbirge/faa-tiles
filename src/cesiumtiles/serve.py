@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import functools
 import http.server
+import json
 import socket
 import socketserver
 import sys
@@ -21,13 +22,43 @@ import threading
 import webbrowser
 from pathlib import Path
 
-__all__ = ["TileRequestHandler", "serve_tileset", "main"]
+__all__ = ["TileRequestHandler", "discover_tileset", "serve_tileset", "main"]
 
 DEFAULT_PORT = 8000
 
 
+def discover_tileset(root: Path) -> tuple[str, dict | None]:
+    """Find what the tile tester should open with, under ``root``.
+
+    Either ``root`` is itself a tileset, or it is a parent holding several. The
+    returned spec is relative to the web root, which is what the page resolves
+    against.
+    """
+    own = root / "metadata.json"
+    if own.is_file():
+        try:
+            return ".", json.loads(own.read_text(encoding="utf-8"))
+        except ValueError:
+            return ".", None
+
+    for child in sorted(p for p in root.iterdir() if p.is_dir()):
+        meta = child / "metadata.json"
+        if meta.is_file():
+            try:
+                return child.name, json.loads(meta.read_text(encoding="utf-8"))
+            except ValueError:
+                return child.name, None
+    return "", None
+
+
 class TileRequestHandler(http.server.SimpleHTTPRequestHandler):
-    """Serves tiles with correct content types and permissive CORS."""
+    """Serves tiles with correct content types and permissive CORS.
+
+    The tile tester is served from memory at ``/``, so a tileset on disk stays
+    pure data -- tiles and metadata, no viewer mixed in with them.
+    """
+
+    viewer_html = b""
 
     # Explicit, so we do not depend on the machine's registry/mime.types.
     extensions_map = {
@@ -58,6 +89,16 @@ class TileRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_OPTIONS(self):  # noqa: N802 - name fixed by BaseHTTPRequestHandler
         self.send_response(204)
         self.end_headers()
+
+    def do_GET(self):  # noqa: N802 - name fixed by BaseHTTPRequestHandler
+        if self.viewer_html and self.path.split("?")[0] in ("/", "/index.html"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(self.viewer_html)))
+            self.end_headers()
+            self.wfile.write(self.viewer_html)
+            return
+        super().do_GET()
 
     def log_message(self, fmt, *args):
         # One line per request is too noisy for thousands of tiles; report only
@@ -90,13 +131,21 @@ def serve_tileset(
     own thread and the caller is responsible for ``shutdown()``; otherwise this
     blocks until interrupted.
     """
+    from cesiumtiles.viewer import render_viewer
+
     root = Path(directory).resolve()
     if not root.is_dir():
         raise NotADirectoryError(f"not a directory: {root}")
-    if not (root / "index.html").is_file():
-        print(f"warning: no index.html in {root}; is this a tileset?", file=sys.stderr)
 
-    handler_class = type("_Configured", (TileRequestHandler,), {"cors": cors})
+    spec, metadata = discover_tileset(root)
+    if not spec:
+        print(f"warning: no metadata.json in {root} or its subdirectories; "
+              "the tester will start empty", file=sys.stderr)
+
+    handler_class = type("_Configured", (TileRequestHandler,), {
+        "cors": cors,
+        "viewer_html": render_viewer(metadata, spec).encode("utf-8"),
+    })
     handler = functools.partial(handler_class, directory=str(root))
 
     try:
@@ -126,10 +175,11 @@ def serve_tileset(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="cesiumtiles-serve",
-        description="Serve a generated tileset for local preview, with CORS enabled.",
+        description="Serve tilesets for local preview and host the tile tester at /.",
     )
     parser.add_argument("directory", nargs="?", default="tileset",
-                        help="tileset directory to serve (default: %(default)s)")
+                        help="a tileset directory, or a parent holding several "
+                             "(default: %(default)s)")
     parser.add_argument("-p", "--port", type=int, default=DEFAULT_PORT,
                         help="port to listen on (default: %(default)s)")
     parser.add_argument("--host", default="127.0.0.1",

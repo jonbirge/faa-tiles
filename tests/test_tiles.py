@@ -12,7 +12,7 @@ from PIL import Image
 from rasterio.crs import CRS
 from rasterio.transform import from_bounds
 
-from cesiumtiles import TileBuildError, build_tileset
+from cesiumtiles import TileBuildError, build_tileset, render_viewer
 from cesiumtiles.scheme import WEB_MERCATOR
 
 # A small patch of Colorado, in lon/lat.
@@ -94,7 +94,7 @@ def test_viewer_and_metadata_are_written(tmp_path, source):
     out = tmp_path / "tiles_out"
     build_tileset(source, out, quiet=True, title="Test Chart")
 
-    html = (out / "index.html").read_text(encoding="utf-8")
+    html = render_viewer(json.loads((out / "metadata.json").read_text()))
     assert "UrlTemplateImageryProvider" in html
     assert "WebMercatorTilingScheme" in html
     assert "Test Chart" in html
@@ -118,6 +118,11 @@ def test_reported_bounds_cover_the_source(tmp_path, source):
 
 
 # -- cropping ----------------------------------------------------------
+
+
+def _meta(result):
+    """The metadata a tileset wrote, as the tile tester would resolve it."""
+    return json.loads((result.output_dir / "metadata.json").read_text())
 
 
 def _area(bounds):
@@ -200,7 +205,7 @@ def test_geographic_scheme_uses_the_4326_grid(tmp_path, source):
     assert result.crs == "EPSG:4326"
     meta = json.loads((result.output_dir / "metadata.json").read_text())
     assert meta["scheme"] == "geographic"
-    assert "GeographicTilingScheme" in (result.output_dir / "index.html").read_text(encoding="utf-8")
+    assert "GeographicTilingScheme" in render_viewer(_meta(result))
 
 
 def test_png_format(tmp_path, source):
@@ -373,7 +378,7 @@ def test_viewer_rectangle_uses_the_unsnapped_extent(tmp_path, source):
     # would clip away imagery that exists.
     assert bw <= dw and bs <= ds and be >= de and bn >= dn
 
-    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+    html = render_viewer(_meta(result))
     assert "extentOf" in html
     assert "meta.data_bounds" in html
     # The rectangle must not be built straight from the snapped bounds.
@@ -383,7 +388,7 @@ def test_viewer_rectangle_uses_the_unsnapped_extent(tmp_path, source):
 def test_viewer_includes_the_diagnostics_panel(tmp_path, source):
     """The panel reports visible tiles and download traffic, with a reset."""
     result = build_tileset(source, tmp_path / "out", quiet=True)
-    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+    html = render_viewer(_meta(result))
 
     # Visible-tile readout, from Cesium's render list.
     assert "visibleTiles" in html
@@ -407,14 +412,14 @@ def test_viewer_cache_classification_compares_wire_to_body(tmp_path, source):
     distinguishes them.
     """
     result = build_tileset(source, tmp_path / "out", quiet=True)
-    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+    html = render_viewer(_meta(result))
     assert "wire < body" in html
 
 
 def test_viewer_is_a_general_tile_tester(tmp_path, source):
     """The page must load any tileset, not just the one it was generated for."""
     result = build_tileset(source, tmp_path / "out", quiet=True)
-    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+    html = render_viewer(_meta(result))
 
     assert 'id="source"' in html and 'id="load"' in html
     for control in ('id="scheme"', 'id="minzoom"', 'id="maxzoom"', 'id="tilesize"'):
@@ -432,7 +437,7 @@ def test_viewer_is_a_general_tile_tester(tmp_path, source):
 
 def test_viewer_has_no_title_heading(tmp_path, source):
     result = build_tileset(source, tmp_path / "out", quiet=True, title="Test Chart")
-    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+    html = render_viewer(_meta(result))
     assert "<h1" not in html
     # The document title still carries the name, for the browser tab.
     assert "<title>Test Chart</title>" in html
@@ -446,9 +451,16 @@ def test_grid_ramps_blue_to_orange_across_the_zoom_range(tmp_path, source):
     running off the end of a fixed list.
     """
     result = build_tileset(source, tmp_path / "out", quiet=True)
-    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+    html = render_viewer(_meta(result))
     assert "GRID_HUE_START" in html and "GRID_HUE_SPAN" in html
     assert "level / span" in html
     # Borders are half transparent, per the requested look.
     assert "GRID_ALPHA = 0.5" in html
     assert "gridColor(level, meta.maxzoom, GRID_ALPHA)" in html
+
+
+def test_tileset_contains_no_viewer(tmp_path, source):
+    """A tileset on disk is data only. The tester is served, not shipped inside it."""
+    result = build_tileset(source, tmp_path / "out", quiet=True)
+    assert not (result.output_dir / "index.html").exists()
+    assert sorted(p.name for p in result.output_dir.iterdir()) == ["metadata.json", "tiles"]

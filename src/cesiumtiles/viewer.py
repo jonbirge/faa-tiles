@@ -106,6 +106,7 @@ _TEMPLATE = """<!DOCTYPE html>
 </div>
 <script>
 const METADATA = __METADATA__;
+const INITIAL_SOURCE = __SOURCE__;
 
 // -- tile grid colouring -------------------------------------------------
 // A continuous ramp: blue at z0 through to orange at the tileset's maximum
@@ -509,7 +510,7 @@ function start(initialMeta) {
     rows(el("traffic"), traffic);
   }
 
-  el("source").value = meta.source_spec || ".";
+  el("source").value = meta.source_spec || INITIAL_SOURCE || ".";
   rebuild(true);
   setInterval(refresh, 400);
 
@@ -526,30 +527,46 @@ function fail(message) {
   box.textContent = message;
 }
 
-// Prefer the metadata.json on disk so the page stays correct after a re-tile,
-// but fall back to the copy baked in at generation time (e.g. file:// use).
-fetch("metadata.json")
-  .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
-  .catch(() => METADATA)
+// Resolve the starting source the same way the Source box does, so the page
+// stays correct after a re-tile and works whether it is serving one tileset or
+// sitting above several. METADATA is a snapshot baked in at generation time,
+// used only if that lookup fails.
+(INITIAL_SOURCE
+  ? resolveSource(INITIAL_SOURCE, { scheme: "mercator", minzoom: 0, maxzoom: 18, tilesize: 256 })
+      .then((meta) => { meta.source_spec = INITIAL_SOURCE; return meta; })
+  : Promise.reject(new Error("no source")))
+  .catch((err) => {
+    if (METADATA) return METADATA;
+    throw err;
+  })
   .then(start)
-  .catch((err) => fail("Could not start the viewer: " + err.message));
+  .catch((err) => fail(
+    "No tileset found. Enter a directory or a {z}/{x}/{y} URL above. (" + err.message + ")"));
 </script>
 </body>
 </html>
 """
 
 
-def render_viewer(metadata: dict) -> str:
-    """Return the viewer HTML for ``metadata`` (as written to metadata.json)."""
+def render_viewer(metadata: dict | None = None, source: str = ".") -> str:
+    """Return the tile-tester HTML.
+
+    ``source`` is the tileset the page loads on startup, resolved the same way
+    the Source box resolves what you type: a directory holding a
+    ``metadata.json``, or a ``{z}/{x}/{y}`` template. ``metadata`` is baked in
+    only as a fallback for when that lookup fails.
+    """
+    metadata = metadata or {}
     return (
         _TEMPLATE.replace("__CESIUM__", CESIUM_VERSION)
         .replace("__TITLE__", str(metadata.get("name", "Tile tester")))
-        .replace("__METADATA__", json.dumps(metadata, indent=2))
+        .replace("__METADATA__", json.dumps(metadata, indent=2) if metadata else "null")
+        .replace("__SOURCE__", json.dumps(source))
     )
 
 
-def write_viewer(output_dir: str | Path, metadata: dict) -> Path:
-    """Write ``index.html`` next to the tiles and return its path."""
-    path = Path(output_dir) / "index.html"
-    path.write_text(render_viewer(metadata), encoding="utf-8")
+def write_viewer(path: str | Path, metadata: dict | None = None, source: str = ".") -> Path:
+    """Write the tile tester to ``path`` (a file) and return it."""
+    path = Path(path)
+    path.write_text(render_viewer(metadata, source), encoding="utf-8")
     return path

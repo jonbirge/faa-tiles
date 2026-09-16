@@ -71,10 +71,13 @@ Output layout:
 tileset/
   tiles/{z}/{x}/{y}.webp    the pyramid
   metadata.json             bounds, zooms, counts, url template
-  index.html                a working Cesium viewer
 ```
 
-The viewer reads `metadata.json` at runtime, so re-tiling with different bounds
+A tileset is **data only** - no viewer is written into it. The tile tester is
+served by `cesiumtiles-serve`, which can therefore sit above several tilesets and
+switch between them.
+
+The tester reads `metadata.json` at runtime, so re-tiling with different bounds
 or zooms needs no change to the HTML. It exposes `window.viewer` and
 `window.tileTracker` for poking at the scene from the dev console.
 
@@ -116,8 +119,9 @@ The **Source** box takes either:
   and zoom range taken from the controls beside it.
 
 To compare local tilesets, serve their common parent:
-`.venv/Scripts/cesiumtiles-serve . --port 8000`, then load `tileset` or
-`other-tileset` by name.
+`.venv/Scripts/cesiumtiles-serve .`. The server finds the tilesets beneath it and
+opens the first; load the others by name. The tester is always at `/`, whichever
+directory you serve.
 
 A remote server must allow cross-origin requests. If it also omits
 `Timing-Allow-Origin`, the browser withholds transfer sizes, and the panel

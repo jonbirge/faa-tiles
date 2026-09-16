@@ -220,7 +220,9 @@ title heading — the user asked for it gone; the document `<title>` stays.
   collaborator or Linux CI.
 - The source rasters are large (62 MB, 250 MB, and a 1.2 GB PSD in `sources/`).
   Never `cat`/`Read` them, and don't let them into a commit.
-- `tileset/` (~280 MB) is build output; regenerate rather than preserve.
+- `tileset/` (~280 MB) is build output; regenerate rather than preserve. It
+  holds `tiles/` and `metadata.json` only - **no index.html**. The tile tester is
+  rendered by `cesiumtiles-serve` and served from memory at `/`.
 - **Do not leave extra tilesets lying around.** The user asked for this: build a
   scratch tileset if a test needs one, then delete it in the same turn. Only
   `tileset/` should persist. (An earlier `tileset-colorado/` demo outlived its
