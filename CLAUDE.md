@@ -25,8 +25,12 @@ and is the input to all tiling.
 - Use `pwsh.exe` not `powershell.exe` (see the user's global CLAUDE.md).
 - `.venv/Scripts/python.exe` — note `Scripts/`, not `bin/`.
 
+**Do not run the full suite unprompted** — the user asked for this explicitly;
+it takes ~35 s and was stalling the work. Run a single test when something
+genuinely needs checking, and otherwise let them ask.
+
 ```bash
-.venv/Scripts/python -m pytest                        # 122 tests, ~35s
+.venv/Scripts/python -m pytest                        # 124 tests, ~35s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -154,6 +158,28 @@ costs a lot of context for no gain.
 - The viewer fetches `metadata.json` at runtime with the generation-time copy as
   a `file://` fallback, so re-tiling needs no HTML change. It uses **no Cesium
   Ion token**: our tiles are the base layer and terrain is the default ellipsoid.
+
+## Viewer diagnostics
+
+The generated viewer has an **On screen** panel (visible imagery tiles by level,
+with x/y ranges, plus camera altitude) and a **Downloaded** panel (tiles, network
+bytes, average tile size, cache hits), with a reset button.
+
+- Visible tiles come from `viewer.scene.globe._surface._tilesToRender`, walking
+  `tile.data.imagery`. Those are **private** Cesium fields, so `visibleTiles()`
+  is wrapped in try/catch and degrades to "unavailable" on a Cesium upgrade.
+- Traffic comes from **Resource Timing**, not from patching Cesium.
+- **Distinguishing a cache hit from a download is not obvious.** A cache hit can
+  report `transferSize: 300` (a fixed header placeholder) with a full
+  `encodedBodySize` and a **200** status — not 0, and not 304. The reliable test
+  is `transferSize < encodedBodySize`: if so, the body never crossed the wire.
+  An earlier version keyed on `transferSize === 0` and then on a 304 status, and
+  both miscounted a fully cached load as a full download.
+- **Reset also busts the cache**, because script cannot clear the browser's HTTP
+  cache. It rebuilds the imagery layer against a fresh `?r=<timestamp>`, which
+  misses both Cesium's in-memory cache and the browser's. Verified: warm load
+  reports 0 downloaded / 37 cached / 10.8 KB, and after reset 34 downloaded /
+  0 cached / 2.51 MB.
 
 ## Repo hygiene
 

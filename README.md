@@ -75,8 +75,27 @@ tileset/
 ```
 
 The viewer reads `metadata.json` at runtime, so re-tiling with different bounds
-or zooms needs no change to the HTML. It exposes `window.viewer` for poking at
-the scene from the dev console.
+or zooms needs no change to the HTML. It exposes `window.viewer` and
+`window.tileTracker` for poking at the scene from the dev console.
+
+It also carries a diagnostics panel:
+
+- **On screen** — how many imagery tiles the globe is drawing, broken down by
+  zoom level with the x/y range at each, how many are still loading, and the
+  camera altitude.
+- **Downloaded** — tiles fetched, bytes over the wire, average tile size, tiles
+  served from cache, and the most recent tile requested.
+
+**Reset counters & cache** zeroes the counters *and* forces the next load to be
+genuinely cold. Script cannot clear the browser's HTTP cache, so it rebuilds the
+imagery layer against a fresh query string, which misses both Cesium's in-memory
+tile cache and the browser's. Without that, pressing reset and flying around
+would just replay local copies and report almost no traffic.
+
+Note that a cache hit is not simply "zero bytes transferred": browsers may report
+a fixed ~300-byte header placeholder with a full body size and a 200 status. The
+panel classifies by whether `transferSize` is smaller than `encodedBodySize`,
+which is what actually indicates the body never crossed the wire.
 
 ### Previewing a tileset
 

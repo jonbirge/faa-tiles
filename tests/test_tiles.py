@@ -378,3 +378,34 @@ def test_viewer_rectangle_uses_the_unsnapped_extent(tmp_path, source):
     assert "meta.data_bounds" in html
     # The rectangle must not be built straight from the snapped bounds.
     assert "const [w, s, e, n] = meta.bounds;" not in html
+
+
+def test_viewer_includes_the_diagnostics_panel(tmp_path, source):
+    """The panel reports visible tiles and download traffic, with a reset."""
+    result = build_tileset(source, tmp_path / "out", quiet=True)
+    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+
+    # Visible-tile readout, from Cesium's render list.
+    assert "visibleTiles" in html
+    assert "_tilesToRender" in html
+    # Traffic accounting, from Resource Timing.
+    assert "PerformanceObserver" in html
+    assert "encodedBodySize" in html
+    assert "transferSize" in html
+    # Reset must clear the counters *and* force a cold reload, which needs a
+    # cache-busting token; without it the next load replays the browser cache.
+    assert 'id="reset"' in html
+    assert "bust = Date.now()" in html
+    assert "removeAll()" in html
+
+
+def test_viewer_cache_classification_compares_wire_to_body(tmp_path, source):
+    """A cache hit can report a ~300 byte header placeholder with a 200 status.
+
+    Treating any non-zero transferSize as a download therefore miscounts a fully
+    cached load as a full download. The test pins the comparison that actually
+    distinguishes them.
+    """
+    result = build_tileset(source, tmp_path / "out", quiet=True)
+    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+    assert "wire < body" in html
