@@ -1,0 +1,12 @@
+# LF in the repository and in every working copy, whatever core.autocrlf is set
+# to on the machine. Windows editors and tools here write LF anyway; without
+# this, checkout wrote CRLF and every commit warned about conversion.
+* text=auto eol=lf
+
+# Never touch these, should any be added.
+*.png binary
+*.jpg binary
+*.webp binary
+*.tif binary
+*.tiff binary
+*.psd binary

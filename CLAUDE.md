@@ -308,9 +308,11 @@ Detection lessons, each learnt from a wrong outline:
 - Git repo on `master`, no remote. The user commits to `master` directly; there
   is no PR workflow here. `.gitignore` excludes `.venv/`, `*.tif`, `*.psd`,
   `sources/`, `tileset/`, `tileset-*/`, which keeps `.git` at ~130 KB.
-- `core.autocrlf` is on while the files are LF, so git warns on every commit.
-  Harmless solo; a `.gitattributes` would silence it if this ever gains a
-  collaborator or Linux CI.
+- **Line endings are LF everywhere**, enforced by `.gitattributes`
+  (`* text=auto eol=lf`), which overrides the user's global `core.autocrlf=true`.
+  When writing files from Python, use `write_text(..., newline="\n")` or the
+  Write tool: plain `Path.write_text` on Windows emits CRLF, which is how a
+  content-free "modified" `requirements-dev.txt` appeared.
 - The source rasters are large (62 MB, 250 MB, and a 1.2 GB PSD in `sources/`).
   Never `cat`/`Read` them, and don't let them into a commit.
 - `tileset/` (~280 MB) is build output; regenerate rather than preserve. It
