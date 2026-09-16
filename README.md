@@ -469,7 +469,7 @@ sharpness. Worth testing as the default.
 
 ### Tile the VFR sectional set — *done*
 
-The sectional series is 57 sheets that overlap at their edges, each in its own
+The sectional series is 55 sheets that overlap at their edges, each in its own
 Lambert Conformal Conic, each inside a printed collar. Three scripts build it:
 
 ```bash
@@ -480,13 +480,18 @@ Lambert Conformal Conic, each inside a printed collar. Three scripts build it:
 
 - **Fetching** picks the newest edition directory that is not in the future
   (the FAA posts the next one early) and runs `WORKERS` downloaders at once.
+  Charts in its `EXCLUDE` set are not extracted, and the build skips them too:
+  currently the Guam (Mariana Islands) and American Samoa insets. They ship in
+  `Hawaiian_Islands.zip` alongside sheets we keep, so that zip still downloads.
 - **Map areas** live in `scripts/sectional_areas.json`, one pixel polygon per
   sheet. They are detected (walk in from each edge until the paper collar
   ends, fit a line or arc, move inward past the worst reading) and then
   reviewed; the script prints how much paper is left just inside each edge and
   writes contact sheets with every outline drawn. Enlarged insets printed over
-  the map are hand-authored `exclude` boxes, and the four sheets that are not
-  a map in a collar (Hawaiian Islands, Honolulu, Mariana, Samoa) are hand-traced.
+  the map are hand-authored `exclude` boxes. Three sheets are hand-traced: the
+  two that are not a map in a collar (Hawaiian Islands, Honolulu), and Los
+  Angeles, whose legend panel and LA Basin inset leave an L-shaped map area that
+  a fitted edge cuts short.
   Rerun and review for each edition.
 - **The mosaic** is `cesiumtiles.mosaic`, not `gdal raster tile`: every z12
   tile warps just the sheets that reach it, with each sheet's map area burnt

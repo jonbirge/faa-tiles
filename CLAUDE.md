@@ -19,7 +19,7 @@ The data: the FAA U.S. VFR Wall Planning Chart. `vfr_geotiff_original.tif` is
 palette-indexed but georeferenced; `vfr_wall_planning.tif` is RGB but has no geo
 metadata; `vfr_wall_planning_geo.tif` is the `geotransfer` output combining them
 and is the input to all tiling. The sectional series lives in `sectionals/`
-(57 GeoTIFFs, 3.2 GB, from `scripts/fetch_sectionals.py`).
+(55 GeoTIFFs, from `scripts/fetch_sectionals.py`).
 
 ## Environment
 
@@ -260,7 +260,11 @@ Decided with the user, with measurements: **z12** (the "finest pixel" rule gives
 z13, driven only by the 1:250k Honolulu inset, at 4x the tiles), **WebP q90**,
 **overlaps by file name, later on top** (an acknowledged placeholder), map areas
 **detected once, reviewed, committed** as `scripts/sectional_areas.json`, and
-lower zooms **box-filtered from children**.
+lower zooms **box-filtered from children**. **Guam and Samoa are excluded**
+(the user's call): `EXCLUDE` in `fetch_sectionals.py` names the Mariana and
+Samoan Islands inset GeoTIFFs, which are not extracted and which the build also
+skips. Exclusion is per GeoTIFF, not per zip, because both ship inside
+`Hawaiian_Islands.zip` with Hawaiian Islands and Honolulu.
 
 - **Per tile, not VRT + `gdal raster tile`.** Each z12 tile warps only the sheets
   that reach it, composited front-to-back ("under") so it stops once opaque.
@@ -307,6 +311,12 @@ Detection lessons, each learnt from a wrong outline:
   49 of 57 sheets. After the fixes only Anchorage east is flagged (27%); a crop
   showed a ragged paper margin, now trimmed, and pale map behind it, but the
   figure was not chased further.
+- **The paper check only catches collar left in, never map cut off.** Los
+  Angeles's west edge fitted a slant (its legend panel sits above map that steps
+  out to column ~605, with the LA Basin inset below), which passed the check at
+  2% and silently dropped a wedge of ocean off Big Sur. The user spotted it.
+  Los Angeles is now hand-traced and `manual`. When a sheet's collar is not a
+  plain band on each side, trace it rather than tune the fitter.
 - **The Phoenix GeoTIFF has a blank white row through its map** near 35.6 N.
   That is the FAA's file, not the mask; it shows because Phoenix sorts after Las
   Vegas. A better overlap rule is the fix, not a mask.
@@ -337,5 +347,5 @@ Detection lessons, each learnt from a wrong outline:
 - **Do not leave extra tilesets lying around.** The user asked for this: build a
   scratch tileset if a test needs one, then delete it in the same turn. Only
   `tileset/` should persist. (An earlier `tileset-colorado/` demo outlived its
-  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~5.7 GB, 510k tiles) is
+  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~5.7 GB, 508k tiles) is
   the other real product and is expected to persist too.

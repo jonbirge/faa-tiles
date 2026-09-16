@@ -27,6 +27,16 @@ from urllib.parse import urljoin
 # How many fetch_sectional.py processes run at once.
 WORKERS = 8
 
+# Charts not wanted in the tileset, by GeoTIFF file name. The FAA packs these
+# into the same zip as sheets we do want (both are in Hawaiian_Islands.zip, with
+# Hawaiian Islands and Honolulu), so the zip is still downloaded and these are
+# simply not extracted. build_sectional_tileset.py skips them too, in case an
+# older download left them in ./sectionals.
+EXCLUDE = {
+    "Mariana Islands Inset SEC.tif",   # Guam
+    "Samoan Islands Inset SEC.tif",    # American Samoa
+}
+
 BASE_URL = "https://aeronav.faa.gov/visual/"
 REPO = Path(__file__).resolve().parent.parent
 WORKER = Path(__file__).resolve().parent / "fetch_sectional.py"
@@ -76,7 +86,8 @@ def main(argv: list[str] | None = None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
 
     def run(url: str) -> int:
-        return subprocess.run([sys.executable, str(WORKER), url, str(args.out)]).returncode
+        command = [sys.executable, str(WORKER), url, str(args.out), "--exclude", *sorted(EXCLUDE)]
+        return subprocess.run(command).returncode
 
     start = time.monotonic()
     with ThreadPoolExecutor(max_workers=args.workers) as pool:

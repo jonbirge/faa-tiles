@@ -33,6 +33,9 @@ sys.path.insert(0, str(REPO / "src"))
 
 from cesiumtiles.mosaic import MapArea, MosaicSource, build_mosaic  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fetch_sectionals import EXCLUDE  # noqa: E402
+
 SECTIONALS = REPO / "sectionals"
 MANIFEST = Path(__file__).resolve().parent / "sectional_areas.json"
 OUTPUT = REPO / "tileset-sectionals"
@@ -42,7 +45,9 @@ QUALITY = 90  # lossy WebP: these tilesets are large, and q90 keeps chart type l
 
 
 def sources(sectionals: Path, manifest: dict) -> list[MosaicSource]:
-    charts = sorted(p for p in sectionals.glob("*.tif"))
+    # Excluded charts are not normally downloaded, but an older download may
+    # have left them behind; they must not reach the tileset either way.
+    charts = sorted(p for p in sectionals.glob("*.tif") if p.name not in EXCLUDE)
     if not charts:
         raise SystemExit(f"no GeoTIFFs in {sectionals}; run scripts/fetch_sectionals.py first")
     missing = [p.name for p in charts if p.name not in manifest]
