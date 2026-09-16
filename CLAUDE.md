@@ -180,17 +180,35 @@ bytes, average tile size, cache hits), with a reset button.
   the user asked for a border only). It is a second imagery layer, so
   `visibleTiles()` filters on `tile.imageryLayer === baseLayer` or every tally
   doubles. Canvas-drawn, so it never touches the traffic counters.
-- **Grid colour is ordinal, not categorical.** Zoom level is ordered, so it uses
-  one hue light→dark; a hue per level would be a rainbow, the classic mistake.
-  The five steps are validated (`dataviz` skill's `validate_palette.js
-  --ordinal`): eleven steps failed at ΔL 0.047 between neighbours, seven still
-  failed at the light end, five and six pass. The ramp anchors at `maxzoom` so
-  the levels you navigate between stay distinct.
+- **Grid colour alternates two hues; do not "fix" it into one smooth ramp.**
+  Zoom is ordered, so a single-hue ramp looks like the right answer and is not:
+  the levels Cesium renders together are *consecutive*, which is exactly where a
+  ramp has least separation. Measured with the `dataviz` skill's
+  `validate_palette.js`: one hue over ten steps gives ΔL 0.047 between
+  neighbours (fails), and a smooth two-hue ramp gives protan ΔE 0.6 (fails
+  badly). Alternating blue/orange by parity, darkening within each family,
+  measures protan 21.4 / normal-vision 28.0 on its worst adjacent pair against
+  floors of 8 and 15. Lightness still orders levels inside each hue.
 - **Reset also busts the cache**, because script cannot clear the browser's HTTP
   cache. It rebuilds the imagery layer against a fresh `?r=<timestamp>`, which
   misses both Cesium's in-memory cache and the browser's. Verified: warm load
   reports 0 downloaded / 37 cached / 10.8 KB, and after reset 34 downloaded /
   0 cached / 2.51 MB.
+
+## The viewer is a general tile tester
+
+Not tied to its own tileset. The **Source** box takes a tileset directory
+(resolved through that directory's `metadata.json`, whose `url_template` is
+relative to *it*, not to the page) or a raw `{z}/{x}/{y}` template (used as
+given, with the form controls supplying scheme/zooms/tile size). There is no
+title heading — the user asked for it gone; the document `<title>` stays.
+
+- `window.tilesetMetadata` is **reassigned in `rebuild()`**, not captured once at
+  startup. It went stale after a source change and reported the original
+  tileset's values, which is confusing when debugging.
+- Cross-origin servers that omit `Timing-Allow-Origin` report all three
+  Resource Timing sizes as zero. Those are counted as `opaque` and the byte
+  totals shown as `n/a (cross-origin)`, never as zero.
 
 ## Repo hygiene
 

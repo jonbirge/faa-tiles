@@ -409,3 +409,43 @@ def test_viewer_cache_classification_compares_wire_to_body(tmp_path, source):
     result = build_tileset(source, tmp_path / "out", quiet=True)
     html = (result.output_dir / "index.html").read_text(encoding="utf-8")
     assert "wire < body" in html
+
+
+def test_viewer_is_a_general_tile_tester(tmp_path, source):
+    """The page must load any tileset, not just the one it was generated for."""
+    result = build_tileset(source, tmp_path / "out", quiet=True)
+    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+
+    assert 'id="source"' in html and 'id="load"' in html
+    for control in ('id="scheme"', 'id="minzoom"', 'id="maxzoom"', 'id="tilesize"'):
+        assert control in html
+    # A directory is resolved through its metadata.json; a raw template is used
+    # as given, with the form supplying what the metadata would have.
+    assert "resolveSource" in html
+    assert 'spec.indexOf("{z}")' in html
+    assert "metadata.json" in html
+    # Cross-origin tile servers withhold Resource Timing sizes; those must be
+    # reported as unavailable rather than silently counted as zero bytes.
+    assert "opaque" in html
+    assert "cross-origin" in html
+
+
+def test_viewer_has_no_title_heading(tmp_path, source):
+    result = build_tileset(source, tmp_path / "out", quiet=True, title="Test Chart")
+    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+    assert "<h1" not in html
+    # The document title still carries the name, for the browser tab.
+    assert "<title>Test Chart</title>" in html
+
+
+def test_grid_uses_two_alternating_hues(tmp_path, source):
+    """Adjacent zoom levels must differ in hue, not just lightness.
+
+    A single smooth ramp puts consecutive levels ~0.047 apart in lightness,
+    which reads as one colour -- and consecutive levels are exactly what Cesium
+    shows together. Alternating two hue families fixes that.
+    """
+    result = build_tileset(source, tmp_path / "out", quiet=True)
+    html = (result.output_dir / "index.html").read_text(encoding="utf-8")
+    assert "GRID_BLUE" in html and "GRID_ORANGE" in html
+    assert "level % 2 === 0" in html

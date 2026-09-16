@@ -1,9 +1,10 @@
-"""Emit a self-contained Cesium viewer for a generated tileset.
+"""Emit a self-contained Cesium viewer and tile tester for a generated tileset.
 
 ``gdal raster tile`` can write Leaflet, OpenLayers, MapML and STAC front ends,
-but not a Cesium one, so we write our own. The page loads Cesium from the CDN
-and reads ``metadata.json`` at runtime, which means re-tiling with different
-bounds or zooms needs no change to the HTML.
+but not a Cesium one, so we write our own. The page reads ``metadata.json`` at
+runtime, so re-tiling with different bounds or zooms needs no change to the
+HTML, and it can be pointed at any other tileset -- a directory beside it or a
+remote XYZ service -- without regenerating anything.
 """
 
 from __future__ import annotations
@@ -31,40 +32,69 @@ _TEMPLATE = """<!DOCTYPE html>
     font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
     color: #e8e8e8; background: rgba(20, 22, 26, 0.84);
     border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 6px;
-    padding: 10px 12px; width: 300px; backdrop-filter: blur(6px);
+    padding: 10px 12px; width: 318px; backdrop-filter: blur(6px);
     max-height: calc(100vh - 40px); overflow-y: auto;
   }
-  #panel h1 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.02em; }
   #panel h2 {
     margin: 12px 0 5px; font-size: 10px; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.09em; color: #7f8794;
     border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 8px;
   }
+  #panel h2:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
   #panel dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; }
   #panel dt { color: #8d95a0; }
   #panel dd { margin: 0; overflow-wrap: anywhere; }
-  #panel button {
-    margin-top: 8px; width: 100%; cursor: pointer; color: #e8e8e8;
-    background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px; padding: 5px; font: inherit;
+  #panel button, #panel input, #panel select {
+    color: #e8e8e8; background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px;
+    padding: 5px; font: inherit;
   }
+  #panel button { margin-top: 8px; width: 100%; cursor: pointer; }
   #panel button:hover { background: rgba(255, 255, 255, 0.18); }
   #panel button:active { background: rgba(255, 255, 255, 0.26); }
-  .num { font-variant-numeric: tabular-nums; }
+  #source { width: 100%; box-sizing: border-box; }
+  .controls {
+    display: grid; grid-template-columns: auto 1fr auto 1fr;
+    gap: 4px 6px; align-items: center; margin-top: 6px;
+  }
+  .controls label { color: #8d95a0; }
+  .controls select, .controls input { width: 100%; box-sizing: border-box; }
   .swatch {
     display: inline-block; width: 9px; height: 9px; margin-right: 6px;
     border-radius: 2px; vertical-align: baseline;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
   }
+  .num { font-variant-numeric: tabular-nums; }
   #error { color: #ff8b8b; margin-top: 8px; display: none; }
+  #note { color: #c2a74e; margin-top: 6px; display: none; }
 </style>
 </head>
 <body>
 <div id="cesiumContainer"></div>
 <div id="panel">
-  <h1 id="title">loading</h1>
+  <h2>Source</h2>
+  <input id="source" spellcheck="false"
+         placeholder="tileset directory, or a {z}/{x}/{y} URL">
+  <div class="controls">
+    <label for="scheme">scheme</label>
+    <select id="scheme">
+      <option value="mercator">mercator</option>
+      <option value="geographic">geographic</option>
+    </select>
+    <label for="tilesize">px</label>
+    <input id="tilesize" type="number" min="32" max="2048" step="1">
+    <label for="minzoom">min z</label>
+    <input id="minzoom" type="number" min="0" max="24" step="1">
+    <label for="maxzoom">max z</label>
+    <input id="maxzoom" type="number" min="0" max="24" step="1">
+  </div>
+  <button id="load">Load source</button>
+  <div id="note"></div>
+  <div id="error"></div>
+
+  <h2>Tileset</h2>
   <dl id="facts"></dl>
-  <button id="home">Fly to chart</button>
+  <button id="home">Fly to extent</button>
 
   <h2>On screen</h2>
   <dl id="visible"></dl>
@@ -73,21 +103,37 @@ _TEMPLATE = """<!DOCTYPE html>
   <h2>Downloaded</h2>
   <dl id="traffic"></dl>
   <button id="reset">Reset counters &amp; cache</button>
-
-  <div id="error"></div>
 </div>
 <script>
 const METADATA = __METADATA__;
+
+// -- tile grid colouring -------------------------------------------------
+// Blue and orange alternate by level parity, each family darkening as the level
+// rises. The alternation is the whole point: the levels visible together are
+// consecutive, so making neighbours differ in HUE rather than in lightness is
+// what makes them tellable apart. A single smooth ramp cannot manage it -- ten
+// steps in one hue land about 0.047 apart in lightness and read as one colour,
+// and even a two-hue smooth ramp scored a protan deltaE of 0.6 between
+// neighbours. This scheme measures 21.4 protan and 28.0 normal-vision on its
+// worst adjacent pair, against floors of 8 and 15. Lightness still carries the
+// ordering inside each hue, so z5 and z7 stay distinguishable too.
+const GRID_BLUE = ["#5facff", "#4693f3", "#2c79d8", "#0f64c0", "#0052ac"];
+const GRID_ORANGE = ["#ff9866", "#ff7e4c", "#eb6834", "#d25117", "#bd3d00"];
+
+function gridColor(level) {
+  const family = level % 2 === 0 ? GRID_BLUE : GRID_ORANGE;
+  return family[Math.min(family.length - 1, Math.floor(level / 2))];
+}
 
 // The imagery rectangle must be the *unsnapped* data extent, never the
 // tile-snapped `bounds`. Cesium's _createTileImagerySkeletons intersects an
 // imagery tile against this rectangle, and when an edge coincides exactly with
 // a tile boundary that intersection comes back undefined, which then blows up
 // inside rectangleToNativeRectangle ("can't access property west"). Measured:
-// tile-snapped edges produce ~60 such calls while panning the chart border,
-// the data extent produces none.
+// tile-snapped edges produce ~60 such calls while panning the border, the data
+// extent produces none.
 function extentOf(meta) {
-  return meta.data_bounds || meta.bounds;
+  return meta.data_bounds || meta.bounds || [-180, -85, 180, 85];
 }
 
 function bytes(n) {
@@ -112,43 +158,24 @@ function rows(dl, pairs) {
   }
 }
 
-// -- tile grid colouring -------------------------------------------------
-// Zoom level is ordinal, not categorical, so the grid uses one hue stepped
-// light->dark. A hue per level would be a rainbow, which implies the levels are
-// unordered categories and is the classic mistake here.
-//
-// Five steps is the most this hue carries with visible gaps between
-// neighbours. That is measured, not guessed: eleven steps put adjacent pairs
-// 0.047 apart in lightness, which reads as the same colour, and seven still
-// failed at the light end. The ramp is anchored at the TOP of the pyramid,
-// where navigation actually happens, so the levels you move between stay
-// distinct; anything more than four levels coarser shares the lightest step.
-// The legend names the exact levels on screen, so identity never rests on
-// colour alone.
-const GRID_RAMP = ["#86b6ef", "#3987e5", "#256abf", "#184f95", "#0d366b"];
-
-function gridColor(level, maxzoom) {
-  const last = GRID_RAMP.length - 1;
-  return GRID_RAMP[Math.max(0, Math.min(last, last - (maxzoom - level)))];
-}
-
 function facts(meta) {
   const [w, s, e, n] = extentOf(meta);
-  return [
-    ["scheme", meta.scheme + " / " + meta.crs],
-    ["format", meta.format + " (" + meta.convention + ")"],
+  const fallbackCrs = meta.scheme === "geographic" ? "EPSG:4326" : "EPSG:3857";
+  const out = [
+    ["name", meta.name || "(unnamed)"],
+    ["scheme", meta.scheme + " / " + (meta.crs || fallbackCrs)],
     ["zooms", meta.minzoom + "-" + meta.maxzoom],
-    ["tiles", meta.tiles.toLocaleString()],
-    ["size", (meta.bytes / 1e6).toFixed(1) + " MB"],
-    ["extent", w.toFixed(3) + ", " + s.toFixed(3)],
-    ["", e.toFixed(3) + ", " + n.toFixed(3)],
   ];
+  if (meta.format) out.push(["format", meta.format + " (" + (meta.convention || "xyz") + ")"]);
+  if (meta.tiles) out.push(["tiles", meta.tiles.toLocaleString()]);
+  if (meta.bytes) out.push(["size", (meta.bytes / 1e6).toFixed(1) + " MB"]);
+  out.push(["extent", w.toFixed(3) + ", " + s.toFixed(3)]);
+  out.push(["", e.toFixed(3) + ", " + n.toFixed(3)]);
+  return out;
 }
 
 // -- download accounting ------------------------------------------------
-// Resource Timing gives the real transfer size per tile. The tiles are
-// same-origin, so transferSize/encodedBodySize are populated rather than
-// zeroed for cross-origin opacity.
+// Resource Timing gives the real transfer size per tile.
 //
 // Telling a real download from a cache hit needs care, because browsers do not
 // agree on how to report one. A cache hit can arrive as transferSize 0, or as a
@@ -157,33 +184,37 @@ function facts(meta) {
 // crossed the wire at all: if transferSize is smaller than encodedBodySize, it
 // did not. That covers 304 revalidations and plain cache hits alike.
 //
+// A cross-origin tile server that omits Timing-Allow-Origin reports all three
+// sizes as zero. Those are counted separately and the byte totals marked
+// unavailable, rather than silently reported as zero.
+//
 // Cesium also keeps its own in-memory imagery cache, and a tile it serves from
 // there makes no request at all, so it appears in none of these counters.
-function makeTracker(meta) {
-  const m = meta.url_template.match(/^(.*)\\{z\\}\\/\\{x\\}\\/\\{y\\}(\\..+)$/);
-  const esc = (s) => s.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
-  const re = new RegExp(
-    esc(m ? m[1] : "tiles/") + "(\\\\d+)\\\\/(\\\\d+)\\\\/(\\\\d+)" + esc(m ? m[2] : ".webp") + "(?:\\\\?|$)"
-  );
-
+function makeTracker() {
   const state = {
-    downloaded: 0, cached: 0,
+    pattern: /(\\d+)\\/(\\d+)\\/(\\d+)(?:\\.[A-Za-z0-9]+)?(?:\\?|$)/,
+    prefix: "",
+    downloaded: 0, cached: 0, opaque: 0,
     network: 0, payload: 0, imagery: 0,
     last: "-", byLevel: new Map(), since: Date.now(),
   };
 
   function consume(entry) {
-    const hit = re.exec(entry.name);
+    if (state.prefix && entry.name.indexOf(state.prefix) === -1) return;
+    const hit = state.pattern.exec(entry.name);
     if (!hit) return;
-    const [, z, x, y] = hit;
+    const z = hit[1], x = hit[2], y = hit[3];
     state.last = z + "/" + x + "/" + y;
 
     const body = entry.encodedBodySize || 0;
     const wire = entry.transferSize || 0;
-    state.imagery += entry.decodedBodySize || 0;
-    state.network += wire;                 // everything that touched the network
+    const decoded = entry.decodedBodySize || 0;
+    state.imagery += decoded;
+    state.network += wire;
 
-    if (body > 0 && wire < body) {
+    if (body === 0 && wire === 0 && decoded === 0) {
+      state.opaque++;                      // cross-origin, sizes withheld
+    } else if (body > 0 && wire < body) {
       state.cached++;                      // body came from cache, not the wire
     } else {
       state.downloaded++;
@@ -201,7 +232,7 @@ function makeTracker(meta) {
   }
 
   state.reset = function () {
-    state.downloaded = 0; state.cached = 0;
+    state.downloaded = 0; state.cached = 0; state.opaque = 0;
     state.network = 0; state.payload = 0; state.imagery = 0;
     state.last = "-"; state.byLevel.clear(); state.since = Date.now();
     try { performance.clearResourceTimings(); } catch (err) { /* not fatal */ }
@@ -232,78 +263,50 @@ function visibleTiles(viewer, layer) {
         if (seen.has(key)) continue;
         seen.add(key);
         let box = byLevel.get(tile.level);
-        if (!box) byLevel.set(tile.level, (box = { n: 0, x0: tile.x, x1: tile.x, y0: tile.y, y1: tile.y }));
+        if (!box) {
+          box = { n: 0, x0: tile.x, x1: tile.x, y0: tile.y, y1: tile.y };
+          byLevel.set(tile.level, box);
+        }
         box.n++;
         box.x0 = Math.min(box.x0, tile.x); box.x1 = Math.max(box.x1, tile.x);
         box.y0 = Math.min(box.y0, tile.y); box.y1 = Math.max(box.y1, tile.y);
       }
     }
-    return { total: seen.size, loading, byLevel, terrain: rendered.length };
+    return { total: seen.size, loading: loading, byLevel: byLevel };
   } catch (err) {
     return null;
   }
 }
 
-function start(meta) {
-  document.getElementById("title").textContent = meta.name;
-  rows(document.getElementById("facts"), facts(meta));
+// -- resolving whatever was typed into a tileset ------------------------
+// Either a URL template containing {z}/{x}/{y}, used as given, or a directory
+// expected to hold the metadata.json one of our own tilesets writes.
+async function resolveSource(spec, form) {
+  spec = (spec || "").trim();
+  if (!spec) throw new Error("enter a directory or a {z}/{x}/{y} URL");
 
-  const [w, s, e, n] = extentOf(meta);
-  const rectangle = Cesium.Rectangle.fromDegrees(w, s, e, n);
-
-  // A cache-busting token is what makes "reset" meaningful. Clearing the
-  // browser's HTTP cache is not possible from script, so instead the layer is
-  // rebuilt against a fresh query string: new URLs miss both Cesium's in-memory
-  // tile cache and the browser's, and the counters then measure a genuine cold
-  // load rather than replaying what is already local.
-  let bust = 0;
-  const newTilingScheme = () => (meta.scheme === "geographic"
-    ? new Cesium.GeographicTilingScheme()
-    : new Cesium.WebMercatorTilingScheme());
-
-  function newLayer() {
-    return new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({
-      url: meta.url_template + (bust ? "?r=" + bust : ""),
-      tilingScheme: newTilingScheme(),
-      rectangle: rectangle,
-      minimumLevel: meta.minzoom,
-      maximumLevel: meta.maxzoom,
-      tileWidth: meta.tilesize,
-      tileHeight: meta.tilesize,
-      hasAlphaChannel: meta.format !== "jpeg",
-      credit: new Cesium.Credit(meta.name, false),
-    }));
-  }
-
-  // The grid is an overlay of generated canvases, not fetched files, so it adds
-  // nothing to the traffic counters. Only the tile edge is drawn -- a dark
-  // hairline underneath keeps it legible where the chart below is pale.
-  function newGridLayer() {
-    const provider = new Cesium.TileCoordinatesImageryProvider({ tilingScheme: newTilingScheme() });
-    provider.maximumLevel = meta.maxzoom;
-    const size = meta.tilesize;
-    provider.requestImage = function (x, y, level) {
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.30)";
-      ctx.lineWidth = 5;
-      ctx.strokeRect(2.5, 2.5, size - 5, size - 5);
-      ctx.globalAlpha = 0.7;
-      ctx.strokeStyle = gridColor(level, meta.maxzoom);
-      ctx.lineWidth = 3;
-      ctx.strokeRect(2.5, 2.5, size - 5, size - 5);
-      return Promise.resolve(canvas);
+  if (spec.indexOf("{z}") !== -1) {
+    return {
+      name: spec, url_template: spec,
+      scheme: form.scheme, minzoom: form.minzoom,
+      maxzoom: form.maxzoom, tilesize: form.tilesize,
+      templateOnly: true,
     };
-    return new Cesium.ImageryLayer(provider, { rectangle: rectangle });
   }
 
-  // No Ion token is used: our own tiles are the base layer, and the default
-  // ellipsoid terrain needs no network access.
-  let baseLayer = newLayer();
-  let gridLayer = null;
+  const base = spec.replace(/\\/+$/, "");
+  const response = await fetch(base + "/metadata.json");
+  if (!response.ok) {
+    throw new Error("no metadata.json under " + base + " (HTTP " + response.status + ")");
+  }
+  const meta = await response.json();
+  // Its url_template is relative to its own directory, not to this page.
+  meta.url_template = base + "/" + meta.url_template;
+  return meta;
+}
+
+function start(initialMeta) {
   const viewer = new Cesium.Viewer("cesiumContainer", {
-    baseLayer: baseLayer,
     baseLayerPicker: false,
     geocoder: false,
     homeButton: false,
@@ -314,28 +317,141 @@ function start(meta) {
     infoBox: false,
     selectionIndicator: false,
     fullscreenButton: true,
+    // No Ion token is used: our own tiles become the base layer below, and the
+    // default ellipsoid terrain needs no network access.
+    baseLayer: false,
   });
   viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10131a");
 
-  const flyHome = () => viewer.camera.flyTo({ destination: rectangle, duration: 1.5 });
-  document.getElementById("home").addEventListener("click", flyHome);
-  viewer.camera.setView({ destination: rectangle });
+  const el = (id) => document.getElementById(id);
+  const tracker = makeTracker();
 
-  const tracker = makeTracker(meta);
-  document.getElementById("reset").addEventListener("click", () => {
+  let meta = initialMeta;
+  let rectangle = null;
+  let baseLayer = null;
+  let gridLayer = null;
+  let bust = 0;
+
+  const newTilingScheme = () => (meta.scheme === "geographic"
+    ? new Cesium.GeographicTilingScheme()
+    : new Cesium.WebMercatorTilingScheme());
+
+  function newLayer() {
+    const joiner = meta.url_template.indexOf("?") === -1 ? "?r=" : "&r=";
+    const provider = new Cesium.UrlTemplateImageryProvider({
+      url: meta.url_template + (bust ? joiner + bust : ""),
+      tilingScheme: newTilingScheme(),
+      rectangle: rectangle,
+      minimumLevel: meta.minzoom,
+      maximumLevel: meta.maxzoom,
+      tileWidth: meta.tilesize,
+      tileHeight: meta.tilesize,
+      hasAlphaChannel: meta.format !== "jpeg",
+      credit: new Cesium.Credit(meta.name || "tiles", false),
+    });
+    provider.errorEvent.addEventListener(() =>
+      note("a tile request failed - a remote server may be refusing cross-origin use"));
+    return new Cesium.ImageryLayer(provider);
+  }
+
+  // The grid is generated canvases, not fetched files, so it adds nothing to
+  // the traffic counters. Only the tile edge is drawn -- a dark hairline
+  // underneath keeps it legible where the imagery below is pale.
+  function newGridLayer() {
+    const provider = new Cesium.TileCoordinatesImageryProvider({ tilingScheme: newTilingScheme() });
+    provider.maximumLevel = meta.maxzoom;
+    const size = meta.tilesize || 256;
+    provider.requestImage = function (x, y, level) {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.30)";
+      ctx.lineWidth = 5;
+      ctx.strokeRect(2.5, 2.5, size - 5, size - 5);
+      ctx.globalAlpha = 0.72;
+      ctx.strokeStyle = gridColor(level);
+      ctx.lineWidth = 3;
+      ctx.strokeRect(2.5, 2.5, size - 5, size - 5);
+      return Promise.resolve(canvas);
+    };
+    return new Cesium.ImageryLayer(provider, { rectangle: rectangle });
+  }
+
+  function relayer() {
     const showingGrid = gridLayer !== null;
-    bust = Date.now();
-    viewer.imageryLayers.removeAll();   // drops Cesium's cached tile images
+    viewer.imageryLayers.removeAll();
     baseLayer = newLayer();
     viewer.imageryLayers.add(baseLayer);
     gridLayer = showingGrid ? newGridLayer() : null;
     if (gridLayer) viewer.imageryLayers.add(gridLayer);
+  }
+
+  function rebuild(fly) {
+    const extent = extentOf(meta);
+    rectangle = Cesium.Rectangle.fromDegrees(extent[0], extent[1], extent[2], extent[3]);
+    relayer();
+    // Count only tiles belonging to the source now loaded.
+    tracker.prefix = meta.url_template.split("{z}")[0];
+    window.tilesetMetadata = meta;   // kept current, not captured at startup
+    rows(el("facts"), facts(meta));
+    el("scheme").value = meta.scheme;
+    el("minzoom").value = meta.minzoom;
+    el("maxzoom").value = meta.maxzoom;
+    el("tilesize").value = meta.tilesize;
+    if (fly) viewer.camera.setView({ destination: rectangle });
+    refresh();
+  }
+
+  function note(message) {
+    const box = el("note");
+    box.style.display = message ? "block" : "none";
+    box.textContent = message || "";
+  }
+
+  function problem(message) {
+    const box = el("error");
+    box.style.display = message ? "block" : "none";
+    box.textContent = message || "";
+  }
+
+  el("load").addEventListener("click", async () => {
+    problem(""); note("");
+    const spec = el("source").value;
+    try {
+      const loaded = await resolveSource(spec, {
+        scheme: el("scheme").value,
+        minzoom: Number(el("minzoom").value) || 0,
+        maxzoom: Number(el("maxzoom").value) || 18,
+        tilesize: Number(el("tilesize").value) || 256,
+      });
+      if (loaded.templateOnly) {
+        note("no metadata.json: using the scheme and zooms set above, whole-world extent");
+      }
+      meta = loaded;
+      meta.source_spec = spec;
+      bust = 0;
+      tracker.reset();
+      rebuild(true);
+    } catch (err) {
+      problem(err.message);
+    }
+  });
+
+  el("home").addEventListener("click", () =>
+    viewer.camera.flyTo({ destination: rectangle, duration: 1.5 }));
+
+  // Clearing the browser's HTTP cache is not possible from script, so reset
+  // rebuilds the layer against a fresh query string instead: new URLs miss both
+  // Cesium's in-memory tile cache and the browser's, and the counters then
+  // measure a genuine cold load rather than replaying what is already local.
+  el("reset").addEventListener("click", () => {
+    bust = Date.now();
+    relayer();
     tracker.reset();
     refresh();
   });
 
-  const gridButton = document.getElementById("grid");
-  gridButton.addEventListener("click", () => {
+  el("grid").addEventListener("click", () => {
     if (gridLayer) {
       viewer.imageryLayers.remove(gridLayer, true);
       gridLayer = null;
@@ -343,17 +459,15 @@ function start(meta) {
       gridLayer = newGridLayer();
       viewer.imageryLayers.add(gridLayer);
     }
-    gridButton.textContent = gridLayer ? "Hide tile grid" : "Show tile grid";
+    el("grid").textContent = gridLayer ? "Hide tile grid" : "Show tile grid";
     refresh();
   });
-
-  const visibleEl = document.getElementById("visible");
-  const trafficEl = document.getElementById("traffic");
 
   function refresh() {
     const view = visibleTiles(viewer, baseLayer);
     const altitude = viewer.camera.positionCartographic.height;
-    const shown = [["altitude", altitude > 9999 ? (altitude / 1000).toFixed(0) + " km" : Math.round(altitude) + " m"]];
+    const shown = [["altitude", altitude > 9999
+      ? (altitude / 1000).toFixed(0) + " km" : Math.round(altitude) + " m"]];
 
     if (!view) {
       shown.push(["tiles", "unavailable"]);
@@ -362,20 +476,23 @@ function start(meta) {
       const levels = [...view.byLevel.keys()].sort((a, b) => a - b);
       for (const level of levels) {
         const b = view.byLevel.get(level);
-        shown.push(["z" + level, b.n + " \\u00d7  x " + b.x0 + (b.x1 > b.x0 ? "-" + b.x1 : "") +
-                                 "  y " + b.y0 + (b.y1 > b.y0 ? "-" + b.y1 : ""), gridLayer ? gridColor(level, meta.maxzoom) : null]);
+        const span = b.n + " \\u00d7  x " + b.x0 + (b.x1 > b.x0 ? "-" + b.x1 : "") +
+                     "  y " + b.y0 + (b.y1 > b.y0 ? "-" + b.y1 : "");
+        shown.push(["z" + level, span, gridLayer ? gridColor(level) : null]);
       }
       if (!levels.length) shown.push(["", "none in view"]);
     }
-    rows(visibleEl, shown);
+    rows(el("visible"), shown);
 
     const seconds = Math.max(1, (Date.now() - tracker.since) / 1000);
+    const opaque = tracker.opaque > 0 && tracker.payload === 0;
     const traffic = [
-      ["downloaded", tracker.downloaded + " tiles"],
-      ["network", bytes(tracker.network)],
-      ["avg tile", tracker.downloaded ? bytes(Math.round(tracker.payload / tracker.downloaded)) : "-"],
+      ["downloaded", (tracker.downloaded + tracker.opaque) + " tiles"],
+      ["network", opaque ? "n/a (cross-origin)" : bytes(tracker.network)],
+      ["avg tile", tracker.downloaded
+        ? bytes(Math.round(tracker.payload / tracker.downloaded)) : "-"],
       ["from cache", tracker.cached + " tiles"],
-      ["imagery seen", bytes(tracker.imagery)],
+      ["imagery seen", opaque ? "n/a" : bytes(tracker.imagery)],
       ["last tile", tracker.last],
       ["elapsed", seconds < 60 ? seconds.toFixed(0) + " s" : (seconds / 60).toFixed(1) + " min"],
     ];
@@ -383,16 +500,17 @@ function start(meta) {
     if (levels.length) {
       traffic.push(["by level", levels.map((z) => "z" + z + ":" + tracker.byLevel.get(z)).join("  ")]);
     }
-    rows(trafficEl, traffic);
+    rows(el("traffic"), traffic);
   }
 
-  refresh();
+  el("source").value = meta.source_spec || ".";
+  rebuild(true);
   setInterval(refresh, 400);
 
   // Exposed deliberately: makes the page inspectable from the dev console.
   window.viewer = viewer;
-  window.tilesetMetadata = meta;
   window.tileTracker = tracker;
+  window.loadSource = (spec) => { el("source").value = spec; el("load").click(); };
   return viewer;
 }
 
@@ -419,7 +537,7 @@ def render_viewer(metadata: dict) -> str:
     """Return the viewer HTML for ``metadata`` (as written to metadata.json)."""
     return (
         _TEMPLATE.replace("__CESIUM__", CESIUM_VERSION)
-        .replace("__TITLE__", str(metadata.get("name", "Tileset")))
+        .replace("__TITLE__", str(metadata.get("name", "Tile tester")))
         .replace("__METADATA__", json.dumps(metadata, indent=2))
     )
 

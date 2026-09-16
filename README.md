@@ -91,13 +91,35 @@ coloured by zoom level, with matching swatches beside the levels in the *On
 screen* list. The overlay is drawn on canvas rather than fetched, so it does not
 disturb the traffic counters.
 
-Zoom level is ordinal, so the grid uses a single hue stepped light to dark rather
-than a hue per level — a rainbow would imply the levels are unordered categories.
-Five steps is the most one hue carries with a visible gap between neighbours
-(measured, not guessed: eleven steps land 0.047 apart in lightness and read as
-one colour), so the ramp is anchored at the top of the pyramid where navigation
-happens, and levels more than four coarser share the lightest step. The legend
-names the exact levels on screen, so identity never rests on colour alone.
+Blue and orange alternate by level parity, each family darkening as the level
+rises. The alternation is the point: the levels Cesium shows together are
+consecutive, so neighbours differ in **hue** rather than lightness, which is what
+makes them tellable apart. A single smooth ramp cannot do this — ten steps in one
+hue land about 0.047 apart in lightness and read as one colour, and a two-hue
+smooth ramp measured a protanopia ΔE of 0.6 between neighbours. This scheme
+measures **21.4 protan and 28.0 normal-vision** on its worst adjacent pair,
+against floors of 8 and 15. Lightness still carries the ordering inside each hue,
+so z5 and z7 remain distinguishable.
+
+### Pointing it at other tiles
+
+The viewer is a general tile tester, not tied to the tileset it ships beside.
+The **Source** box takes either:
+
+- a **tileset directory** — `.`, `../other-tileset`, or an absolute URL — which
+  is read through its `metadata.json`, so scheme, zooms, extent and size all
+  come across automatically; or
+- a raw **`{z}/{x}/{y}` URL template**, used as given, with the scheme, tile size
+  and zoom range taken from the controls beside it.
+
+To compare local tilesets, serve their common parent:
+`.venv/Scripts/cesiumtiles-serve . --port 8000`, then load `tileset` or
+`other-tileset` by name.
+
+A remote server must allow cross-origin requests. If it also omits
+`Timing-Allow-Origin`, the browser withholds transfer sizes, and the panel
+reports network bytes as `n/a (cross-origin)` rather than pretending they are
+zero — tile counts still work.
 
 **Reset counters & cache** zeroes the counters *and* forces the next load to be
 genuinely cold. Script cannot clear the browser's HTTP cache, so it rebuilds the
