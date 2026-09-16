@@ -25,9 +25,12 @@ and is the input to all tiling.
 - Use `pwsh.exe` not `powershell.exe` (see the user's global CLAUDE.md).
 - `.venv/Scripts/python.exe` — note `Scripts/`, not `bin/`.
 
-**Do not run the full suite unprompted** — the user asked for this explicitly;
-it takes ~35 s and was stalling the work. Run a single test when something
-genuinely needs checking, and otherwise let them ask.
+**Do not run the full test suite on your own initiative.** Not before a commit,
+not after a refactor, not "because it touched a lot of files". *Offering* is
+welcome — say when you think a full run is worth it and let the user call it.
+Running one test by node id to check a specific thing is fine. What is not fine
+is a full run after every small change; this was asked for repeatedly before it
+stuck.
 
 ```bash
 .venv/Scripts/python -m pytest                        # 124 tests, ~35s
