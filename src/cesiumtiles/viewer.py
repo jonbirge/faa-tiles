@@ -51,6 +51,11 @@ _TEMPLATE = """<!DOCTYPE html>
   #panel button:hover { background: rgba(255, 255, 255, 0.18); }
   #panel button:active { background: rgba(255, 255, 255, 0.26); }
   .num { font-variant-numeric: tabular-nums; }
+  .swatch {
+    display: inline-block; width: 9px; height: 9px; margin-right: 6px;
+    border-radius: 2px; vertical-align: baseline;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+  }
   #error { color: #ff8b8b; margin-top: 8px; display: none; }
 </style>
 </head>
@@ -63,6 +68,7 @@ _TEMPLATE = """<!DOCTYPE html>
 
   <h2>On screen</h2>
   <dl id="visible"></dl>
+  <button id="grid">Show tile grid</button>
 
   <h2>Downloaded</h2>
   <dl id="traffic"></dl>
@@ -92,11 +98,38 @@ function bytes(n) {
 
 function rows(dl, pairs) {
   dl.textContent = "";
-  for (const [k, v] of pairs) {
+  for (const [k, v, swatch] of pairs) {
     const dt = document.createElement("dt"); dt.textContent = k;
-    const dd = document.createElement("dd"); dd.textContent = v; dd.className = "num";
+    const dd = document.createElement("dd"); dd.className = "num";
+    if (swatch) {
+      const chip = document.createElement("span");
+      chip.className = "swatch";
+      chip.style.background = swatch;
+      dd.appendChild(chip);
+    }
+    dd.appendChild(document.createTextNode(v));
     dl.append(dt, dd);
   }
+}
+
+// -- tile grid colouring -------------------------------------------------
+// Zoom level is ordinal, not categorical, so the grid uses one hue stepped
+// light->dark. A hue per level would be a rainbow, which implies the levels are
+// unordered categories and is the classic mistake here.
+//
+// Five steps is the most this hue carries with visible gaps between
+// neighbours. That is measured, not guessed: eleven steps put adjacent pairs
+// 0.047 apart in lightness, which reads as the same colour, and seven still
+// failed at the light end. The ramp is anchored at the TOP of the pyramid,
+// where navigation actually happens, so the levels you move between stay
+// distinct; anything more than four levels coarser shares the lightest step.
+// The legend names the exact levels on screen, so identity never rests on
+// colour alone.
+const GRID_RAMP = ["#86b6ef", "#3987e5", "#256abf", "#184f95", "#0d366b"];
+
+function gridColor(level, maxzoom) {
+  const last = GRID_RAMP.length - 1;
+  return GRID_RAMP[Math.max(0, Math.min(last, last - (maxzoom - level)))];
 }
 
 function facts(meta) {
@@ -180,7 +213,7 @@ function makeTracker(meta) {
 // Walks Cesium's render list. These are private fields, so everything is
 // guarded: a Cesium upgrade that renames them should degrade to "unavailable"
 // rather than break the page.
-function visibleTiles(viewer) {
+function visibleTiles(viewer, layer) {
   try {
     const rendered = viewer.scene.globe._surface._tilesToRender;
     if (!rendered) return null;
@@ -193,6 +226,7 @@ function visibleTiles(viewer) {
       for (const slot of imagery) {
         const tile = slot.readyImagery || slot.loadingImagery;
         if (!tile || tile.level === undefined) continue;
+        if (layer && tile.imageryLayer !== layer) continue;
         if (!slot.readyImagery) loading++;
         const key = tile.level + "/" + tile.x + "/" + tile.y;
         if (seen.has(key)) continue;
@@ -223,12 +257,14 @@ function start(meta) {
   // tile cache and the browser's, and the counters then measure a genuine cold
   // load rather than replaying what is already local.
   let bust = 0;
+  const newTilingScheme = () => (meta.scheme === "geographic"
+    ? new Cesium.GeographicTilingScheme()
+    : new Cesium.WebMercatorTilingScheme());
+
   function newLayer() {
     return new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({
       url: meta.url_template + (bust ? "?r=" + bust : ""),
-      tilingScheme: meta.scheme === "geographic"
-        ? new Cesium.GeographicTilingScheme()
-        : new Cesium.WebMercatorTilingScheme(),
+      tilingScheme: newTilingScheme(),
       rectangle: rectangle,
       minimumLevel: meta.minzoom,
       maximumLevel: meta.maxzoom,
@@ -239,10 +275,35 @@ function start(meta) {
     }));
   }
 
+  // The grid is an overlay of generated canvases, not fetched files, so it adds
+  // nothing to the traffic counters. Only the tile edge is drawn -- a dark
+  // hairline underneath keeps it legible where the chart below is pale.
+  function newGridLayer() {
+    const provider = new Cesium.TileCoordinatesImageryProvider({ tilingScheme: newTilingScheme() });
+    provider.maximumLevel = meta.maxzoom;
+    const size = meta.tilesize;
+    provider.requestImage = function (x, y, level) {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.30)";
+      ctx.lineWidth = 5;
+      ctx.strokeRect(2.5, 2.5, size - 5, size - 5);
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = gridColor(level, meta.maxzoom);
+      ctx.lineWidth = 3;
+      ctx.strokeRect(2.5, 2.5, size - 5, size - 5);
+      return Promise.resolve(canvas);
+    };
+    return new Cesium.ImageryLayer(provider, { rectangle: rectangle });
+  }
+
   // No Ion token is used: our own tiles are the base layer, and the default
   // ellipsoid terrain needs no network access.
+  let baseLayer = newLayer();
+  let gridLayer = null;
   const viewer = new Cesium.Viewer("cesiumContainer", {
-    baseLayer: newLayer(),
+    baseLayer: baseLayer,
     baseLayerPicker: false,
     geocoder: false,
     homeButton: false,
@@ -262,10 +323,27 @@ function start(meta) {
 
   const tracker = makeTracker(meta);
   document.getElementById("reset").addEventListener("click", () => {
+    const showingGrid = gridLayer !== null;
     bust = Date.now();
     viewer.imageryLayers.removeAll();   // drops Cesium's cached tile images
-    viewer.imageryLayers.add(newLayer());
+    baseLayer = newLayer();
+    viewer.imageryLayers.add(baseLayer);
+    gridLayer = showingGrid ? newGridLayer() : null;
+    if (gridLayer) viewer.imageryLayers.add(gridLayer);
     tracker.reset();
+    refresh();
+  });
+
+  const gridButton = document.getElementById("grid");
+  gridButton.addEventListener("click", () => {
+    if (gridLayer) {
+      viewer.imageryLayers.remove(gridLayer, true);
+      gridLayer = null;
+    } else {
+      gridLayer = newGridLayer();
+      viewer.imageryLayers.add(gridLayer);
+    }
+    gridButton.textContent = gridLayer ? "Hide tile grid" : "Show tile grid";
     refresh();
   });
 
@@ -273,7 +351,7 @@ function start(meta) {
   const trafficEl = document.getElementById("traffic");
 
   function refresh() {
-    const view = visibleTiles(viewer);
+    const view = visibleTiles(viewer, baseLayer);
     const altitude = viewer.camera.positionCartographic.height;
     const shown = [["altitude", altitude > 9999 ? (altitude / 1000).toFixed(0) + " km" : Math.round(altitude) + " m"]];
 
@@ -285,7 +363,7 @@ function start(meta) {
       for (const level of levels) {
         const b = view.byLevel.get(level);
         shown.push(["z" + level, b.n + " \\u00d7  x " + b.x0 + (b.x1 > b.x0 ? "-" + b.x1 : "") +
-                                 "  y " + b.y0 + (b.y1 > b.y0 ? "-" + b.y1 : "")]);
+                                 "  y " + b.y0 + (b.y1 > b.y0 ? "-" + b.y1 : ""), gridLayer ? gridColor(level, meta.maxzoom) : null]);
       }
       if (!levels.length) shown.push(["", "none in view"]);
     }

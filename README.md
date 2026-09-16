@@ -86,6 +86,19 @@ It also carries a diagnostics panel:
 - **Downloaded** — tiles fetched, bytes over the wire, average tile size, tiles
   served from cache, and the most recent tile requested.
 
+**Show tile grid** overlays each tile's boundary as a semi-transparent border,
+coloured by zoom level, with matching swatches beside the levels in the *On
+screen* list. The overlay is drawn on canvas rather than fetched, so it does not
+disturb the traffic counters.
+
+Zoom level is ordinal, so the grid uses a single hue stepped light to dark rather
+than a hue per level — a rainbow would imply the levels are unordered categories.
+Five steps is the most one hue carries with a visible gap between neighbours
+(measured, not guessed: eleven steps land 0.047 apart in lightness and read as
+one colour), so the ramp is anchored at the top of the pyramid where navigation
+happens, and levels more than four coarser share the lightest step. The legend
+names the exact levels on screen, so identity never rests on colour alone.
+
 **Reset counters & cache** zeroes the counters *and* forces the next load to be
 genuinely cold. Script cannot clear the browser's HTTP cache, so it rebuilds the
 imagery layer against a fresh query string, which misses both Cesium's in-memory

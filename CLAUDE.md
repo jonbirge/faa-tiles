@@ -175,6 +175,17 @@ bytes, average tile size, cache hits), with a reset button.
   is `transferSize < encodedBodySize`: if so, the body never crossed the wire.
   An earlier version keyed on `transferSize === 0` and then on a 304 status, and
   both miscounted a fully cached load as a full download.
+- **The tile-grid overlay is a `TileCoordinatesImageryProvider` with
+  `requestImage` overridden** to stroke only the tile edge (no fill, no label —
+  the user asked for a border only). It is a second imagery layer, so
+  `visibleTiles()` filters on `tile.imageryLayer === baseLayer` or every tally
+  doubles. Canvas-drawn, so it never touches the traffic counters.
+- **Grid colour is ordinal, not categorical.** Zoom level is ordered, so it uses
+  one hue light→dark; a hue per level would be a rainbow, the classic mistake.
+  The five steps are validated (`dataviz` skill's `validate_palette.js
+  --ordinal`): eleven steps failed at ΔL 0.047 between neighbours, seven still
+  failed at the light end, five and six pass. The ramp anchors at `maxzoom` so
+  the levels you navigate between stay distinct.
 - **Reset also busts the cache**, because script cannot clear the browser's HTTP
   cache. It rebuilds the imagery layer against a fresh `?r=<timestamp>`, which
   misses both Cesium's in-memory cache and the browser's. Verified: warm load
