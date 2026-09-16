@@ -23,7 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  cesiumtiles chart.tif ./colorado --bbox -109.1 36.9 -102.0 41.1\n"
             "  cesiumtiles chart.tif ./small --format webp --lossy --quality 95\n"
             "  cesiumtiles chart.tif ./trimmed --bbox-crs source \\\n"
-            "      --bbox -2078595 -1374023 2574081 1473465\n"
+            "      --bbox -2065471 -1353551 2560432 1453780\n"
         ),
     )
     parser.add_argument("source", help="georeferenced input raster (GeoTIFF)")

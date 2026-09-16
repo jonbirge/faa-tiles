@@ -52,35 +52,48 @@ RGB_IMAGE = REPO / "vfr_wall_planning.tif"             # full colour, no geo met
 COMBINED = REPO / "vfr_wall_planning_geo.tif"          # stage 1 output
 
 # --------------------------------------------------------------------------
-# The neatline: the rectangle where the map graphic ends and the printed
-# furniture begins. Outside it are a white margin, a heavy black border, and a
-# "Nautical Miles" scale bar -- all georeferenced, so without this crop they get
-# painted onto the globe as if they were terrain.
+# Where the map graphic ends and the printed furniture begins. Outside it are a
+# white paper margin, a heavy black neatline, and a "Nautical Miles" scale bar.
+# All of it is georeferenced, so without this crop it gets painted onto the
+# globe as if it were terrain.
 #
-# These numbers are in the chart's OWN CRS (a custom Lambert Conformal Conic,
-# metres), not lon/lat, because that is the frame the neatline is a true
-# rectangle in. Its corners differ by 8.3 degrees of longitude between NW and SW,
-# so a lon/lat box would leave white wedges in the corners.
+# These numbers are in the chart's OWN CRS (a custom Lambert Conformal Conic, in
+# metres), not lon/lat: the sheet's corners differ by 8.3 degrees of longitude
+# between NW and SW, so a lon/lat box would leave white wedges in the corners.
+#
+# The box is INSCRIBED in the map, not circumscribed about it. The neatline is
+# not aligned to the pixel grid -- its top edge runs from row 272 on the left to
+# row 200 on the right -- so any axis-aligned box that contains the whole map
+# also contains slices of border and paper. Trimming to the inscribed box costs
+# about 1.8% of the area and is what keeps the edges clean.
 #
 # Measured from the 2025 edition with --detect-neatline: pixel box
-# (422, 221)-(18148, 11070) of 18509 x 11441, i.e. margins of 422 left, 221 top,
-# 361 right, 371 bottom. Keeps 90.8% of the image area.
+# (472, 296)-(18096, 10992) of 18509 x 11441, i.e. margins of 472 left, 296 top,
+# 413 right, 449 bottom. Keeps 89.0% of the sheet. Re-running --detect-neatline
+# reproduces these numbers exactly.
 # --------------------------------------------------------------------------
-NEATLINE_LCC = (-2078595.031, -1374023.013, 2574081.248, 1473465.213)  # W, S, E, N
+NEATLINE_LCC = (-2065471.156, -1353550.704, 2560432.418, 1453780.3)  # W, S, E, N
 
 TITLE = "U.S. VFR Wall Planning Chart"
 DEFAULT_OUT = REPO / "tileset"
 
 
-def detect_neatline(source: Path, threshold: float = 0.25, decimation: int = 8):
-    """Re-measure the neatline by finding where chromatic content lives.
+def detect_neatline(source: Path, run_limit: int = 150, step: int = 8, decimation: int = 8):
+    """Re-measure the crop from the image. Returns (W, S, E, N) in the source CRS.
 
-    The margin is pure white and the scale-bar panel is white with black text
-    and rules; only the map itself is chromatic (blue ocean, green and tan
-    terrain). Counting pixels with real saturation therefore separates map from
-    furniture without needing to recognise any of the furniture.
+    Two stages, because two different things have to be distinguished.
 
-    Returns (west, south, east, north) in the source's own CRS.
+    First, find roughly where the map is: the paper margin is pure white and the
+    scale-bar panel is white with black type, so only the map itself is
+    chromatic (blue ocean, green and tan terrain). Saturation separates map from
+    furniture without having to recognise any of the furniture.
+
+    That bounding box still catches border and paper, because the neatline is
+    not square to the pixel grid. So second, shrink each edge until it is clean,
+    judged on the thing that really tells furniture from map: a long
+    uninterrupted run of paper-white or of neatline-black. Map ink is broken up
+    at that scale by coastlines, symbols and type, so a run of ``run_limit``
+    pixels of either is border, not content.
     """
     import numpy as np
     from osgeo import gdal
@@ -89,43 +102,57 @@ def detect_neatline(source: Path, threshold: float = 0.25, decimation: int = 8):
     ds = gdal.Open(str(source))
     width, height = ds.RasterXSize, ds.RasterYSize
 
-    def chromatic(block):
-        a = block.astype(np.int16)
-        return (a.max(axis=0) - a.min(axis=0)) > 10
-
-    # Pass 1: a decimated read to find the box approximately.
+    # -- stage 1: chromatic bounding box, from a cheap decimated read ---
     small = ds.ReadAsArray(buf_xsize=width // decimation, buf_ysize=height // decimation)
-    mask = chromatic(small)
-    rows = np.where(mask.mean(axis=1) > threshold)[0]
-    cols = np.where(mask.mean(axis=0) > threshold)[0]
+    a = small.astype(np.int16)
+    mask = (a.max(axis=0) - a.min(axis=0)) > 10
+    rows = np.where(mask.mean(axis=1) > 0.25)[0]
+    cols = np.where(mask.mean(axis=0) > 0.25)[0]
     if not len(rows) or not len(cols):
         raise SystemExit("no chromatic content found; is this the right image?")
-    box = [cols[0] * decimation, rows[0] * decimation,
-           (cols[-1] + 1) * decimation, (rows[-1] + 1) * decimation]
+    left, top = int(cols[0] * decimation), int(rows[0] * decimation)
+    right, bottom = int((cols[-1] + 1) * decimation), int((rows[-1] + 1) * decimation)
+    print(f"  chromatic box   : ({left}, {top})-({right}, {bottom})")
 
-    # Pass 2: full-resolution strips around each edge, for exact pixels.
-    pad = decimation * 64
+    # -- stage 2: shrink until every edge is free of paper and neatline -
+    def longest_run(flags):
+        if not flags.any():
+            return 0
+        padded = np.concatenate(([False], flags, [False]))
+        edges = np.flatnonzero(padded[1:] != padded[:-1])
+        return int((edges[1::2] - edges[::2]).max())
 
-    def edge(axis: int, guess: int, take_last: bool) -> int:
-        lo = max(0, guess - pad)
-        hi = min(width if axis else height, guess + pad)
-        if axis:  # vertical edge: scan columns
-            arr = ds.ReadAsArray(lo, box[1], hi - lo, box[3] - box[1])
-            frac = chromatic(arr).mean(axis=0)
-        else:  # horizontal edge: scan rows
-            arr = ds.ReadAsArray(box[0], lo, box[2] - box[0], hi - lo)
-            frac = chromatic(arr).mean(axis=1)
-        hits = np.where(frac > threshold)[0]
-        return lo + (hits[-1] + 1 if take_last else hits[0])
+    def worst_run(x, y, xsize, ysize):
+        strip = ds.ReadAsArray(x, y, xsize, ysize).astype(np.int16)
+        paper = (strip.min(axis=0) > 245).ravel()
+        ink = (strip.max(axis=0) < 100).ravel()
+        return max(longest_run(paper), longest_run(ink))
 
-    left = edge(1, box[0], False)
-    right = edge(1, box[2], True)
-    top = edge(0, box[1], False)
-    bottom = edge(0, box[3], True)
+    for _ in range(200):
+        sides = {
+            "top": worst_run(left, top, right - left, 1),
+            "bottom": worst_run(left, bottom - 1, right - left, 1),
+            "left": worst_run(left, top, 1, bottom - top),
+            "right": worst_run(right - 1, top, 1, bottom - top),
+        }
+        dirty = [s for s, run in sides.items() if run > run_limit]
+        if not dirty:
+            break
+        if "top" in dirty:
+            top += step
+        if "bottom" in dirty:
+            bottom -= step
+        if "left" in dirty:
+            left += step
+        if "right" in dirty:
+            right -= step
+    else:
+        raise SystemExit("crop did not converge; check run_limit")
 
-    print(f"  neatline pixels : ({left}, {top})-({right}, {bottom}) of {width} x {height}")
+    print(f"  inscribed box   : ({left}, {top})-({right}, {bottom}) of {width} x {height}")
     print(f"  margins dropped : left {left}, top {top}, right {width - right}, "
           f"bottom {height - bottom}")
+    print(f"  keeps {(right - left) * (bottom - top) / (width * height) * 100:.1f}% of the sheet")
 
     gt = ds.GetGeoTransform()
     return (round(float(gt[0] + left * gt[1]), 3), round(float(gt[3] + bottom * gt[5]), 3),

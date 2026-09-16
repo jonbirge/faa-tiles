@@ -79,14 +79,21 @@ costs a lot of context for no gain.
    margin, a heavy border and a "Nautical Miles" scale bar, all georeferenced,
    which would otherwise land on the globe as if they were map. The crop is
    `NEATLINE_LCC` in `scripts/build_vfr_tileset.py`: pixel box
-   (422, 221)-(18148, 11070) of 18509 x 11441, keeping 90.8% of the area.
+   (472, 296)-(18096, 10992) of 18509 x 11441, keeping 89.0% of the area.
+   The box is **inscribed** in the map, not circumscribed: the neatline is not
+   square to the pixel grid (top edge row 272 on the left, row 200 on the
+   right), so a containing box always catches border and paper. An earlier
+   circumscribed crop looked right in the middle and left neatline at the edges.
    **It must be expressed in the source CRS** (`--bbox-crs source`) because the
    neatline is a rectangle in the chart's Lambert Conformal Conic, not in
    lon/lat — its corners differ by 8.3 deg of longitude NW vs SW. Cropped build
-   is 6,552 tiles / 283.5 MB; uncropped is 7,190 / 285.0 MB.
-   `--detect-neatline` re-measures it for a new chart edition by finding where
-   chromatic pixels live (margins are white, the scale-bar panel is white with
-   black text, only the map is coloured).
+   is 6,372 tiles / 280.4 MB; uncropped is 7,190 / 285.0 MB.
+   `--detect-neatline` re-measures it for a new chart edition and reproduces
+   these numbers exactly: a chromatic bounding box first (margins are white, the
+   scale-bar panel is white with black type, only the map is coloured), then
+   shrink each edge until it holds no run of paper-white or neatline-black
+   longer than 150 px. Map ink is broken up at that scale, so a long run of
+   either is furniture.
 
 ## Gotchas that have already bitten
 

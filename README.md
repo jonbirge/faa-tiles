@@ -22,7 +22,7 @@ That script is the recipe for the published tileset and a worked example of the
 library: georeference the RGB render, crop to the map neatline, tile. It is
 commented with the options worth reaching for — `--lossy`, `--max-zoom`,
 `--scheme`, `--skip-blank` — and `--dry-run` prints the plan without writing
-280 MB. Result: **6,552 tiles, 283.5 MB, ~54 s** on 24 cores.
+280 MB. Result: **6,372 tiles, 280.4 MB, ~64 s** on 24 cores.
 
 ## Setup
 
@@ -154,12 +154,19 @@ A printed chart carries a margin, a border and a scale bar, and they are
 georeferenced along with the map — so without a crop they get pasted onto the
 globe as if they were terrain. Cropping them off is what `--bbox-crs source` is
 for, because **a neatline is a rectangle in the projection the chart was drawn
-in, not in lon/lat**. On the VFR wall planning chart the neatline's corners
+in, not in lon/lat**. On the VFR wall planning chart the sheet's corners
 differ by 8.3 degrees of longitude between NW and SW, so a lon/lat box would
 leave white wedges in the corners.
 
+The crop also has to be **inscribed** in the map rather than circumscribed about
+it. The neatline is not square to the pixel grid — its top edge runs from row 272
+on the left of the sheet to row 200 on the right — so any axis-aligned box
+containing the whole map also contains slices of border and paper. Trimming to
+the inscribed box costs about 1.8% of the area and is what actually keeps the
+edges clean.
+
 ```bash
-.venv/Scripts/cesiumtiles vfr_wall_planning_geo.tif ./tileset     --bbox-crs source --bbox -2078595.031 -1374023.013 2574081.248 1473465.213
+.venv/Scripts/cesiumtiles vfr_wall_planning_geo.tif ./tileset     --bbox-crs source --bbox -2065471.156 -1353550.704 2560432.418 1453780.3
 ```
 
 `scripts/build_vfr_tileset.py` does this for you, and can re-measure the
