@@ -438,14 +438,17 @@ def test_viewer_has_no_title_heading(tmp_path, source):
     assert "<title>Test Chart</title>" in html
 
 
-def test_grid_uses_two_alternating_hues(tmp_path, source):
-    """Adjacent zoom levels must differ in hue, not just lightness.
+def test_grid_ramps_blue_to_orange_across_the_zoom_range(tmp_path, source):
+    """Blue at z0 through to orange at maxzoom, scaled to the tileset loaded.
 
-    A single smooth ramp puts consecutive levels ~0.047 apart in lightness,
-    which reads as one colour -- and consecutive levels are exactly what Cesium
-    shows together. Alternating two hue families fixes that.
+    The ramp is computed from level/maxzoom rather than baked in, so pointing
+    the tester at a source with a different depth re-scales it instead of
+    running off the end of a fixed list.
     """
     result = build_tileset(source, tmp_path / "out", quiet=True)
     html = (result.output_dir / "index.html").read_text(encoding="utf-8")
-    assert "GRID_BLUE" in html and "GRID_ORANGE" in html
-    assert "level % 2 === 0" in html
+    assert "GRID_HUE_START" in html and "GRID_HUE_SPAN" in html
+    assert "level / span" in html
+    # Borders are half transparent, per the requested look.
+    assert "GRID_ALPHA = 0.5" in html
+    assert "gridColor(level, meta.maxzoom, GRID_ALPHA)" in html

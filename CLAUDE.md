@@ -180,15 +180,15 @@ bytes, average tile size, cache hits), with a reset button.
   the user asked for a border only). It is a second imagery layer, so
   `visibleTiles()` filters on `tile.imageryLayer === baseLayer` or every tally
   doubles. Canvas-drawn, so it never touches the traffic counters.
-- **Grid colour alternates two hues; do not "fix" it into one smooth ramp.**
-  Zoom is ordered, so a single-hue ramp looks like the right answer and is not:
-  the levels Cesium renders together are *consecutive*, which is exactly where a
-  ramp has least separation. Measured with the `dataviz` skill's
-  `validate_palette.js`: one hue over ten steps gives ΔL 0.047 between
-  neighbours (fails), and a smooth two-hue ramp gives protan ΔE 0.6 (fails
-  badly). Alternating blue/orange by parity, darkening within each family,
-  measures protan 21.4 / normal-vision 28.0 on its worst adjacent pair against
-  floors of 8 and 15. Lightness still orders levels inside each hue.
+- **Grid colour is a continuous blue -> orange ramp**, computed from
+  `level / maxzoom` (hue 212 + 173*f, HSL, 50% alpha) so it re-scales for any
+  source. The user asked for exactly this after an earlier alternating-hue
+  version. Worth remembering rather than re-deriving: a smooth ramp separates
+  *adjacent* levels least, and adjacent levels are what Cesium renders together
+  -- measured with the `dataviz` validator, one hue over ten steps gives
+  ΔL 0.047 and a smooth two-hue ramp gives protan ΔE 0.6. The legend naming each
+  level is what carries identity. This is a deliberate, stated preference; do not
+  "fix" it back to an alternating scheme.
 - **Reset also busts the cache**, because script cannot clear the browser's HTTP
   cache. It rebuilds the imagery layer against a fresh `?r=<timestamp>`, which
   misses both Cesium's in-memory cache and the browser's. Verified: warm load

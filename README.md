@@ -91,15 +91,18 @@ coloured by zoom level, with matching swatches beside the levels in the *On
 screen* list. The overlay is drawn on canvas rather than fetched, so it does not
 disturb the traffic counters.
 
-Blue and orange alternate by level parity, each family darkening as the level
-rises. The alternation is the point: the levels Cesium shows together are
-consecutive, so neighbours differ in **hue** rather than lightness, which is what
-makes them tellable apart. A single smooth ramp cannot do this — ten steps in one
-hue land about 0.047 apart in lightness and read as one colour, and a two-hue
-smooth ramp measured a protanopia ΔE of 0.6 between neighbours. This scheme
-measures **21.4 protan and 28.0 normal-vision** on its worst adjacent pair,
-against floors of 8 and 15. Lightness still carries the ordering inside each hue,
-so z5 and z7 remain distinguishable.
+The border is a continuous ramp: **blue at z0 through to orange at the tileset's
+maximum zoom**, drawn at 50% transparency over a faint dark hairline that keeps
+it visible where the imagery beneath is pale. The colour is computed from
+`level / maxzoom`, so pointing the tester at a shallower or deeper source
+re-scales the ramp rather than running off the end of a fixed list. The hue
+travels the short way round, through purple and red, which keeps it clear of the
+greens and yellows the terrain shading uses.
+
+One caveat worth knowing: on a smooth ramp, *adjacent* levels are the least
+distinguishable, and adjacent levels are exactly what Cesium renders together.
+The swatches in the *On screen* list name the levels outright, so identity never
+rests on the colour alone.
 
 ### Pointing it at other tiles
 

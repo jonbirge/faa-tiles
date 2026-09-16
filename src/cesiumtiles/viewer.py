@@ -108,21 +108,26 @@ _TEMPLATE = """<!DOCTYPE html>
 const METADATA = __METADATA__;
 
 // -- tile grid colouring -------------------------------------------------
-// Blue and orange alternate by level parity, each family darkening as the level
-// rises. The alternation is the whole point: the levels visible together are
-// consecutive, so making neighbours differ in HUE rather than in lightness is
-// what makes them tellable apart. A single smooth ramp cannot manage it -- ten
-// steps in one hue land about 0.047 apart in lightness and read as one colour,
-// and even a two-hue smooth ramp scored a protan deltaE of 0.6 between
-// neighbours. This scheme measures 21.4 protan and 28.0 normal-vision on its
-// worst adjacent pair, against floors of 8 and 15. Lightness still carries the
-// ordering inside each hue, so z5 and z7 stay distinguishable too.
-const GRID_BLUE = ["#5facff", "#4693f3", "#2c79d8", "#0f64c0", "#0052ac"];
-const GRID_ORANGE = ["#ff9866", "#ff7e4c", "#eb6834", "#d25117", "#bd3d00"];
+// A continuous ramp: blue at z0 through to orange at the tileset's maximum
+// zoom, computed from level/maxzoom so it re-scales for whatever source is
+// loaded. The hue travels the short way round, through purple and red, which
+// keeps it clear of the greens and yellows the terrain shading itself uses.
+//
+// Worth knowing when reading this: on a smooth ramp, *adjacent* levels are the
+// least distinguishable, and adjacent levels are exactly what Cesium renders
+// together. The swatches in the "On screen" list name the levels outright, so
+// identity does not rest on the colour.
+const GRID_HUE_START = 212;   // blue
+const GRID_HUE_SPAN = 173;    // -> 385 (mod 360) = orange
+const GRID_ALPHA = 0.5;
 
-function gridColor(level) {
-  const family = level % 2 === 0 ? GRID_BLUE : GRID_ORANGE;
-  return family[Math.min(family.length - 1, Math.floor(level / 2))];
+function gridColor(level, maxzoom, alpha) {
+  const span = Math.max(1, maxzoom);
+  const f = Math.min(1, Math.max(0, level / span));
+  const hue = (GRID_HUE_START + GRID_HUE_SPAN * f) % 360;
+  return alpha === undefined
+    ? "hsl(" + hue.toFixed(1) + ", 95%, 64%)"
+    : "hsla(" + hue.toFixed(1) + ", 95%, 64%, " + alpha + ")";
 }
 
 // The imagery rectangle must be the *unsnapped* data extent, never the
@@ -365,11 +370,12 @@ function start(initialMeta) {
       const canvas = document.createElement("canvas");
       canvas.width = canvas.height = size;
       const ctx = canvas.getContext("2d");
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.30)";
+      // A faint dark hairline under the stroke keeps a 50%-transparent border
+      // visible where the imagery beneath it is pale.
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.22)";
       ctx.lineWidth = 5;
       ctx.strokeRect(2.5, 2.5, size - 5, size - 5);
-      ctx.globalAlpha = 0.72;
-      ctx.strokeStyle = gridColor(level);
+      ctx.strokeStyle = gridColor(level, meta.maxzoom, GRID_ALPHA);
       ctx.lineWidth = 3;
       ctx.strokeRect(2.5, 2.5, size - 5, size - 5);
       return Promise.resolve(canvas);
@@ -478,7 +484,7 @@ function start(initialMeta) {
         const b = view.byLevel.get(level);
         const span = b.n + " \\u00d7  x " + b.x0 + (b.x1 > b.x0 ? "-" + b.x1 : "") +
                      "  y " + b.y0 + (b.y1 > b.y0 ? "-" + b.y1 : "");
-        shown.push(["z" + level, span, gridLayer ? gridColor(level) : null]);
+        shown.push(["z" + level, span, gridLayer ? gridColor(level, meta.maxzoom) : null]);
       }
       if (!levels.length) shown.push(["", "none in view"]);
     }
