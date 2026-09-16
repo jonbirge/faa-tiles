@@ -226,7 +226,8 @@ title heading — the user asked for it gone; the document `<title>` stays.
 - **The tester page is `src/cesiumtiles/viewer.html`** - plain HTML, edit it
   directly. `viewer.py` only substitutes four placeholders (`__CESIUM__`,
   `__TITLE__`, `__METADATA__`, `__SOURCE__`). It used to be a Python string,
-  which forced double-escaping (`\d` for `\d`) and made edits error-prone.
+  which forced double-escaping (a literal backslash-backslash-d to mean the
+  regex `\d`) and made edits error-prone.
   The server re-renders **per request**, so editing the HTML and reloading the
   browser shows the change with no restart. It ships as package data via
   `[tool.setuptools.package-data]`.
