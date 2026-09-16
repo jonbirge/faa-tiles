@@ -365,7 +365,11 @@ belong to the image file.
 Four things worth building next, roughly in dependency order. Each notes what
 already exists to build on.
 
-### Upsample the source before tiling
+### Upsample the source before tiling — *done*
+
+> Implemented: `build_vfr_tileset.py` stage 3 upsamples 2x with Real-CUGAN,
+> raising the native zoom to z10. `--no-upsample` skips it. What follows is the
+> reasoning, kept because it is the argument for the choice.
 
 The chart's native resolution runs out at **z9** — 262 m/px in Lambert Conformal
 Conic, which is where `--max-zoom`'s auto-detection lands. Past that Cesium
@@ -503,31 +507,60 @@ parameterised the right way; the generalisation is a manifest of charts plus a
 download stage, with `--detect-neatline` doing the per-edition measurement so
 new editions do not inherit stale constants.
 
-### Generative upsampling
+### Try a transformer upsampler
 
-Learned super-resolution in place of the lanczos stage.
+Real-CUGAN won the first round, but it is a small CNN — 1.28 M parameters, 26
+convolutions, a receptive field of a few tens of pixels. The obvious next step is
+a model that can see further along a line before deciding what it is.
 
-This is the strongest option for the artwork, and for a reason classical kernels
-cannot match: a linear filter has no way to tell an artifact from signal. Scan
-noise, ragged antialiasing on a one-pixel airway, the stair-stepping where a
-diagonal boundary was rasterised — to `lanczos` these are all just data to be
-interpolated, and it faithfully magnifies them. A model trained on flat-colour
-line art has seen what a clean edge is supposed to look like and reconstructs
-one, which is exactly the cleanup this source needs.
+**Attention-based architectures are the interesting tier**, and they are already
+drop-in: **15 of the 42 architectures `spandrel` recognises are attention-based**,
+and `scripts/upsample.py` loads any of them unchanged. Trying one is
+`--model path/to/weights.pth`, nothing else. Worth a look, roughly in order:
 
-The hallucination worry that attaches to generative upscaling belongs to a
-different regime than this one. At 2x or 4x each output pixel is tightly
-conditioned on a small, well-defined source neighbourhood, leaving little room
-to insert content that was not already there; and the text on this chart is
-already legible at source resolution, so the model is sharpening glyphs rather
-than reading and re-setting them. The risk of invented detail is real at large
-upscale factors, or with a strongly generative prior asked to fill in what was
-never sampled — neither describes doubling the resolution of a legible chart.
+| model | why |
+| --- | --- |
+| **DAT** (Dual Aggregation Transformer) | Aggregates across both spatial and channel dimensions; strong 2x results and several line-art-tuned weights exist. |
+| **HAT** (Hybrid Attention Transformer) | Combines channel attention with window self-attention, which activates more input pixels than SwinIR. Big, but this is a batch job. |
+| **ATD** (Adaptive Token Dictionary, CVPR 2024) | Learns a token dictionary rather than attending over a fixed window; good quality per parameter. |
+| **DRCT** | Addresses the information bottleneck that limits SwinIR-style networks; a strong recent baseline. |
+| **SwinIR** / **Swin2SR** | The reference transformer SR. Not the strongest any more, but the most line-art-tuned weights exist for it, so it is the easiest honest comparison. |
+| **SeemoRe**, **MoESR**, **SPAN**, **OmniSR**, **PLKSR** | Efficiency-oriented. Include them: the first round was won by the *smallest* model tried, so more capacity is not obviously the answer. |
 
-Ordinary quality control still applies, and costs nothing: keep the source tiles
-alongside the upsampled ones so any pixel can be compared against what was
-published. That is worth doing for *any* upsampling method, classical included,
-not as a special precaution against models.
+All are a **single deterministic forward pass**, like the CNNs — same input, same
+output, reproducible tiles. Weights tuned for illustration and line art (rather
+than the usual DIV2K natural-image training) are on
+[OpenModelDB](https://openmodeldb.info); a model trained on photographs will
+reach for texture this artwork does not have.
+
+**What to measure.** `scripts/upsample_test.py` has the ringing and sharpness
+harness. Two more signals proved useful in the first round and are worth
+formalising: **line continuity** on thin airways and boundaries, which is the
+property that separates these models on line art and the one that disqualifies a
+model outright; and **lossless WebP size as a proxy for local complexity** — with
+tile count held constant, APISR's output was 30% larger than Real-CUGAN's, which
+correctly predicted it was synthesising more high-frequency content than the
+source justified.
+
+### Diffusion upsamplers — probably the wrong tool
+
+**StableSR**, **SeeSR**, **SUPIR**, **DiffBIR**, and the one-step distillations
+(**OSEDiff**, **ResShift**, **CCSR**, **AdcSR**) are the genuinely generative
+tier, and two things argue against them here.
+
+They **sample**, so they are not reproducible: the literature reports noticeable
+instability across noise samples for StableSR, PASD, SeeSR, SUPIR and AddSR, with
+CCSR existing specifically to address it. Tiles that differ run to run are a poor
+fit for a chart, and it is also the regime where the worry about invented detail
+actually bites — unlike a deterministic 2x convolution, where it does not.
+
+And their advantage is inventing plausible *texture*: skin, foliage, fabric. A
+chart has no texture to invent, only flat fills, hard edges and type. The first
+round already hinted at this — the winner was the smallest model, and the one
+that synthesised most lost.
+
+Worth revisiting only if a transformer plateaus and the remaining gap is clearly
+reconstruction rather than invention.
 
 ## Tests
 
