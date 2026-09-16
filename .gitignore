@@ -23,3 +23,8 @@ sources/
 # Generated tilesets
 tileset/
 tileset-*/
+
+# Super-resolution model weights and vendored source (large, fetched not authored)
+models/
+vendor/
+upsampled/
