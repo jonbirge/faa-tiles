@@ -89,6 +89,20 @@ It also carries a diagnostics panel:
 - **Downloaded** — tiles fetched, bytes over the wire, average tile size, tiles
   served from cache, and the most recent tile requested.
 
+The **Rendering** section controls how Cesium draws the tiles, which matters when
+comparing tilesets because two of its defaults flatter or penalise them
+misleadingly:
+
+| control | what it does |
+| --- | --- |
+| `max SSE` | `globe.maximumScreenSpaceError`, default **2**. How aggressively the globe refines. Lower fetches deeper tiles sooner — 1 roughly doubles the tiles on screen. |
+| `scale` | Cesium defaults `useBrowserRecommendedResolution` to true, which **ignores the display's pixel ratio**: on a 1.5x screen the globe renders at two thirds of the panel's sharpness. This turns that off and sets `resolutionScale`; above 1 it supersamples. |
+| `magnify` | Texture magnification past the deepest zoom. Cesium's default is `LINEAR`, so every tile is bilinearly smeared once you pass max zoom — which reads as the *tileset* being soft when it is not. `nearest` keeps pixels hard and honest. |
+| `MSAA` | `scene.msaaSamples`. Affects geometry edges, including the globe silhouette, more than imagery. |
+
+When judging an upsampler, set `magnify` to `nearest` and `scale` to your display's
+pixel ratio first — otherwise you are partly grading Cesium's bilinear filter.
+
 **Show tile grid** overlays each tile's boundary as a semi-transparent border,
 coloured by zoom level, with matching swatches beside the levels in the *On
 screen* list. The overlay is drawn on canvas rather than fetched, so it does not
