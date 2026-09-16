@@ -271,6 +271,12 @@ Measured on real chart tiles, extrapolated to the full 7,190-tile pyramid:
 | WebP q95 | 11.4 | ~64 MB |
 | WebP q90 | 8.6 | ~48 MB |
 
+Lossless is the default, but **q95 was reviewed on the real chart and showed no
+discernible ringing** — including on hairline symbology and type, which is where
+it would show first. `tileset-lossy` is that build: same 6,372 tiles at
+**72.3 MB against 280.4 MB**, a 3.9x saving. Worth considering as the default if
+serving cost matters more than exactness.
+
 ### Parallelism
 
 Tiling runs in parallel: GDAL spawns worker processes, each taking a range of
@@ -339,6 +345,91 @@ belong to the image file.
 | `copy_nodata` / `--copy-nodata` | Also copy the reference's nodata value. |
 
 ---
+
+## Planned work
+
+Four things worth building next, roughly in dependency order. Each notes what
+already exists to build on.
+
+### Upsample the source before tiling
+
+The chart's native resolution runs out at **z9** — 262 m/px in Lambert Conformal
+Conic, which is where `--max-zoom`'s auto-detection lands. Past that Cesium
+magnifies the top level and the linework goes soft. Upsampling the GeoTIFF 2x
+before tiling would put a genuine z10 in the pyramid, with hairlines and type
+resampled smoothly rather than stretched.
+
+Worth being honest about what this buys: classical upsampling (lanczos, cubic,
+Lanczos-3 in `gdal.Warp`) **adds no information**. It makes magnification look
+clean instead of blocky, which matters a lot for chart symbology, but it does not
+recover detail the scan never had. The costs are concrete: 4x the pixels (212 Mpx
+→ 850 Mpx), roughly 4x the tiles at the new top level (~4,700 → ~19,000), and a
+source file that no longer fits comfortably in memory, so the warp wants to stay
+a VRT rather than being materialised.
+
+`build_vfr_tileset.py` is the place for it — a stage between the crop and the
+tiling, with the neatline detection running on the original rather than the
+upsampled copy.
+
+### Tile the VFR sectional set
+
+The wall planning chart is one sheet. The sectional series is ~50 sheets that
+**overlap at their edges**, so this is a mosaicking problem rather than a bigger
+version of the current one:
+
+- Each sheet needs its own neatline crop first, or the printed margins land in
+  the middle of the mosaic. `detect_neatline` in `build_vfr_tileset.py` already
+  does this per sheet and should generalise, though the run-length threshold is
+  tuned to this chart's furniture and will want re-checking.
+- Sheets carry **different Lambert Conformal Conic parameters** — standard
+  parallels chosen per sheet — so they cannot simply be stacked. They have to be
+  warped to a common frame, which `gdal.Warp` will do into a VRT mosaic.
+- Overlaps need a resolution order. GDAL's VRT mosaic takes the last-listed
+  source, so sheet ordering becomes a deliberate choice rather than an accident.
+- The combined pyramid will be far deeper: sectionals are 1:500,000 against the
+  wall chart's much smaller scale, so expect a native zoom around z12–13 and tile
+  counts in the hundreds of thousands.
+
+`cesiumtiles` itself needs no change for this — it already accepts any
+georeferenced raster, and a VRT mosaic is one. The work is in assembling the VRT.
+
+### Automate fetching and building every current FAA chart
+
+The FAA republishes on a **56-day cycle**, so this should be a scheduled job
+rather than something run by hand:
+
+- Fetch the current edition list, download the VFR and IFR products, and unpack
+  the GeoTIFFs.
+- Detect each sheet's neatline, upsample, mosaic where a series overlaps, and
+  tile — the pipeline above, driven by a manifest rather than constants.
+- Track edition dates so an unchanged chart is skipped instead of rebuilt.
+- Plan for the storage: the full VFR sectional set alone is tens of GB of source
+  before any tiling.
+
+`scripts/build_vfr_tileset.py` is the single-chart case of this and is already
+parameterised the right way; the generalisation is a manifest of charts plus a
+download stage, with `--detect-neatline` doing the per-edition measurement so
+new editions do not inherit stale constants.
+
+### Generative upsampling
+
+Learned super-resolution in place of the lanczos stage, to reconstruct plausible
+detail rather than merely interpolating it.
+
+One constraint that should shape the design from the start: a generative model
+**invents** detail, and on an aeronautical chart the detail carries meaning —
+frequencies, altitudes, airspace floors and ceilings, identifiers. A model that
+renders a legible but wrong `4500` where the scan was ambiguous produces
+something more dangerous than a blurry image, because it looks authoritative.
+Practical implications:
+
+- Keep the source tiles alongside the upsampled ones so any pixel can be checked
+  against what was actually published.
+- Constrain or mask the model away from text and numerics, or run it only on the
+  terrain and shaded-relief layers where invention is cosmetic.
+- Label the output explicitly. The chart itself already says it is for preflight
+  planning only and not for navigation; an AI-upsampled derivative needs that
+  said louder, not quieter.
 
 ## Tests
 
