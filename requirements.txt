@@ -7,3 +7,15 @@
 
 rasterio>=1.5,<2
 gdal>=3.11
+# cesiumtiles.mosaic composites tiles as arrays.
+numpy>=2
+# Review contact sheets in scripts/detect_sectional_areas.py.
+pillow>=12
+
+# Super-resolution upsampling (scripts/upsample.py). CPU builds: the PyTorch
+# index serves `+cpu` wheels, which pip prefers over PyPI's by version label.
+# A CUDA build needs a different index -- see CLAUDE.md on which GPU this is.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.14
+torchvision>=0.29
+spandrel>=0.4

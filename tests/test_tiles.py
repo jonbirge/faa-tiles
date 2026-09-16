@@ -422,8 +422,13 @@ def test_viewer_is_a_general_tile_tester(tmp_path, source):
     html = render_viewer(_meta(result))
 
     assert 'id="source"' in html and 'id="load"' in html
-    for control in ('id="scheme"', 'id="minzoom"', 'id="maxzoom"', 'id="tilesize"'):
+    for control in ('id="scheme"', 'id="tilesize"'):
         assert control in html
+    # No zoom inputs: a directory's metadata.json carries its real range, and a
+    # raw template falls back to named constants instead.
+    for control in ('id="minzoom"', 'id="maxzoom"'):
+        assert control not in html
+    assert "TEMPLATE_MIN_ZOOM" in html and "TEMPLATE_MAX_ZOOM" in html
     # A directory is resolved through its metadata.json; a raw template is used
     # as given, with the form supplying what the metadata would have.
     assert "resolveSource" in html

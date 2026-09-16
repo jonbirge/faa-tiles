@@ -592,7 +592,8 @@ function fail(message) {
 // sitting above several. METADATA is a snapshot baked in at generation time,
 // used only if that lookup fails.
 (INITIAL_SOURCE
-  ? resolveSource(INITIAL_SOURCE, { scheme: "mercator", minzoom: 0, maxzoom: 18, tilesize: 256 })
+  ? resolveSource(INITIAL_SOURCE, { scheme: "mercator", minzoom: TEMPLATE_MIN_ZOOM,
+                                    maxzoom: TEMPLATE_MAX_ZOOM, tilesize: 256 })
       .then((meta) => { meta.source_spec = INITIAL_SOURCE; return meta; })
   : Promise.reject(new Error("no source")))
   .catch((err) => {

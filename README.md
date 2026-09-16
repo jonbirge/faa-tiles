@@ -467,27 +467,45 @@ resample each with what suits it.
 resamples at roughly 1:1, `cubic` halves the ringing at nearly the same
 sharpness. Worth testing as the default.
 
-### Tile the VFR sectional set
+### Tile the VFR sectional set — *done*
 
-The wall planning chart is one sheet. The sectional series is ~50 sheets that
-**overlap at their edges**, so this is a mosaicking problem rather than a bigger
-version of the current one:
+The sectional series is 57 sheets that overlap at their edges, each in its own
+Lambert Conformal Conic, each inside a printed collar. Three scripts build it:
 
-- Each sheet needs its own neatline crop first, or the printed margins land in
-  the middle of the mosaic. `detect_neatline` in `build_vfr_tileset.py` already
-  does this per sheet and should generalise, though the run-length threshold is
-  tuned to this chart's furniture and will want re-checking.
-- Sheets carry **different Lambert Conformal Conic parameters** — standard
-  parallels chosen per sheet — so they cannot simply be stacked. They have to be
-  warped to a common frame, which `gdal.Warp` will do into a VRT mosaic.
-- Overlaps need a resolution order. GDAL's VRT mosaic takes the last-listed
-  source, so sheet ordering becomes a deliberate choice rather than an accident.
-- The combined pyramid will be far deeper: sectionals are 1:500,000 against the
-  wall chart's much smaller scale, so expect a native zoom around z12–13 and tile
-  counts in the hundreds of thousands.
+```bash
+.venv/Scripts/python scripts/fetch_sectionals.py          # current edition -> ./sectionals
+.venv/Scripts/python scripts/detect_sectional_areas.py --sheet review/
+.venv/Scripts/python scripts/build_sectional_tileset.py   # -> ./tileset-sectionals
+```
 
-`cesiumtiles` itself needs no change for this — it already accepts any
-georeferenced raster, and a VRT mosaic is one. The work is in assembling the VRT.
+- **Fetching** picks the newest edition directory that is not in the future
+  (the FAA posts the next one early) and runs `WORKERS` downloaders at once.
+- **Map areas** live in `scripts/sectional_areas.json`, one pixel polygon per
+  sheet. They are detected (walk in from each edge until the paper collar
+  ends, fit a line or arc, move inward past the worst reading) and then
+  reviewed; the script prints how much paper is left just inside each edge and
+  writes contact sheets with every outline drawn. Enlarged insets printed over
+  the map are hand-authored `exclude` boxes, and the four sheets that are not
+  a map in a collar (Hawaiian Islands, Honolulu, Mariana, Samoa) are hand-traced.
+  Rerun and review for each edition.
+- **The mosaic** is `cesiumtiles.mosaic`, not `gdal raster tile`: every z12
+  tile warps just the sheets that reach it, with each sheet's map area burnt
+  into a mask the warp reads as alpha, and composites them. Lower zooms are
+  box-filtered from their children, a level at a time, fully parallel. Sheets
+  crossing 180 degrees are handled.
+- **Choices:** max zoom z12 (only the 1:250k Honolulu inset would use z13, at 4x
+  the tiles), WebP q90, and overlaps resolved by file name — later on top.
+
+Still open:
+
+- **Overlap order is a placeholder.** It already shows: the FAA's Phoenix
+  GeoTIFF has a blank white row running through its map near 35.6 N, and
+  Phoenix sorts after Las Vegas, so it is drawn on top of good Las Vegas map.
+  Preferring the sheet whose own map area is further from its edge would fix
+  this and most seam artefacts generally.
+- **Empty ocean returns 404s.** Tiles are only written where a sheet has map,
+  so Cesium requests (and fails) tiles over the gaps inside the extent.
+- **No upsampling** yet; the wall chart's Real-CUGAN stage is not in this path.
 
 ### Automate fetching and building every current FAA chart
 
@@ -495,7 +513,7 @@ The FAA republishes on a **56-day cycle**, so this should be a scheduled job
 rather than something run by hand:
 
 - Fetch the current edition list, download the VFR and IFR products, and unpack
-  the GeoTIFFs.
+  the GeoTIFFs. *Done for sectionals* (`scripts/fetch_sectionals.py`).
 - Detect each sheet's neatline, upsample, mosaic where a series overlaps, and
   tile — the pipeline above, driven by a manifest rather than constants.
 - Track edition dates so an unchanged chart is skipped instead of rebuilt.
@@ -568,7 +586,7 @@ reconstruction rather than invention.
 .venv/Scripts/python -m pytest
 ```
 
-115 tests, all against small synthetic rasters built in a temp directory — none
+139 tests, all against small synthetic rasters built in a temp directory — none
 need the chart files. The tile arithmetic in `cesiumtiles.scheme` is checked
 against [mercantile](https://github.com/mapbox/mercantile), a separate
 implementation of the same grid, so agreement is evidence rather than tautology.
@@ -585,6 +603,7 @@ src/geotransfer/
 src/cesiumtiles/
     scheme.py             XYZ grid maths for both tiling schemes
     core.py               build_tileset
+    mosaic.py             build_mosaic: many overlapping sheets, masked
     viewer.html           the tile tester page (plain HTML - edit this)
     viewer.py             fills in its placeholders
     serve.py              local preview server (CORS, tile MIME types)
@@ -593,6 +612,7 @@ tests/
     test_core.py          georeferencing transfer
     test_scheme.py        tile maths vs mercantile
     test_tiles.py         end-to-end tileset builds
+    test_mosaic.py        mosaics: overlap order, masks, antimeridian
     test_serve.py         preview server behaviour
 .claude/
     launch.json           dev-server definitions for the browser pane

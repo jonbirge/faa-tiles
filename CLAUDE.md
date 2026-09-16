@@ -12,16 +12,18 @@ Two packages under `src/`, one venv, one test suite.
   TIFF by duplicating the file and rewriting only its header tags. No pixel
   decode, no recompression.
 - **`cesiumtiles`** — cuts a GeoTIFF into a static `z/x/y` pyramid for Cesium,
-  plus a generated viewer and a local preview server.
+  plus a generated viewer and a local preview server. `cesiumtiles.mosaic`
+  does the same for a *series* of overlapping sheets (the VFR sectionals).
 
 The data: the FAA U.S. VFR Wall Planning Chart. `vfr_geotiff_original.tif` is
 palette-indexed but georeferenced; `vfr_wall_planning.tif` is RGB but has no geo
 metadata; `vfr_wall_planning_geo.tif` is the `geotransfer` output combining them
-and is the input to all tiling.
+and is the input to all tiling. The sectional series lives in `sectionals/`
+(57 GeoTIFFs, 3.2 GB, from `scripts/fetch_sectionals.py`).
 
 ## Environment
 
-- Windows 11, **Python 3.14.4**, venv at `.venv/`. 24 cores, NVIDIA GPU
+- Windows 11, **Python 3.14.7**, venv at `.venv/`. 24 cores, NVIDIA GPU
   (Windows reports an RTX 5070 Ti Laptop; the user has said 4070 Ti — reconcile
   before picking a CUDA build, since Blackwell needs cu128 and Ada does not).
 - **Windows is not a limitation here, and assuming it is has been wrong twice.**
@@ -30,6 +32,14 @@ and is the input to all tiling.
   The user has Linux and macOS available too, so pick on merit, not portability.
 - Use `pwsh.exe` not `powershell.exe` (see the user's global CLAUDE.md).
 - `.venv/Scripts/python.exe` — note `Scripts/`, not `bin/`.
+- **Every dependency that stays goes in `requirements.txt` (or
+  `requirements-dev.txt`) in the same change that starts using it.** Do not just
+  `pip install` it into the venv and move on. torch, torchvision and spandrel
+  were installed for the upsampler that way and never recorded; when the base
+  interpreter vanished and the venv had to be rebuilt, they were only recovered
+  by reading package names out of the dead venv's `site-packages`. The venv is
+  disposable; the requirements files are the record. If a package needs a
+  non-PyPI index or a specific build (CPU vs CUDA), record that too.
 
 **The user tests in their own browser, continuously, while you work.** They are
 the live verification loop. Make the change, say what to look at, stop. Do not
@@ -45,8 +55,23 @@ Running one test by node id to check a specific thing is fine. What is not fine
 is a full run after every small change; this was asked for repeatedly before it
 stuck.
 
+**Not running the suite is not the same as not maintaining it.** The suite must
+stay green and current, and keeping it that way is part of every change:
+
+- When a change alters behaviour a test asserts, update that test **in the same
+  change**, deliberately, without waiting for a run to reveal it. Grep `tests/`
+  for the ids, names, strings or numbers you touched. The "Tighten the tester
+  panel" commit removed the min/max zoom inputs and left
+  `test_viewer_is_a_general_tile_tester` still asserting them; it failed on the
+  user's next run.
+- New behaviour gets a test, and a fixed bug gets a regression test, as the
+  gotchas below already have.
+- Fix a failing test by deciding which side is wrong: the code or the test. Never
+  delete or loosen an assertion just to get back to green.
+- Keep the test count and runtime quoted below accurate when they change.
+
 ```bash
-.venv/Scripts/python -m pytest                        # 124 tests, ~35s
+.venv/Scripts/python -m pytest                        # 139 tests, ~45s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -61,6 +86,8 @@ costs a lot of context for no gain.
    of it from 3.13. `cesiumtiles` is a thin wrapper adding only what it lacks:
    geographic bbox cropping, resolution-derived zoom defaults, and Cesium
    metadata/viewer (GDAL emits Leaflet/OpenLayers/MapML/STAC, not Cesium).
+   **Except for chart series**, which `cesiumtiles.mosaic` renders itself (see
+   *Sectional mosaic* below); the user laid out that per-tile design.
 
 2. **GDAL comes from a non-PyPI index.** PyPI's `GDAL` is sdist-only on Windows
    for *every* Python version, so `requirements.txt` carries
@@ -69,7 +96,7 @@ costs a lot of context for no gain.
    build GDAL from source and fail.
 
 3. **`osgeo.gdal` and `rasterio` coexist fine** in one venv, in either import
-   order, each using its own bundled GDAL (3.13.3 and 3.12.4 respectively).
+   order, each using its own bundled GDAL (rasterio 1.5.1 currently bundles 3.13.3 too).
 
 4. **WSL is not an improvement.** Ubuntu 24.04's apt ships GDAL 3.8.4 — five
    minor versions *behind* what we have on Windows. There is no Linux-only tool
@@ -226,6 +253,56 @@ title heading — the user asked for it gone; the document `<title>` stays.
   Resource Timing sizes as zero. Those are counted as `opaque` and the byte
   totals shown as `n/a (cross-origin)`, never as zero.
 
+## Sectional mosaic
+
+`fetch_sectionals.py` -> `detect_sectional_areas.py` -> `build_sectional_tileset.py`.
+Decided with the user, with measurements: **z12** (the "finest pixel" rule gives
+z13, driven only by the 1:250k Honolulu inset, at 4x the tiles), **WebP q90**,
+**overlaps by file name, later on top** (an acknowledged placeholder), map areas
+**detected once, reviewed, committed** as `scripts/sectional_areas.json`, and
+lower zooms **box-filtered from children**.
+
+- **Per tile, not VRT + `gdal raster tile`.** Each z12 tile warps only the sheets
+  that reach it, composited front-to-back ("under") so it stops once opaque.
+  Measured 388 tiles/s at z12 on 24 cores, 14 KB/tile. Do not warp lower zooms
+  from the sheets: a z8 tile reads a 16x source window and ran at 13 tiles/s.
+- **Map areas are masks, not clip rectangles.** Each sheet's area becomes a Byte
+  mask attached to its VRT as an alpha band, which the warp honours. A lon/lat
+  rectangle was tried first and cannot express enlarged insets printed over the
+  map, the tilted/L-shaped island sheets, or Alaskan legend panels.
+- **Sheets are re-based from NAD83 to WGS84** (`_wgs84_based`). Otherwise PROJ
+  picks different datum operations in different tiles and warns of seams. The
+  datums differ by ~2 m, under a z12 pixel.
+- **Antimeridian:** footprints are unwrapped around each sheet's centre meridian
+  and warped with a whole-world x offset. `metadata.json` bounds then have
+  `west > east`, which Cesium rectangles accept as-is.
+- **Palette sheets are RGB-expanded before warping**, or resampling blends
+  indices. A test guards it.
+
+Detection lessons, each learnt from a wrong outline:
+
+- **Neatlines are not one kind of line.** West/east are meridians (straight in
+  LCC) and get line fits; north/south may be parallels (arcs) or straight, and
+  get quadratics. Denver's south edge bows 0.045 deg across the sheet.
+- **Measure a side only between the two sides across it**, and never extrapolate
+  a fit past its last band; corner bands run along the perpendicular collar and
+  produced wild arcs.
+- **Paper is `min(RGB) >= 250`, sampled not averaged.** Collar paper is 255;
+  Canada's tint is 232-242 and read as paper at 235, cutting 16% off Montreal.
+  Averaging smears notes-panel type into grey that reads as map.
+- **The map must start *at* the detected edge** (48 px of non-paper), not merely
+  somewhere in the next 600 px: a scale-bar line under the neatline passed the
+  long-run test and left ~100 px of collar on nearly every sheet. The contact
+  sheets did not show it; the per-edge paper check the script now prints did.
+- Every image edge is trimmed 40 px for ragged paper margins too thin to fit.
+- **Trust the numbers, not the thumbnails.** A clean contact sheet hid collar on
+  49 of 57 sheets. After the fixes only Anchorage east is flagged (27%); a crop
+  showed a ragged paper margin, now trimmed, and pale map behind it, but the
+  figure was not chased further.
+- **The Phoenix GeoTIFF has a blank white row through its map** near 35.6 N.
+  That is the FAA's file, not the mask; it shows because Phoenix sorts after Las
+  Vegas. A better overlap rule is the fix, not a mask.
+
 ## Repo hygiene
 
 - Git repo on `master`, no remote. The user commits to `master` directly; there
@@ -250,4 +327,5 @@ title heading — the user asked for it gone; the document `<title>` stays.
 - **Do not leave extra tilesets lying around.** The user asked for this: build a
   scratch tileset if a test needs one, then delete it in the same turn. Only
   `tileset/` should persist. (An earlier `tileset-colorado/` demo outlived its
-  usefulness and had to be cleaned up by hand.)
+  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~8 GB) is
+  the other real product and is expected to persist too.
