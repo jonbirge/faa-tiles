@@ -387,6 +387,11 @@ function start(initialMeta) {
     if (gridLayer) viewer.imageryLayers.add(gridLayer);
   }
 
+  function cameraIsInside(rect) {
+    const c = viewer.camera.positionCartographic;
+    return Cesium.Rectangle.contains(rect, Cesium.Cartographic.fromRadians(c.longitude, c.latitude));
+  }
+
   function rebuild(fly) {
     const extent = extentOf(meta);
     rectangle = Cesium.Rectangle.fromDegrees(extent[0], extent[1], extent[2], extent[3]);
@@ -407,7 +412,14 @@ function start(initialMeta) {
     el("minzoom").value = meta.minzoom;
     el("maxzoom").value = meta.maxzoom;
     el("tilesize").value = meta.tilesize;
-    if (fly) viewer.camera.setView({ destination: rectangle });
+    // Only the first load frames the tileset. Swapping sources deliberately
+    // leaves the camera alone, so two tilesets can be compared at a fixed
+    // viewpoint -- moving the camera would defeat the comparison.
+    if (fly) {
+      viewer.camera.setView({ destination: rectangle });
+    } else if (!cameraIsInside(rectangle)) {
+      note("camera is outside this tileset — use Fly to extent");
+    }
     refresh();
   }
 
@@ -440,7 +452,7 @@ function start(initialMeta) {
       meta.source_spec = spec;
       bust = 0;
       tracker.reset();
-      rebuild(true);
+      rebuild(false);   // keep the viewpoint, so A/B comparison is possible
     } catch (err) {
       problem(err.message);
     }

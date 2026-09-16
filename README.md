@@ -118,6 +118,11 @@ The **Source** box takes either:
 - a raw **`{z}/{x}/{y}` URL template**, used as given, with the scheme, tile size
   and zoom range taken from the controls beside it.
 
+Swapping sources **leaves the camera where it is**, so two tilesets can be
+compared at a fixed viewpoint — flip between `./tileset` and `./tileset-lossy`
+and only the imagery changes. If the new tileset does not cover where you are
+looking, the panel says so and **Fly to extent** takes you there.
+
 To compare local tilesets, serve their common parent:
 `.venv/Scripts/cesiumtiles-serve .`. The server finds the tilesets beneath it and
 opens the first; load the others by name. The tester is always at `/`, whichever
