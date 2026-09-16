@@ -504,7 +504,8 @@ Still open:
   Preferring the sheet whose own map area is further from its edge would fix
   this and most seam artefacts generally.
 - **Empty ocean returns 404s.** Tiles are only written where a sheet has map,
-  so Cesium requests (and fails) tiles over the gaps inside the extent.
+  so Cesium requests (and fails) tiles over the gaps inside the extent. The
+  tester no longer warns about these, but the requests still happen.
 - **No upsampling** yet; the wall chart's Real-CUGAN stage is not in this path.
 
 ### Automate fetching and building every current FAA chart
@@ -586,7 +587,7 @@ reconstruction rather than invention.
 .venv/Scripts/python -m pytest
 ```
 
-139 tests, all against small synthetic rasters built in a temp directory — none
+141 tests, all against small synthetic rasters built in a temp directory — none
 need the chart files. The tile arithmetic in `cesiumtiles.scheme` is checked
 against [mercantile](https://github.com/mapbox/mercantile), a separate
 implementation of the same grid, so agreement is evidence rather than tautology.

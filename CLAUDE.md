@@ -71,7 +71,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 139 tests, ~45s
+.venv/Scripts/python -m pytest                        # 141 tests, ~45s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -275,7 +275,15 @@ lower zooms **box-filtered from children**.
   datums differ by ~2 m, under a z12 pixel.
 - **Antimeridian:** footprints are unwrapped around each sheet's centre meridian
   and warped with a whole-world x offset. `metadata.json` bounds then have
-  `west > east`, which Cesium rectangles accept as-is.
+  `west > east`. The camera and `Rectangle.contains` accept that, but
+  **`UrlTemplateImageryProvider` does not**: it intersects the rectangle with
+  the tiling scheme and keeps only west..180. The first full build showed only
+  a few Pacific tiles around Guam and a tile-failure note, because this was
+  claimed from the Cesium API rather than checked in the viewer. The viewer now
+  gives the imagery the full longitude band (`imageryExtentOf`, edges 1e-5 deg
+  inside +/-180) and the camera the true extent (`viewRectangle`). It also no
+  longer warns on 404s from a metadata-described tileset, since a mosaic has
+  no tiles over ocean by design.
 - **Palette sheets are RGB-expanded before warping**, or resampling blends
   indices. A test guards it.
 
@@ -329,5 +337,5 @@ Detection lessons, each learnt from a wrong outline:
 - **Do not leave extra tilesets lying around.** The user asked for this: build a
   scratch tileset if a test needs one, then delete it in the same turn. Only
   `tileset/` should persist. (An earlier `tileset-colorado/` demo outlived its
-  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~8 GB) is
+  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~5.7 GB, 510k tiles) is
   the other real product and is expected to persist too.

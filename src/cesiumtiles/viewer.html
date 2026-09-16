@@ -156,6 +156,18 @@ function extentOf(meta) {
   return meta.data_bounds || meta.bounds || [-180, -85, 180, 85];
 }
 
+// An extent that crosses the antimeridian arrives as west > east. The camera
+// and Rectangle.contains understand that, but UrlTemplateImageryProvider does
+// not: it intersects the rectangle with the tiling scheme's and keeps only the
+// part east of `west` up to 180, so a mosaic running from Guam to Halifax loaded
+// nothing but the Guam slice. The imagery therefore gets the full longitude
+// band instead. Its edges sit a hair inside +/-180 so they never coincide with
+// a tile boundary (see above); 1e-5 degrees is ~1 m, a thirtieth of a z12 pixel.
+function imageryExtentOf(meta) {
+  const e = extentOf(meta);
+  return e[0] > e[2] ? [-180 + 1e-5, e[1], 180 - 1e-5, e[3]] : e;
+}
+
 function bytes(n) {
   if (n < 1024) return n + " B";
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
@@ -344,7 +356,8 @@ function start(initialMeta) {
   const tracker = makeTracker();
 
   let meta = initialMeta;
-  let rectangle = null;
+  let rectangle = null;        // imagery extent, safe for the provider
+  let viewRectangle = null;    // true data extent, for framing the camera
   let baseLayer = null;
   let gridLayer = null;
   let bust = 0;
@@ -366,9 +379,17 @@ function start(initialMeta) {
       hasAlphaChannel: meta.format !== "jpeg",
       credit: new Cesium.Credit(meta.name || "tiles", false),
     });
-    provider.errorEvent.addEventListener(() =>
+    // A tileset described by metadata.json writes tiles only where it has
+    // data, so inside its extent a 404 just means "nothing here" -- a mosaic
+    // of chart sheets has ocean and gaps between them. That is not worth a
+    // warning. Anything else is: other statuses, or any failure from a bare
+    // template, which says nothing about where it has tiles.
+    provider.errorEvent.addEventListener((err) => {
+      const status = err && err.error && err.error.statusCode;
+      if (status === 404 && !meta.templateOnly) return;
       note("a tile request failed - the zoom range may go deeper than this source " +
-           "has, or a remote server may be refusing cross-origin requests"));
+           "has, or a remote server may be refusing cross-origin requests");
+    });
     return new Cesium.ImageryLayer(provider);
   }
 
@@ -412,7 +433,9 @@ function start(initialMeta) {
 
   function rebuild(fly) {
     const extent = extentOf(meta);
-    rectangle = Cesium.Rectangle.fromDegrees(extent[0], extent[1], extent[2], extent[3]);
+    viewRectangle = Cesium.Rectangle.fromDegrees(extent[0], extent[1], extent[2], extent[3]);
+    const imagery = imageryExtentOf(meta);
+    rectangle = Cesium.Rectangle.fromDegrees(imagery[0], imagery[1], imagery[2], imagery[3]);
     relayer();
     // Count only tiles belonging to the source now loaded.
     // Resource Timing reports absolute URLs, so the filter has to be absolute
@@ -432,8 +455,8 @@ function start(initialMeta) {
     // leaves the camera alone, so two tilesets can be compared at a fixed
     // viewpoint -- moving the camera would defeat the comparison.
     if (fly) {
-      viewer.camera.setView({ destination: rectangle });
-    } else if (!cameraIsInside(rectangle)) {
+      viewer.camera.setView({ destination: viewRectangle });
+    } else if (!cameraIsInside(viewRectangle)) {
       note("camera is outside this tileset — use Fly to extent");
     }
     refresh();
@@ -476,7 +499,7 @@ function start(initialMeta) {
   });
 
   el("home").addEventListener("click", () =>
-    viewer.camera.flyTo({ destination: rectangle, duration: 1.5 }));
+    viewer.camera.flyTo({ destination: viewRectangle, duration: 1.5 }));
 
   // Clearing the browser's HTTP cache is not possible from script, so reset
   // rebuilds the layer against a fresh query string instead: new URLs miss both

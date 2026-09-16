@@ -385,6 +385,30 @@ def test_viewer_rectangle_uses_the_unsnapped_extent(tmp_path, source):
     assert "const [w, s, e, n] = meta.bounds;" not in html
 
 
+
+def test_viewer_widens_an_antimeridian_extent_for_the_imagery(tmp_path, source):
+    """A mosaic crossing 180 degrees reports west > east. UrlTemplateImageryProvider
+    clips such a rectangle to its west-to-180 slice, which loaded only the Guam
+    corner of the sectional mosaic, so the imagery must get the full longitude
+    band while the camera keeps the true extent."""
+    result = build_tileset(source, tmp_path / "out", quiet=True)
+    html = render_viewer(_meta(result))
+    assert "function imageryExtentOf(meta)" in html
+    assert "e[0] > e[2]" in html
+    # Edges just inside +/-180, never on a tile boundary.
+    assert "-180 + 1e-5" in html and "180 - 1e-5" in html
+    assert "rectangle: rectangle" in html
+    assert "destination: viewRectangle" in html
+
+
+def test_viewer_does_not_warn_about_404s_inside_a_tileset(tmp_path, source):
+    """A mosaic writes tiles only where it has data; missing tiles over ocean
+    are expected and must not raise the tile-failure note. A bare template
+    has no metadata to say so, and still warns."""
+    result = build_tileset(source, tmp_path / "out", quiet=True)
+    html = render_viewer(_meta(result))
+    assert "status === 404 && !meta.templateOnly" in html
+
 def test_viewer_includes_the_diagnostics_panel(tmp_path, source):
     """The panel reports visible tiles and download traffic, with a reset."""
     result = build_tileset(source, tmp_path / "out", quiet=True)
