@@ -22,6 +22,8 @@ import threading
 import webbrowser
 from pathlib import Path
 
+from cesiumtiles.viewer import render_viewer
+
 __all__ = ["TileRequestHandler", "discover_tileset", "serve_tileset", "main"]
 
 DEFAULT_PORT = 8000
@@ -58,7 +60,10 @@ class TileRequestHandler(http.server.SimpleHTTPRequestHandler):
     pure data -- tiles and metadata, no viewer mixed in with them.
     """
 
-    viewer_html = b""
+    # Rendered per request, not cached, so editing viewer.html and reloading
+    # the browser is enough to see the change.
+    viewer_source = ""
+    viewer_metadata = None
 
     # Explicit, so we do not depend on the machine's registry/mime.types.
     extensions_map = {
@@ -91,12 +96,13 @@ class TileRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):  # noqa: N802 - name fixed by BaseHTTPRequestHandler
-        if self.viewer_html and self.path.split("?")[0] in ("/", "/index.html"):
+        if self.path.split("?")[0] in ("/", "/index.html"):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(self.viewer_html)))
+            body = render_viewer(self.viewer_metadata, self.viewer_source).encode("utf-8")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(self.viewer_html)
+            self.wfile.write(body)
             return
         super().do_GET()
 
@@ -131,8 +137,6 @@ def serve_tileset(
     own thread and the caller is responsible for ``shutdown()``; otherwise this
     blocks until interrupted.
     """
-    from cesiumtiles.viewer import render_viewer
-
     root = Path(directory).resolve()
     if not root.is_dir():
         raise NotADirectoryError(f"not a directory: {root}")
@@ -144,7 +148,8 @@ def serve_tileset(
 
     handler_class = type("_Configured", (TileRequestHandler,), {
         "cors": cors,
-        "viewer_html": render_viewer(metadata, spec).encode("utf-8"),
+        "viewer_source": spec,
+        "viewer_metadata": metadata,
     })
     handler = functools.partial(handler_class, directory=str(root))
 

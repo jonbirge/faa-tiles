@@ -18,6 +18,9 @@ geotransfer = "geotransfer.cli:main"
 cesiumtiles = "cesiumtiles.cli:main"
 cesiumtiles-serve = "cesiumtiles.serve:main"
 
+[tool.setuptools.package-data]
+cesiumtiles = ["viewer.html"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

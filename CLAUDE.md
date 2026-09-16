@@ -223,6 +223,13 @@ title heading — the user asked for it gone; the document `<title>` stays.
 - `tileset/` (~280 MB) is build output; regenerate rather than preserve. It
   holds `tiles/` and `metadata.json` only - **no index.html**. The tile tester is
   rendered by `cesiumtiles-serve` and served from memory at `/`.
+- **The tester page is `src/cesiumtiles/viewer.html`** - plain HTML, edit it
+  directly. `viewer.py` only substitutes four placeholders (`__CESIUM__`,
+  `__TITLE__`, `__METADATA__`, `__SOURCE__`). It used to be a Python string,
+  which forced double-escaping (`\d` for `\d`) and made edits error-prone.
+  The server re-renders **per request**, so editing the HTML and reloading the
+  browser shows the change with no restart. It ships as package data via
+  `[tool.setuptools.package-data]`.
 - **Do not leave extra tilesets lying around.** The user asked for this: build a
   scratch tileset if a test needs one, then delete it in the same turn. Only
   `tileset/` should persist. (An earlier `tileset-colorado/` demo outlived its

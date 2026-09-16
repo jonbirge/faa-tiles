@@ -354,7 +354,8 @@ src/geotransfer/
 src/cesiumtiles/
     scheme.py             XYZ grid maths for both tiling schemes
     core.py               build_tileset
-    viewer.py             Cesium viewer generation
+    viewer.html           the tile tester page (plain HTML - edit this)
+    viewer.py             fills in its placeholders
     serve.py              local preview server (CORS, tile MIME types)
     cli.py
 tests/
