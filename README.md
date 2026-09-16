@@ -465,23 +465,29 @@ new editions do not inherit stale constants.
 
 ### Generative upsampling
 
-Learned super-resolution in place of the lanczos stage, to reconstruct plausible
-detail rather than merely interpolating it.
+Learned super-resolution in place of the lanczos stage.
 
-One constraint that should shape the design from the start: a generative model
-**invents** detail, and on an aeronautical chart the detail carries meaning —
-frequencies, altitudes, airspace floors and ceilings, identifiers. A model that
-renders a legible but wrong `4500` where the scan was ambiguous produces
-something more dangerous than a blurry image, because it looks authoritative.
-Practical implications:
+This is the strongest option for the artwork, and for a reason classical kernels
+cannot match: a linear filter has no way to tell an artifact from signal. Scan
+noise, ragged antialiasing on a one-pixel airway, the stair-stepping where a
+diagonal boundary was rasterised — to `lanczos` these are all just data to be
+interpolated, and it faithfully magnifies them. A model trained on flat-colour
+line art has seen what a clean edge is supposed to look like and reconstructs
+one, which is exactly the cleanup this source needs.
 
-- Keep the source tiles alongside the upsampled ones so any pixel can be checked
-  against what was actually published.
-- Constrain or mask the model away from text and numerics, or run it only on the
-  terrain and shaded-relief layers where invention is cosmetic.
-- Label the output explicitly. The chart itself already says it is for preflight
-  planning only and not for navigation; an AI-upsampled derivative needs that
-  said louder, not quieter.
+The hallucination worry that attaches to generative upscaling belongs to a
+different regime than this one. At 2x or 4x each output pixel is tightly
+conditioned on a small, well-defined source neighbourhood, leaving little room
+to insert content that was not already there; and the text on this chart is
+already legible at source resolution, so the model is sharpening glyphs rather
+than reading and re-setting them. The risk of invented detail is real at large
+upscale factors, or with a strongly generative prior asked to fill in what was
+never sampled — neither describes doubling the resolution of a legible chart.
+
+Ordinary quality control still applies, and costs nothing: keep the source tiles
+alongside the upsampled ones so any pixel can be compared against what was
+published. That is worth doing for *any* upsampling method, classical included,
+not as a special precaution against models.
 
 ## Tests
 
