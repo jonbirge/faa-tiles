@@ -28,14 +28,16 @@ import numpy as np
 import torch
 from osgeo import gdal
 
-REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from layout import MODELS, VENDOR  # noqa: E402
+
 gdal.UseExceptions()
 
 SCALE = 2
 
 # Real-CUGAN, chosen on a side-by-side of APISR, Real-CUGAN and waifu2x over the
-# whole chart. Weights are fetched rather than vendored; models/ is gitignored.
-DEFAULT_MODEL = REPO / "models" / "realcugan-up2x-no-denoise.pth"
+# whole chart. Weights are fetched rather than vendored, into source/models.
+DEFAULT_MODEL = MODELS / "realcugan-up2x-no-denoise.pth"
 DEFAULT_MODEL_URL = (
     "https://huggingface.co/spaces/saber2022/Real-CUGAN/resolve/main/"
     "weights_v3/up2x-latest-no-denoise.pth"
@@ -76,12 +78,12 @@ class Waifu2xModel:
     """nunif's waifu2x. Its CUNet architecture is not one spandrel knows."""
 
     def __init__(self, threads: int, noise_level: int = 0):
-        vendor = REPO / "vendor" / "nunif"
+        vendor = VENDOR / "nunif"
         if not vendor.is_dir():
             raise SystemExit(
                 f"waifu2x needs a nunif checkout at {vendor}:\n"
-                "  git clone --depth 1 https://github.com/nagadomi/nunif.git vendor/nunif\n"
-                "  (cd vendor/nunif && python -m waifu2x.download_models)"
+                "  git clone --depth 1 https://github.com/nagadomi/nunif.git source/vendor/nunif\n"
+                "  (cd source/vendor/nunif && python -m waifu2x.download_models)"
             )
         sys.path.insert(0, str(vendor))
         from waifu2x.utils import Waifu2x

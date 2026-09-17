@@ -7,11 +7,12 @@ looks a series up here, so a series is described once. Standard library only.
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
-SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from layout import REPO, SCRIPTS, SOURCE  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -32,11 +33,28 @@ class Series:
     # GeoTIFFs dropped by name even when the pattern keeps them. The build
     # skips these too, in case an older download left them on disk.
     exclude: frozenset[str] = frozenset()
+    # Paint order where sheets overlap. Sheets are drawn in file-name order and
+    # a later sheet lands on top; reverse puts the earliest name on top instead.
+    reverse_order: bool = False
+    # Sheets meet edge to edge at a drawn frame rule rather than overlapping, so
+    # the rule is painted over (heal_frames.py) and the build tiles the healed
+    # copies. Needs a manifest with a "frame" per sheet (detect_ifr_areas.py).
+    heal_frames: bool = False
 
     @property
     def directory(self) -> Path:
         """Where the GeoTIFFs are downloaded to."""
-        return REPO / self.name
+        return SOURCE / self.name
+
+    @property
+    def healed_directory(self) -> Path:
+        """Where heal_frames.py writes frame-healed copies of the sheets."""
+        return self.directory / "healed"
+
+    @property
+    def build_directory(self) -> Path:
+        """The GeoTIFFs a build tiles: healed copies if the series heals frames."""
+        return self.healed_directory if self.heal_frames else self.directory
 
     @property
     def manifest(self) -> Path:
@@ -84,6 +102,10 @@ SERIES = {
             # the user chose to skip. L-06 is published in two halves,
             # ENR_L06N and ENR_L06S, both part of the chart.
             tif_pattern=r"ENR_L\d\d[NS]?\.tif",
+            # The user's call, after seeing overlap artefacts with name order.
+            reverse_order=True,
+            # The user's call, after black seams between every pair of charts.
+            heal_frames=True,
         ),
     )
 }

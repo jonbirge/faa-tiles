@@ -14,7 +14,13 @@ import numpy as np
 from osgeo import gdal, osr
 
 gdal.UseExceptions()
-SRC = r"E:\faa-tiles\vfr_wall_planning_geo.tif"
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from layout import WALL_PLANNING  # noqa: E402
+
+SRC = str(WALL_PLANNING / "vfr_wall_planning_geo.tif")
 OUT = r"C:\Users\jrbir\AppData\Local\Temp\claude\E--faa-tiles\55e59bfc-a279-4a48-a3c1-e6022ffe4bbd\scratchpad"
 
 ds = gdal.Open(SRC)

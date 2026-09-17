@@ -15,12 +15,29 @@ Two packages under `src/`, one venv, one test suite.
   plus a generated viewer and a local preview server. `cesiumtiles.mosaic`
   does the same for a *series* of overlapping sheets (the VFR sectionals).
 
-The data: the FAA U.S. VFR Wall Planning Chart. `vfr_geotiff_original.tif` is
-palette-indexed but georeferenced; `vfr_wall_planning.tif` is RGB but has no geo
-metadata; `vfr_wall_planning_geo.tif` is the `geotransfer` output combining them
-and is the input to all tiling. The sectional series lives in `sectionals/`
-(55 GeoTIFFs), and the IFR low enroute series in `ifr-low/` (37 GeoTIFFs),
-both from `scripts/fetch_charts.py SERIES`.
+**Everything downloaded or derived from downloads lives under `source/`** (the
+user asked for this, so the lot can be deleted in one go): `source/sectionals/`
+(55 GeoTIFFs) and `source/ifr-low/` (37) from `scripts/fetch_charts.py SERIES`,
+`source/ifr-low/healed/` (frame-healed copies, see below),
+`source/models/` (upsampler weights), `source/vendor/nunif`, and
+`source/wall-planning/`. Paths come from `scripts/layout.py`; use it rather than
+building paths from `REPO`. Tilesets stay at the top level.
+
+The first chart was the FAA U.S. VFR Wall Planning Chart, in
+`source/wall-planning/`: `vfr_geotiff_original.tif` is palette-indexed but
+georeferenced; `vfr_wall_planning.tif` is RGB but has no geo metadata;
+`vfr_wall_planning_geo.tif` is the `geotransfer` output combining them and is
+the input to tiling. Only the combined file is on disk now. **It has no
+automated download**: the FAA product page's "Planning Set" link
+(`visual/<edition>/All_Files/Planning.zip`) was 404 for every edition, so the
+user chose a manual drop-in; `build_wall_planning.py` checks for the files.
+
+**Wrappers, one per product** (the user asked for these over running stages by
+hand): `build_sectionals.py`, `build_ifr_low.py`, `build_wall_planning.py`, all
+thin, running stage scripts through `pipeline.py`. The chart wrappers do **not**
+re-detect map areas unless `--detect` is passed, because the manifests are
+reviewed and committed. `scripts/setup_repo.py` takes a fresh clone to a working
+venv; it has been run against an existing venv, not from a truly fresh clone.
 
 ## Environment
 
@@ -341,12 +358,29 @@ Detection lessons, each learnt from a wrong outline:
   call). L-06 ships as two halves, `ENR_L06N`/`ENR_L06S`, which the first
   pattern missed: the fetch reported 36 ok while one zip extracted nothing.
   Compare sheet counts against zip counts after a fetch.
+- **IFR low paints in reverse file-name order** (`reverse_order=True` in its
+  series, the user's call after seeing overlap artefacts), so L-01 is on top of
+  L-02 and so on. `build_chart_tileset.py --[no-]reverse-order` overrides a
+  series' default. Still a placeholder for a real overlap rule.
 - **IFR map areas come from the frame rule, not the collar.** The map is mostly
   white, so `detect_sectional_areas.py` cannot work on them. The frame is a
   fully dark run 6-10 px thick across the middle of the sheet (L-12's is 6;
   legend column rules are 5), and L-34's right rule reads only 0.94 dark
   because something crosses it. L-23 frames a Wilmington-Bimini inset strip
   beside its map; the widest framed panel is taken and the other dropped.
+- **IFR sheets abut; they do not overlap, and the frame rule is the seam.**
+  Cropping inside the rule (the first build) left dark 1-3 km gaps along all 32
+  shared edges; the user saw them as black lines. Growing the outline showed the
+  seams only close at the rule's *outer* edge, so there is no map under the rule
+  on either sheet. The user chose healing: the manifest records `frame.outer`
+  and `frame.clean` per sheet, `include` runs to `outer`, and `heal_frames.py`
+  writes `source/ifr-low/healed/` copies with the band repeated from the clean
+  row/column outward. `heal_frames=True` in the series makes the build read the
+  healed copies and refuse stale ones. Result: 31 of 32 seams closed. **L-29/L-30
+  keeps a straight ~450 m transparent sliver** (the W79 meridian lines up across
+  it), so the FAA's two georeferenced sheets just do not meet there; closing it
+  would need a bleed past the frame, which would overpaint real map elsewhere.
+  The healed build ran 17.6 min, against ~9 min for the unhealed one.
 - **The Phoenix GeoTIFF has a blank white row through its map** near 35.6 N.
   That is the FAA's file, not the mask; it shows because Phoenix sorts after Las
   Vegas. A better overlap rule is the fix, not a mask.
@@ -355,15 +389,16 @@ Detection lessons, each learnt from a wrong outline:
 
 - Git repo on `master`, pushed to the **public** GitHub repo `jonbirge/faa-tiles` (`origin`); anything committed is published once pushed. The user commits to `master` directly; there
   is no PR workflow here. `.gitignore` excludes `.venv/`, `*.tif`, `*.psd`,
-  `sources/`, `tileset/`, `tileset-*/`, which keeps `.git` at ~130 KB.
+  `source/`, `tileset/`, `tileset-*/`, which keeps `.git` at ~130 KB.
 - **Line endings are LF everywhere**, enforced by `.gitattributes`
   (`* text=auto eol=lf`), which overrides the user's global `core.autocrlf=true`.
   When writing files from Python, use `write_text(..., newline="\n")` or the
   Write tool: plain `Path.write_text` on Windows emits CRLF, which is how a
   content-free "modified" `requirements-dev.txt` appeared.
-- The source rasters are large (62 MB, 250 MB, and a 1.2 GB PSD in `sources/`).
-  Never `cat`/`Read` them, and don't let them into a commit.
-- `tileset/` (~280 MB) is build output; regenerate rather than preserve. It
+- The source rasters under `source/` are large (3.2 GB of sectionals, 386 MB of
+  IFR charts, a 250 MB wall chart). Never `cat`/`Read` them, and don't let them
+  into a commit.
+- `tileset-planning/` (~280 MB) is build output; regenerate rather than preserve. It
   holds `tiles/` and `metadata.json` only - **no index.html**. The tile tester is
   rendered by `cesiumtiles-serve` and served from memory at `/`.
 - **The tester page is `src/cesiumtiles/viewer.html`** - plain HTML, edit it
@@ -376,6 +411,6 @@ Detection lessons, each learnt from a wrong outline:
   `[tool.setuptools.package-data]`.
 - **Do not leave extra tilesets lying around.** The user asked for this: build a
   scratch tileset if a test needs one, then delete it in the same turn. Only
-  `tileset/` should persist. (An earlier `tileset-colorado/` demo outlived its
-  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~5.7 GB, 508k tiles) and `tileset-ifr-low/` (~0.9 GB, 239k tiles) are
+  `tileset-planning/` should persist. (An earlier `tileset-colorado/` demo outlived its
+  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~5.7 GB, 508k tiles) and `tileset-ifr-low/` (~0.9 GB, 240k tiles) are
   the other real products and are expected to persist too.

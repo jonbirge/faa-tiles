@@ -7,7 +7,7 @@ SERIES is a name from chart_series.py (``sectionals``, ``ifr-low``). Stages,
 each its own script so it can be rerun alone:
 
   1. fetch_charts.py SERIES      download the current edition's GeoTIFFs into
-                                 ./SERIES
+                                 source/SERIES
   2. detect_*_areas.py           find each sheet's map area into
                                  scripts/SERIES_areas.json; rerun and review
                                  for every new edition.
@@ -16,8 +16,10 @@ each its own script so it can be rerun alone:
   3. this script                 mosaic the sheets into z/x/y tiles
 
 Overlaps are resolved by file name: sheets are painted in lexicographic order,
-so where two overlap, the one later in the alphabet is on top. That is a
-placeholder for a smarter rule, not a considered choice.
+so where two overlap, the one later in the alphabet is on top. ``--reverse-order``
+paints in reverse, putting the earliest name on top; each series sets its own
+default (on for ``ifr-low``), and ``--no-reverse-order`` overrides it. Either way
+it is a placeholder for a smarter rule, not a considered choice.
 
 Max zoom is z12 for both series. For sectionals, only the 1:250,000 Honolulu
 inset would ask for z13, which quadruples the tileset; for IFR low charts, the
@@ -62,13 +64,18 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("series", choices=sorted(SERIES))
     ap.add_argument("--out", type=Path, help="output tileset (default: tileset-SERIES)")
-    ap.add_argument("--charts", type=Path, help="directory of GeoTIFFs (default: ./SERIES)")
+    ap.add_argument("--charts", type=Path,
+                    help="directory of GeoTIFFs (default: source/SERIES, or its healed/ "
+                         "subdirectory for a series that heals frames)")
     ap.add_argument("--max-zoom", type=int, default=MAX_ZOOM)
     ap.add_argument("--min-zoom", type=int, default=0)
     ap.add_argument("--quality", type=int, default=QUALITY)
     ap.add_argument("--workers", type=int, default=None, help="render processes (default: all cores)")
     ap.add_argument("--only", nargs="+", metavar="NAME",
                     help="build from just these charts (file name prefixes)")
+    ap.add_argument("--reverse-order", action=argparse.BooleanOptionalAction, default=None,
+                    help="paint sheets in reverse file-name order, so the earliest name is on "
+                         "top where sheets overlap (default: the series' setting)")
     ap.add_argument("--resume", action="store_true", help="keep tiles already written")
     ap.add_argument("--overwrite", action="store_true", help="replace an existing tileset")
     args = ap.parse_args(argv)
@@ -76,11 +83,24 @@ def main(argv=None) -> int:
     out = args.out or chart_series.tileset
 
     manifest = json.loads(chart_series.manifest.read_text(encoding="utf-8"))
-    chosen = sources(chart_series, args.charts or chart_series.directory, manifest)
+    directory = args.charts or chart_series.build_directory
+    if chart_series.heal_frames and not args.charts:
+        raw = sorted(p.name for p in chart_series.directory.glob("*.tif") if chart_series.wants_tif(p.name))
+        stale = [n for n in raw if not (directory / n).is_file()
+                 or (directory / n).stat().st_mtime < (chart_series.directory / n).stat().st_mtime]
+        if stale:
+            raise SystemExit(f"{len(stale)} sheet(s) not healed or out of date, e.g. {stale[0]}; "
+                             f"run scripts/heal_frames.py {chart_series.name} first")
+    chosen = sources(chart_series, directory, manifest)
     if args.only:
         chosen = [s for s in chosen if any(Path(s.path).name.startswith(n) for n in args.only)]
         if not chosen:
             raise SystemExit(f"--only matched no charts: {args.only}")
+    reverse = chart_series.reverse_order if args.reverse_order is None else args.reverse_order
+    if reverse:
+        chosen.reverse()
+    print(f"paint order: {'reverse ' if reverse else ''}file name, "
+          f"{Path(chosen[-1].path).name} on top", flush=True)
 
     result = build_mosaic(
         chosen, out,

@@ -12,24 +12,25 @@
 set -u
 
 PY=.venv/Scripts/python.exe
-mkdir -p upsampled
+SOURCE=source/wall-planning/vfr_wall_planning_geo.tif
+mkdir -p source/wall-planning/upsampled
 
 run() {
   local label="$1" model="$2" title="$3"
-  local tif="upsampled/${label}.tif"
+  local tif="source/wall-planning/upsampled/${label}.tif"
   local out="tileset-${label}"
 
   echo "=============================================================="
   echo "  ${label}"
   echo "=============================================================="
-  "$PY" scripts/upsample.py --model "$model" --out "$tif" || return 1
+  "$PY" scripts/upsample.py "$SOURCE" --model "$model" --out "$tif" || return 1
   "$PY" -m cesiumtiles.cli "$tif" "$out" --title "$title" --overwrite --quiet || return 1
   [ "${KEEP:-0}" = "1" ] || rm -f "$tif"
   echo
 }
 
-run apisr     "models/2x_APISR_RRDB_GAN_generator.pth" "VFR chart - APISR 2x"
-run realcugan "models/realcugan-up2x-no-denoise.pth"   "VFR chart - Real-CUGAN 2x"
+run apisr     "source/models/2x_APISR_RRDB_GAN_generator.pth" "VFR chart - APISR 2x"
+run realcugan "source/models/realcugan-up2x-no-denoise.pth"   "VFR chart - Real-CUGAN 2x"
 run waifu2x   "waifu2x"                                "VFR chart - waifu2x 2x"
 
 echo "=============================================================="

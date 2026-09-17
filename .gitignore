@@ -18,15 +18,11 @@ dist/
 *.tiff
 *.psd
 *.aux.xml
-sources/
 
 # Generated tilesets
 tileset/
 tileset-*/
 
-# Super-resolution model weights and vendored source (large, fetched not authored)
-models/
-vendor/
-upsampled/
-sectionals/
-ifr-low/
+# Everything downloaded or derived from downloads: chart GeoTIFFs, model
+# weights, third-party checkouts, intermediates. Delete it to reclaim the space.
+source/

@@ -57,9 +57,11 @@ from upsample import DEFAULT_MODEL, load_model, upsample_raster  # noqa: E402
 # render is the one worth looking at, the GeoTIFF is the one that knows where
 # it is.
 # --------------------------------------------------------------------------
-GEO_REFERENCE = REPO / "vfr_geotiff_original.tif"      # palette-indexed, georeferenced
-RGB_IMAGE = REPO / "vfr_wall_planning.tif"             # full colour, no geo metadata
-COMBINED = REPO / "vfr_wall_planning_geo.tif"          # stage 1 output
+from layout import WALL_PLANNING  # noqa: E402
+
+GEO_REFERENCE = WALL_PLANNING / "vfr_geotiff_original.tif"   # palette-indexed, georeferenced
+RGB_IMAGE = WALL_PLANNING / "vfr_wall_planning.tif"          # full colour, no geo metadata
+COMBINED = WALL_PLANNING / "vfr_wall_planning_geo.tif"       # stage 1 output
 
 # --------------------------------------------------------------------------
 # Where the map graphic ends and the printed furniture begins. Outside it are a
@@ -85,8 +87,8 @@ COMBINED = REPO / "vfr_wall_planning_geo.tif"          # stage 1 output
 NEATLINE_LCC = (-2065471.156, -1353550.704, 2560432.418, 1453780.3)  # W, S, E, N
 
 TITLE = "U.S. VFR Wall Planning Chart"
-DEFAULT_OUT = REPO / "tileset"
-UPSAMPLED_DIR = REPO / "upsampled"
+DEFAULT_OUT = REPO / "tileset-planning"
+UPSAMPLED_DIR = WALL_PLANNING / "upsampled"
 
 
 def detect_neatline(source: Path, run_limit: int = 150, step: int = 8, decimation: int = 8):

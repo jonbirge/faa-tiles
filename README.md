@@ -12,19 +12,41 @@ georeferenced but palette-indexed GeoTIFF. A full-colour RGB render of the same
 chart at the same resolution has the better pixels but no geo metadata.
 `geotransfer` marries the two; `cesiumtiles` then serves the result.
 
-## Reproducing the chart tileset
+## Quick start
+
+From a fresh clone, with Python 3.14 (Windows, Linux or macOS):
 
 ```bash
-.venv/Scripts/python scripts/build_vfr_tileset.py
+python scripts/setup_repo.py
 ```
 
-That script is the recipe for the published tileset and a worked example of the
-library: georeference the RGB render, crop to the map neatline, tile. It is
-commented with the options worth reaching for — `--lossy`, `--max-zoom`,
-`--scheme`, `--skip-blank` — and `--dry-run` prints the plan without writing
-280 MB. Result: **6,372 tiles, 280.4 MB, ~64 s** on 24 cores.
+That creates `.venv`, installs everything (including GDAL and CPU PyTorch from
+their own package indexes) and checks the imports. Then build whichever
+tilesets you want and open the tester:
 
-## Setup
+```bash
+.venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   ~25 min, ~5.7 GB
+.venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute  ~10 min, ~0.9 GB
+.venv/Scripts/python scripts/build_wall_planning.py   # VFR wall planning chart (see below)
+.venv/Scripts/cesiumtiles-serve .                     # http://127.0.0.1:8000/
+```
+
+(On Linux and macOS the venv interpreter is `.venv/bin/python`.)
+
+Each wrapper runs its stages as separate scripts, in order: download, then
+build. The chart wrappers accept `--no-fetch`, `--resume`, `--detect` (redo the
+reviewed map areas) and any `build_chart_tileset.py` option. The wall planning
+chart has **no automated download** — the FAA's "Planning Set" link was dead —
+so put its files in `source/wall-planning/` by hand first; `--help` lists them.
+Its wrapper then georeferences, crops to the neatline, upsamples 2x with
+Real-CUGAN and tiles.
+
+**Everything downloaded lives in `source/`**: chart GeoTIFFs, model weights,
+third-party checkouts and the intermediates made from them, in one subfolder
+each. Delete `source/` to reclaim all of it. Tilesets (`tileset-*`) stay at the
+top level, where the tester finds them.
+
+## Setup by hand
 
 ```bash
 py -3 -m venv .venv
@@ -483,7 +505,7 @@ The sectional series is 55 sheets that overlap at their edges, each in its own
 Lambert Conformal Conic, each inside a printed collar. Three scripts build it:
 
 ```bash
-.venv/Scripts/python scripts/fetch_charts.py sectionals          # current edition -> ./sectionals
+.venv/Scripts/python scripts/fetch_charts.py sectionals          # current edition -> source/sectionals
 .venv/Scripts/python scripts/detect_sectional_areas.py --sheet review/
 .venv/Scripts/python scripts/build_chart_tileset.py sectionals   # -> ./tileset-sectionals
 ```
@@ -529,8 +551,9 @@ Still open:
 The CONUS low enroute charts, L-01 to L-36, build the same way:
 
 ```bash
-.venv/Scripts/python scripts/fetch_charts.py ifr-low          # -> ./ifr-low
+.venv/Scripts/python scripts/fetch_charts.py ifr-low          # -> source/ifr-low
 .venv/Scripts/python scripts/detect_ifr_areas.py --sheet review/
+.venv/Scripts/python scripts/heal_frames.py ifr-low           # -> source/ifr-low/healed
 .venv/Scripts/python scripts/build_chart_tileset.py ifr-low   # -> ./tileset-ifr-low
 ```
 
@@ -544,8 +567,17 @@ The CONUS low enroute charts, L-01 to L-36, build the same way:
   thick rules on each axis. Where a sheet frames a second panel beside the map
   (L-23's Wilmington-Bimini inset strip), the widest panel is the map and the
   other is reported and dropped.
-- **Same engine and choices** as the sectionals: z12, WebP q90, overlaps by
-  file name.
+- **Seams are healed, not cropped.** Neighbouring IFR charts do not overlap:
+  they meet at their frame rules, and under a rule neither sheet has map.
+  Cropping inside the rules left a 1-3 km dark gap along every shared edge.
+  Instead the map area runs to each rule's outer edge, and `heal_frames.py`
+  writes a copy of each sheet with the rule painted over by repeating the
+  nearest clean row or column outward (~12 px, ~0.5-1 km per side), which the
+  build tiles. That closed 31 of 32 seams; L-29/L-30 still has a straight
+  ~450 m sliver where the FAA's two georeferenced sheets simply do not meet.
+- **Same engine and choices** as the sectionals: z12 and WebP q90. Overlaps are
+  painted in *reverse* file-name order, so the lower-numbered chart is on top;
+  `build_chart_tileset.py --[no-]reverse-order` overrides a series' default.
 
 ### Automate fetching and building every current FAA chart
 
@@ -637,6 +669,20 @@ implementation of the same grid, so agreement is evidence rather than tautology.
 pyproject.toml            packaging + pytest config
 requirements.txt          runtime deps (incl. the GDAL wheel index)
 requirements-dev.txt      runtime + test deps
+scripts/
+    setup_repo.py         fresh clone -> working venv
+    build_sectionals.py   wrappers: download + build one product each
+    build_ifr_low.py
+    build_wall_planning.py
+    pipeline.py           what the wrappers share: run stages in order
+    layout.py             where everything lives (source/, models, ...)
+    chart_series.py       each FAA chart series, described once
+    fetch_charts.py       download a series' current edition (+ fetch_chart.py worker)
+    detect_*_areas.py     find each sheet's map area -> *_areas.json (reviewed, committed)
+    build_chart_tileset.py  mosaic a series into tiles
+    build_vfr_tileset.py  the wall planning chart pipeline
+    upsample.py           2x super-resolution
+source/                   every download and intermediate (gitignored)
 src/geotransfer/
     core.py               copy_geo_metadata / read_georeference
     cli.py

@@ -11,8 +11,17 @@ What IFR charts do have is a drawn frame. Every sheet encloses its map in a
 heavy black rule, ~8 px wide, top, bottom, left and right, with the lettered
 grid ticks and legend panels outside it. Legend tables are ruled too, but with
 1-2 px lines. So each side of the map is the one run of fully dark, *thick*
-rows (or columns) across the middle of the sheet, and the map area is the
-rectangle just inside them. That is a measurement, not a fit.
+rows (or columns) across the middle of the sheet. That is a measurement, not a
+fit.
+
+Adjacent IFR charts do not overlap: they meet at their frames, and under a
+frame rule there is no map on either sheet. Cropping inside the rule therefore
+leaves a 1-3 km gap along every shared edge. So each manifest entry records the
+frame -- ``outer``, the rectangle to the rule's outside edge, and ``clean``, the
+rectangle just inside its anti-aliased inner edge -- and its ``include`` runs to
+the outer edge. heal_frames.py then paints over the rule on a copy of the sheet
+by repeating the nearest clean pixels outward, and the build tiles those copies,
+so neighbouring sheets meet with no black line and no gap.
 
 Some sheets carry a second framed panel beside the main map -- L-23 has a
 "Wilmington - Bimini Inset" strip down its left side, at its own scale and so
@@ -22,7 +31,7 @@ dropped. A sheet with fewer than two thick rules on an axis is reported and left
 out of the manifest rather than guessed at.
 
 The map area is written to ``scripts/<series>_areas.json`` as that chart's
-``include``. Hand-authored keys are never touched: ``exclude`` polygons, and
+``include`` and ``frame``. Hand-authored keys are never touched: ``exclude`` polygons, and
 ``"manual": true``, which skips the chart. ``--sheet DIR`` writes contact sheets
 with each map area outlined, for review.
 """
@@ -47,7 +56,7 @@ FULL = 0.9          # fraction of the middle of the sheet a frame rule must cove
                     # (L-34's right rule is crossed by something and reads 0.94)
 THICK = 6           # pixels; frame rules are 6-10 (L-12 has 6), legend column rules 5, table rules 1-2
 MIDDLE = (0.3, 0.7) # the span a rule is measured across, clear of corners
-INSET = 12          # pixels moved inside the rule, past its anti-aliased edge
+CLEAN = 3           # pixels inside a rule's inner edge before the map is clean of its anti-aliasing
 
 
 def _ink(dataset) -> np.ndarray:
@@ -70,8 +79,9 @@ def _thick_rules(fraction: np.ndarray) -> list[tuple[int, int]]:
     return [(a, b) for a, b in runs if b - a + 1 >= THICK]
 
 
-def detect(path: Path) -> tuple[list[list[int]] | None, str]:
-    """The map frame's interior as a pixel polygon, or None and the reason."""
+def detect(path: Path) -> tuple[dict | None, str]:
+    """``{"outer": [x0, y0, x1, y1], "clean": [...]}`` for the map frame, with
+    exclusive right/bottom edges, or None and the reason."""
     dataset = gdal.Open(str(path))
     ink = _ink(dataset)
     height, width = ink.shape
@@ -80,23 +90,28 @@ def detect(path: Path) -> tuple[list[list[int]] | None, str]:
     cols = _thick_rules(ink[int(height * lo):int(height * hi), :].mean(axis=0))
     if len(rows) < 2 or len(cols) < 2:
         return None, f"no frame: {len(rows)} thick horizontal and {len(cols)} thick vertical rules"
-    (top, bottom), dropped_rows = _widest_panel(rows)
-    (left, right), dropped_cols = _widest_panel(cols)
-    x0, y0, x1, y1 = left + 1 + INSET, top + 1 + INSET, right - INSET, bottom - INSET
-    report = (f"frame x {left}..{right}, y {top}..{bottom}; map {x1 - x0}x{y1 - y0} px "
+    (top_rule, bottom_rule), dropped_rows = _widest_panel(rows)
+    (left_rule, right_rule), dropped_cols = _widest_panel(cols)
+    outer = [left_rule[0], top_rule[0], right_rule[1] + 1, bottom_rule[1] + 1]
+    clean = [left_rule[1] + 1 + CLEAN, top_rule[1] + 1 + CLEAN, right_rule[0] - CLEAN, bottom_rule[0] - CLEAN]
+    x0, y0, x1, y1 = outer
+    rules = (f"rules {right_rule[1] - right_rule[0] + 1}-{left_rule[1] - left_rule[0] + 1}"
+             f"x{top_rule[1] - top_rule[0] + 1}-{bottom_rule[1] - bottom_rule[0] + 1} px")
+    report = (f"frame x {x0}..{x1}, y {y0}..{y1} ({rules}); map {x1 - x0}x{y1 - y0} px "
               f"({100 * (x1 - x0) * (y1 - y0) / (width * height):.0f}% of sheet)")
     dropped = [f"x {a}..{b}" for a, b in dropped_cols] + [f"y {a}..{b}" for a, b in dropped_rows]
     if dropped:
         report += "; dropped framed panel(s) " + ", ".join(dropped)
-    return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], report
+    return {"outer": outer, "clean": clean}, report
 
 
 def _widest_panel(rules):
-    """The widest gap between consecutive rules, as (inner edge, inner edge),
-    and every other gap wide enough to be a panel rather than a doubled rule."""
-    gaps = [(int(a[1]), int(b[0])) for a, b in zip(rules, rules[1:])]
-    widest = max(gaps, key=lambda g: g[1] - g[0])
-    others = [g for g in gaps if g != widest and g[1] - g[0] > 1000]
+    """The two rules bounding the widest panel, as ((first, last), (first, last)),
+    and every other panel wide enough not to be a doubled rule, as inner edges."""
+    rules = [(int(a), int(b)) for a, b in rules]
+    pairs = list(zip(rules, rules[1:]))
+    widest = max(pairs, key=lambda pair: pair[1][0] - pair[0][1])
+    others = [(a[1], b[0]) for a, b in pairs if (a, b) != widest and b[0] - a[1] > 1000]
     return widest, others
 
 
@@ -152,13 +167,16 @@ def main(argv=None) -> int:
             if entry.get("manual"):
                 print(f"{name}: manual, skipped")
                 continue
-            points, report = detect(chart_series.directory / name)
-            if points is None:
+            frame, report = detect(chart_series.directory / name)
+            if frame is None:
                 failed += 1
                 entry.pop("include", None)
+                entry.pop("frame", None)
                 print(f"!! {name}: {report}", flush=True)
             else:
-                entry["include"] = [{"pixel": points}]
+                x0, y0, x1, y1 = frame["outer"]
+                entry["frame"] = frame
+                entry["include"] = [{"pixel": [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]}]
                 print(f"{'??' if 'dropped' in report else '  '} {name}: {report}", flush=True)
         ordered = {k: manifest[k] for k in sorted(manifest) if manifest[k]}
         path.write_text(json.dumps(ordered, indent=1) + "\n", encoding="utf-8", newline="\n")
