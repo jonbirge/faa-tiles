@@ -4,7 +4,7 @@
     .venv/Scripts/python scripts/build_sectionals.py [--no-fetch] [--detect] [--resume]
 
 Runs fetch_charts.py sectionals, then build_chart_tileset.py sectionals, which
-replaces the tileset. Takes about 25 minutes on 24 cores and writes ~5.7 GB.
+replaces the tileset. Takes about 7 minutes on 24 cores and writes ~2.1 GB (z11).
 """
 
 import sys

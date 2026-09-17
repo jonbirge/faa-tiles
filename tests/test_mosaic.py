@@ -156,6 +156,22 @@ def test_manifest_form_round_trips():
     assert not area.is_whole_image
 
 
+def test_pixel_scale_scales_only_pixel_polygons():
+    """Manifests are recorded against the downloaded GeoTIFFs; ifr-low tiles
+    rasters drawn from the PDFs at twice that, so its pixel polygons double."""
+    spec = {
+        "limits": {"south": 32.0},
+        "include": [{"pixel": [[0, 0], [10, 0], [10, 20]]}],
+        "exclude": [{"lonlat": [[1, 1], [2, 1], [2, 2]]}],
+    }
+    area = MapArea.from_dict(spec, 2)
+    assert area.include[0].points == ((0.0, 0.0), (20.0, 0.0), (20.0, 40.0))
+    # Ground coordinates are ground coordinates at any resolution.
+    assert area.exclude[0].points == ((1.0, 1.0), (2.0, 1.0), (2.0, 2.0))
+    assert area.limits.south == 32.0
+    assert MapArea.from_dict(spec).include[0].points == ((0.0, 0.0), (10.0, 0.0), (10.0, 20.0))
+
+
 # -- the antimeridian --------------------------------------------------
 
 

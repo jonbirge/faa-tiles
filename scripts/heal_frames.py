@@ -7,15 +7,19 @@ IFR enroute charts do not overlap their neighbours; they meet at a heavy black
 frame rule, and under that rule neither sheet has any map. Tiled as they are,
 every shared edge becomes a black line, or a gap if the rule is cropped away.
 
-For each sheet this writes a copy under ``source/<series>/healed/`` in which the
+For each sheet this writes a copy under ``source/<series>/healed/`` of the
+series' rasters -- the downloaded GeoTIFFs, or the PDF renders where a series
+draws its own (``render_pdfs.py``) -- in which the
 band between the rule's outer edge and the clean map just inside it is replaced
 by repeating that clean row or column outward -- a line crossing the edge
 carries straight on through, flat fills stay flat. Everything else is copied
 unchanged, and only the healed strips are rewritten. The band is ~10-20 px,
 roughly 0.5-1 km, per side; where two sheets meet, each fills its own half.
 
-The frame comes from the manifest's ``frame`` entry (detect_ifr_areas.py).
-A healed copy newer than its sheet is skipped unless ``--force``.
+The frame comes from the manifest's ``frame`` entry (detect_ifr_areas.py),
+scaled by the series' ``pixel_scale`` because the manifest is recorded in
+GeoTIFF pixel space. A healed copy newer than its sheet is skipped unless
+``--force``.
 """
 
 from __future__ import annotations
@@ -84,23 +88,31 @@ def main(argv=None) -> int:
     chart_series = series(args.series)
 
     manifest = json.loads(chart_series.manifest.read_text(encoding="utf-8"))
-    names = args.charts or sorted(p.name for p in chart_series.directory.glob("*.tif")
+    in_dir = chart_series.raster_directory
+    names = args.charts or sorted(p.name for p in in_dir.glob("*.tif")
                                   if chart_series.wants_tif(p.name))
+    if not names:
+        raise SystemExit(f"no rasters in {in_dir}; run the earlier stages first")
     missing = [n for n in names if "frame" not in manifest.get(n, {})]
     if missing:
         raise SystemExit(f"no frame recorded for {', '.join(missing)}; "
                          f"run detect_ifr_areas.py {chart_series.name} and review it first")
 
+    # The manifest is in GeoTIFF pixel space; a series that renders its PDFs
+    # heals rasters drawn at a multiple of that.
+    scale = chart_series.pixel_scale
     out_dir = chart_series.healed_directory
     out_dir.mkdir(parents=True, exist_ok=True)
     todo = []
     for name in names:
-        source, target = chart_series.directory / name, out_dir / name
+        source, target = in_dir / name, out_dir / name
         if (not args.force and target.is_file()
                 and target.stat().st_mtime >= source.stat().st_mtime
                 and target.stat().st_mtime >= chart_series.manifest.stat().st_mtime):
             continue
-        todo.append((str(source), str(target), manifest[name]["frame"]))
+        frame = {edge: [v * scale for v in bounds]
+                 for edge, bounds in manifest[name]["frame"].items()}
+        todo.append((str(source), str(target), frame))
     print(f"{len(todo)} of {len(names)} sheet(s) to heal -> {out_dir}", flush=True)
 
     with ProcessPoolExecutor(args.workers) as pool:

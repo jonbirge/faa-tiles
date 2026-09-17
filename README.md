@@ -25,17 +25,20 @@ their own package indexes) and checks the imports. Then build whichever
 tilesets you want and open the tester:
 
 ```bash
-.venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   ~25 min, ~5.7 GB
-.venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute  ~10 min, ~0.9 GB
+.venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   ~7 min, ~2.1 GB (z11)
+.venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute ~28 min, ~1.4 GB (z12, lossless)
 .venv/Scripts/python scripts/build_wall_planning.py   # VFR wall planning chart (see below)
 .venv/Scripts/cesiumtiles-serve .                     # http://127.0.0.1:8000/
 ```
 
 (On Linux and macOS the venv interpreter is `.venv/bin/python`.)
 
-Each wrapper runs its stages as separate scripts, in order: download, then
-build. The chart wrappers accept `--no-fetch`, `--resume`, `--detect` (redo the
-reviewed map areas) and any `build_chart_tileset.py` option. The wall planning
+Each wrapper runs its stages as separate scripts, in order: download, then any
+preparation the series needs (the IFR charts are rendered from vector PDFs and
+their frame seams healed), then build. The chart wrappers accept `--no-fetch`,
+`--resume`, `--detect` (redo the reviewed manifests, which for the IFR charts
+also downloads the GeoTIFFs they are derived from) and any
+`build_chart_tileset.py` option. The wall planning
 chart has **no automated download** — the FAA's "Planning Set" link was dead —
 so put its files in `source/wall-planning/` by hand first; `--help` lists them.
 Its wrapper then georeferences, crops to the neatline, upsamples 2x with
@@ -552,8 +555,8 @@ Still open:
 The CONUS low enroute charts, L-01 to L-36, build the same way:
 
 ```bash
-.venv/Scripts/python scripts/fetch_charts.py ifr-low          # -> source/ifr-low
-.venv/Scripts/python scripts/detect_ifr_areas.py --sheet review/
+.venv/Scripts/python scripts/fetch_charts.py ifr-low          # -> source/ifr-low/pdf
+.venv/Scripts/python scripts/render_pdfs.py ifr-low           # -> source/ifr-low/rendered
 .venv/Scripts/python scripts/heal_frames.py ifr-low           # -> source/ifr-low/healed
 .venv/Scripts/python scripts/build_chart_tileset.py ifr-low   # -> ./tileset-ifr-low
 ```
@@ -561,6 +564,25 @@ The CONUS low enroute charts, L-01 to L-36, build the same way:
 - **Scope:** only `ENR_L01`-`ENR_L36`. Alaska, Pacific and area charts are left
   out, and so are the inset TIFFs some zips carry. L-06 is published as two
   halves, `ENR_L06N` and `ENR_L06S`, so the series has 37 sheets.
+- **The sheets are drawn from the FAA's vector PDFs, not its GeoTIFFs.** The
+  published GeoTIFFs are badly rasterised — every edge staircases, and no
+  amount of super-resolution recovers what the rasteriser threw away. The same
+  charts are also published as true vector PDFs, which `render_pdfs.py` draws
+  at 2x the GeoTIFF's 400 dpi. That is *rendering*, not upsampling: each pixel
+  comes from the vector geometry, so type and line work antialias properly.
+  A sheet takes about 35 s, and all 37 render in 6.4 minutes on 6 workers.
+  **Rendering is done in 8192 px blocks**, not whole sheets: pdfium stops
+  drawing past ~32767 px without any error, and a 48000 px sheet silently loses
+  its right third (see CLAUDE.md).
+- **The PDFs are not georeferenced** — their own metadata says so, offering
+  only four bounding corners. So `detect_pdf_windows.py` registers each
+  GeoTIFF against its PDF once per edition and commits the result as
+  `scripts/ifr_low_pdf.json`: the affine, the CRS, and which box of which page
+  the sheet is. `ENR_L06.pdf` is a single page holding both panels that ship as
+  `ENR_L06N` and `ENR_L06S`, which is why a window is recorded rather than
+  assumed. After that only the PDFs are downloaded (~130 MB against 386 MB of
+  GeoTIFFs); `build_ifr_low.py --detect` fetches the GeoTIFFs and re-derives
+  both manifests, which is the only thing they are still needed for.
 - **Map areas are found differently.** An IFR chart's map is mostly white, so
   the sectional detector's "walk in until the paper ends" has nothing to find.
   Instead every sheet frames its map with a heavy black rule, 6-10 px, while
@@ -576,8 +598,9 @@ The CONUS low enroute charts, L-01 to L-36, build the same way:
   nearest clean row or column outward (~12 px, ~0.5-1 km per side), which the
   build tiles. That closed 31 of 32 seams; L-29/L-30 still has a straight
   ~450 m sliver where the FAA's two georeferenced sheets simply do not meet.
-- **Same engine** as the sectionals at z12, but **lossless WebP**: IFR charts
-  are thin linework and small type on white, which lossy q90 softens.
+- **Same engine** as the sectionals, at **z12** and **lossless WebP**: IFR
+  charts are thin linework and small type on white, which lossy q90 softens.
+  The 2x renders reach z13 natively; z12 is where the current build stops.
   `build_chart_tileset.py --[no-]lossless` overrides a series' default. Overlaps are
   painted in *reverse* file-name order, so the lower-numbered chart is on top;
   `build_chart_tileset.py --[no-]reverse-order` overrides a series' default.
@@ -588,7 +611,9 @@ The FAA republishes on a **56-day cycle**, so this should be a scheduled job
 rather than something run by hand:
 
 - Fetch the current edition list, download the VFR and IFR products, and unpack
-  the GeoTIFFs. *Done for sectionals and IFR low* (`scripts/fetch_charts.py`).
+  the GeoTIFFs (or the vector PDFs, for the IFR charts). *Done for sectionals
+  and IFR low* (`scripts/fetch_charts.py`). The reviewed manifests are tied to
+  an edition, so a scheduled job has to re-detect and someone has to look.
 - Detect each sheet's neatline, upsample, mosaic where a series overlaps, and
   tile — the pipeline above, driven by a manifest rather than constants.
 - Track edition dates so an unchanged chart is skipped instead of rebuilt.

@@ -229,18 +229,24 @@ class MapArea:
         return self.limits is None and not self.include and not self.exclude
 
     @classmethod
-    def from_dict(cls, spec: Mapping) -> "MapArea":
+    def from_dict(cls, spec: Mapping, pixel_scale: float = 1.0) -> "MapArea":
         """Build from the manifest form::
 
             {"limits": {"west": -109, "south": 32},
              "include": [{"lonlat": [[lon, lat], ...]}],
              "exclude": [{"pixel": [[col, row], ...]}]}
+
+        ``pixel_scale`` scales the ``pixel`` polygons, for a raster drawn at a
+        multiple of the resolution the manifest was recorded against. Polygons
+        in ``lonlat`` are on the ground and never scale.
         """
         def polygons(items):
             out = []
             for item in items or ():
                 (frame, points), = item.items()
-                out.append(Polygon(tuple((float(x), float(y)) for x, y in points), frame))
+                scale = pixel_scale if frame == "pixel" else 1.0
+                out.append(Polygon(tuple((float(x) * scale, float(y) * scale) for x, y in points),
+                                   frame))
             return tuple(out)
 
         limits = spec.get("limits")

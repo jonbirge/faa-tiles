@@ -6,14 +6,17 @@
 SERIES is a name from chart_series.py (``sectionals``, ``ifr-low``). Stages,
 each its own script so it can be rerun alone:
 
-  1. fetch_charts.py SERIES      download the current edition's GeoTIFFs into
-                                 source/SERIES
+  1. fetch_charts.py SERIES      download the current edition into source/SERIES
+                                 -- GeoTIFFs, or just the vector PDFs for a
+                                 series that renders its own rasters
   2. detect_*_areas.py           find each sheet's map area into
                                  scripts/SERIES_areas.json; rerun and review
                                  for every new edition.
                                    sectionals: detect_sectional_areas.py
                                    ifr-low:    detect_ifr_areas.py
-  3. this script                 mosaic the sheets into z/x/y tiles
+  3. render_pdfs.py SERIES       (ifr-low) draw the sheets from their PDFs at 2x
+  4. heal_frames.py SERIES       (ifr-low) paint over the frame rule
+  5. this script                 mosaic the sheets into z/x/y tiles
 
 Overlaps are resolved by file name: sheets are painted in lexicographic order,
 so where two overlap, the one later in the alphabet is on top. ``--reverse-order``
@@ -48,18 +51,31 @@ QUALITY = 90  # lossy WebP where a series is not lossless: large tilesets, and q
 
 
 def check_stages(chart_series) -> None:
-    """Refuse to tile a preparation stage that is missing or older than its input."""
-    stages = [chart_series.directory]
+    """Refuse to tile a preparation stage that is missing or older than its input.
+
+    The chain starts at whatever the series downloads: the GeoTIFFs, or the PDFs
+    for a series that draws its own rasters from them.
+    """
+    if chart_series.pdf_scale:
+        manifest = json.loads(chart_series.pdf_manifest.read_text(encoding="utf-8"))
+        names = sorted(n for n in manifest if chart_series.wants_tif(n))
+        first = {n: chart_series.pdf_directory / manifest[n]["pdf"] for n in names}
+        stages = [(chart_series.render_directory, "render_pdfs.py")]
+    else:
+        names = sorted(p.name for p in chart_series.directory.glob("*.tif")
+                       if chart_series.wants_tif(p.name))
+        first = {n: chart_series.directory / n for n in names}
+        stages = []
     if chart_series.heal_frames:
-        stages.append(chart_series.healed_directory)
-    scripts = {chart_series.healed_directory: "heal_frames.py"}
-    names = sorted(p.name for p in chart_series.directory.glob("*.tif") if chart_series.wants_tif(p.name))
-    for before, after in zip(stages, stages[1:]):
+        stages.append((chart_series.healed_directory, "heal_frames.py"))
+
+    for after, script in stages:
         stale = [n for n in names if not (after / n).is_file()
-                 or (after / n).stat().st_mtime < (before / n).stat().st_mtime]
+                 or (after / n).stat().st_mtime < first[n].stat().st_mtime]
         if stale:
             raise SystemExit(f"{len(stale)} sheet(s) missing or out of date in {after}, e.g. {stale[0]}; "
-                             f"run scripts/{scripts[after]} {chart_series.name} first")
+                             f"run scripts/{script} {chart_series.name} first")
+        first = {n: after / n for n in names}
 
 
 def sources(chart_series, directory: Path, manifest: dict) -> list[MosaicSource]:
@@ -75,7 +91,10 @@ def sources(chart_series, directory: Path, manifest: dict) -> list[MosaicSource]
             "no map area recorded for: " + ", ".join(missing)
             + "\ndetect and review map areas first (see this script's docstring)"
         )
-    return [MosaicSource(p, MapArea.from_dict(manifest[p.name])) for p in charts]
+    # Map areas are recorded against the downloaded GeoTIFFs, so their pixel
+    # polygons scale with a series that tiles renders drawn at a multiple of it.
+    return [MosaicSource(p, MapArea.from_dict(manifest[p.name], chart_series.pixel_scale))
+            for p in charts]
 
 
 def main(argv=None) -> int:

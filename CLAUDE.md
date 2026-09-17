@@ -17,8 +17,10 @@ Two packages under `src/`, one venv, one test suite.
 
 **Everything downloaded or derived from downloads lives under `source/`** (the
 user asked for this, so the lot can be deleted in one go): `source/sectionals/`
-(55 GeoTIFFs) and `source/ifr-low/` (37) from `scripts/fetch_charts.py SERIES`,
-`source/ifr-low/healed/` (frame-healed copies, see below),
+(55 GeoTIFFs) and `source/ifr-low/pdf/` (36 vector PDFs) from
+`scripts/fetch_charts.py SERIES`, then `source/ifr-low/rendered/` (37 sheets
+drawn from those PDFs) and `source/ifr-low/healed/` (frame-healed copies, both
+below),
 `source/models/` (upsampler weights), `source/vendor/nunif`, and
 `source/wall-planning/`. Paths come from `scripts/layout.py`; use it rather than
 building paths from `REPO`. Tilesets stay at the top level.
@@ -89,7 +91,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 145 tests, ~45s
+.venv/Scripts/python -m pytest                        # 173 tests, ~50s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -193,6 +195,18 @@ costs a lot of context for no gain.
   panning the chart border. Measured: snapped edges caused ~60 bad calls, the
   unsnapped extent caused 0. `viewer.py` has `extentOf()` for this; a test
   guards it.
+- **pdfium silently stops drawing past ~32767 px.** It rasterises through AGG,
+  whose cell coordinates overflow there. Ask for a wider bitmap and it returns
+  the full size you asked for, fills it white, draws the page frame -- and omits
+  the interior beyond the limit. Nothing raises, no dimension is wrong, and the
+  frame at the page edge still reads as ink, so a "last drawn column" probe says
+  everything is fine. A whole IFR sheet at 2x is 48000 px wide and lost its
+  right third; it looked like a georeferencing fault, and was misdiagnosed as
+  one twice. Measured on ENR_L27: 31868 px complete, 35324 px starts dropping,
+  47900 px empty past ~32000; the right half rendered *alone* is complete.
+  `render_pdfs.py` renders in `BLOCK` (8192 px) squares for this, and
+  `tests/test_render_pdfs.py` guards the size. When checking a render for
+  missing content, measure **interior** ink by region, never a single extent.
 - **Windows `SO_REUSEADDR` lets a second server hijack a bound port** (opposite
   of POSIX). `serve.py` sets `allow_reuse_address` only on non-Windows for this
   reason — don't "simplify" it back to `True`.
@@ -279,6 +293,14 @@ for it gone; the document `<title>` stays.
   current tileset in place, so the menu never shows a source that is not loaded.
 - **MSAA defaults to none** (the user's call); the option reads "none", not
   "off".
+- **Magnification is per imagery layer; the other rendering controls are not.**
+  `maximumScreenSpaceError`, `resolutionScale` and `msaaSamples` live on the
+  viewer or scene and survive a source change, but `magnificationFilter` is set
+  on each `ImageryLayer`, and `relayer()` builds a new one. It used to be
+  applied only from `applyRendering()`, so switching tilesets silently dropped
+  "magnify" back to Cesium's LINEAR while the menu still read "nearest" -- the
+  user spotted it. `relayer()` now calls `applyMagnification()`, which covers
+  the grid toggle too; a test guards it.
 - `window.tilesetMetadata` is **reassigned in `rebuild()`**, not captured once at
   startup. It went stale after a source change and reported the original
   tileset's values, which is confusing when debugging.
@@ -288,11 +310,18 @@ for it gone; the document `<title>` stays.
 
 ## Chart series mosaics
 
-`fetch_charts.py SERIES` -> `detect_sectional_areas.py` or `detect_ifr_areas.py`
--> `build_chart_tileset.py SERIES`. **`scripts/chart_series.py` is the one place a
-series is described**: its index URL, which zips and GeoTIFFs it wants (regexes),
-exclusions, download directory, manifest (`scripts/<series>_areas.json`) and
-tileset directory. Add a series there, not by copying scripts.
+`fetch_charts.py SERIES` -> the series' detectors -> (`render_pdfs.py`) ->
+(`heal_frames.py`) -> `build_chart_tileset.py SERIES`.
+**`scripts/chart_series.py` is the one place a series is described**: its index
+URL, which zips and files it wants (regexes), exclusions, download directory,
+manifests (`scripts/<series>_areas.json`, `<series>_pdf.json`) and tileset
+directory. Add a series there, not by copying scripts.
+
+**The manifests are always in downloaded-GeoTIFF pixel space.** A series that
+renders PDFs tiles rasters drawn at `pdf_scale` times that, so pixel polygons
+and frame bands are scaled by `Series.pixel_scale` at the point of use --
+`MapArea.from_dict(spec, pixel_scale)` and `heal_frames.py`. Do not rescale the
+manifests themselves; they are the reviewed record.
 
 The sectionals came first, and the notes below are mostly theirs.
 Decided with the user, with measurements: **z12** at first (the "finest pixel"
@@ -368,11 +397,33 @@ Detection lessons, each learnt from a wrong outline:
   earlier measurement that lanczos rang most and cubic halved it at nearly the
   same sharpness): `build_tileset`, the CLI, `build_mosaic` and the wall chart
   build. Overview cascades are untouched.
-- **Real-CUGAN over the IFR sheets was tried and shelved.** Measured 2.3
-  blocks/s on CPU PyTorch: ~9.5 h for the 78,930 blocks of the 37 frames. The
-  user skipped it. If it comes back: the no-denoise weights (the user ruled
-  denoise out for IFR charts), and `upsample.py` now crops with `window=` and
-  scales all four geotransform terms, which rotated sheets need.
+- **The IFR sheets are rendered from the FAA's vector PDFs, not upsampled.**
+  This is the settled answer to the staircasing, and supersedes the
+  super-resolution experiments below. The published GeoTIFFs are badly
+  rasterised at source, so no upsampler can recover the edges; the same charts
+  ship as true vector PDFs (`DELUS<odd>.zip`, two sheets each), which
+  `render_pdfs.py` draws at `pdf_scale=2` times their 400 dpi. **Do not call
+  this upsampling and do not add an upsampler to this path** -- every pixel
+  comes from the vector geometry. Measured: ~35 s/sheet, 6.4 min for all 37 on
+  6 workers, and 1.7 GB of renders.
+- **Those PDFs carry no georeferencing** (their `.htm` metadata says so, giving
+  only four bounding corners), so `detect_pdf_windows.py` registers each
+  GeoTIFF against its PDF once per edition and commits the affine, CRS and page
+  window as `scripts/ifr_low_pdf.json`. **`ENR_L06.pdf` is one 24000x8000 page
+  holding both panels** that ship as `ENR_L06N` (at x=2000) and `ENR_L06S` (at
+  x=16000), each with its own affine -- which is why a window is registered
+  rather than the page assumed. Registration is ink-profile correlation at 1/8
+  scale, then a +/-16 px search on five full-resolution probes whose offsets
+  must agree; expect matches around 0.89-0.92.
+- **A routine ifr-low build downloads only the PDFs** (`fetches_tifs` is false
+  when `pdf_scale` is set), ~130 MB against 386 MB of GeoTIFFs. The GeoTIFFs
+  are an input to re-detection alone: `build_ifr_low.py --detect` passes
+  `fetch_charts.py --tifs` and reruns both detectors.
+- **Real-CUGAN over the IFR sheets was tried and shelved** before the PDFs were
+  found. Measured 2.3 blocks/s on CPU PyTorch: ~9.5 h for the 78,930 blocks of
+  the 37 frames, and it did not remove the staircasing anyway, because that is
+  baked into the FAA raster. `upsample.py` crops with `window=` and scales all
+  four geotransform terms, which rotated sheets need.
 - **The wall planning chart now uses the denoise3x Real-CUGAN weights** (the
   user asked to try them); earlier builds used no-denoise.
 - **IFR low tiles are lossless WebP** (`lossless=True` in its series, the user's
@@ -428,5 +479,6 @@ Detection lessons, each learnt from a wrong outline:
 - **Do not leave extra tilesets lying around.** The user asked for this: build a
   scratch tileset if a test needs one, then delete it in the same turn. Only
   `tileset-planning/` should persist. (An earlier `tileset-colorado/` demo outlived its
-  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~5.7 GB, 508k tiles) and `tileset-ifr-low/` (~0.9 GB, 240k tiles) are
+  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~2.1 GB, 129k tiles at z11) and `tileset-ifr-low/`
+  (~1.4 GB, 240k tiles at z12, lossless, rendered from the PDFs) are
   the other real products and are expected to persist too.

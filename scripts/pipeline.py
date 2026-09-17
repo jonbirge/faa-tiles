@@ -45,12 +45,18 @@ def chart_series_main(series: str, detector: list[str], description: str, argv=N
     ap.add_argument("--resume", action="store_true",
                     help="keep tiles already written instead of rebuilding from scratch")
     args, passthrough = ap.parse_known_args(argv)
+    this = chart_series(series)
 
     if not args.no_fetch:
-        run("fetch_charts.py", series)
+        # Detection reads the GeoTIFFs; a routine build of a PDF series does not.
+        run("fetch_charts.py", series, *(["--tifs"] if args.detect else []))
     if args.detect:
         run(*detector)
-    if chart_series(series).heal_frames:
+        if this.pdf_scale:
+            run("detect_pdf_windows.py", series)
+    if this.pdf_scale:
+        run("render_pdfs.py", series)
+    if this.heal_frames:
         run("heal_frames.py", series)
     run("build_chart_tileset.py", series, "--resume" if args.resume else "--overwrite", *passthrough)
     return 0

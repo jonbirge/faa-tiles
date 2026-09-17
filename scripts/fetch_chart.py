@@ -1,4 +1,4 @@
-"""Download one FAA chart zip and extract the GeoTIFF(s) a series wants from it.
+"""Download one FAA chart zip and extract the file(s) a series wants from it.
 
     python scripts/fetch_chart.py SERIES URL [--out DIR]
 
@@ -6,8 +6,9 @@ This is the worker half of ``fetch_charts.py``, which runs a team of these in
 parallel. It stands alone so a single chart can be re-fetched by hand.
 
 The zip is streamed to a temp file in the output directory (same drive, so the
-final rename is atomic), the ``.tif`` members the series keeps are copied out
-with their folder path dropped, and the zip is deleted. Each TIFF is written as
+final rename is atomic), the members the series keeps are copied out with their
+folder path dropped -- GeoTIFFs into the output directory, vector PDFs into its
+``pdf/`` subdirectory -- and the zip is deleted. Each file is written as
 ``.part`` and renamed only once complete, so an interrupted run never leaves a
 truncated chart that looks finished. Standard library only.
 """
@@ -51,25 +52,37 @@ def download(url: str, dest: Path) -> int:
     raise AssertionError("unreachable")
 
 
-def extract_tifs(zip_path: Path, out_dir: Path, chart_series: Series) -> list[Path]:
-    """Copy the .tif members ``chart_series`` wants flat into ``out_dir``."""
+def extract_members(zip_path: Path, out_dir: Path, chart_series: Series) -> list[Path]:
+    """Copy the members ``chart_series`` wants flat out of ``zip_path``.
+
+    GeoTIFFs land in ``out_dir``, vector PDFs in its ``pdf/`` subdirectory, so
+    one worker handles both kinds of zip.
+    """
     written, seen = [], 0
     with zipfile.ZipFile(zip_path) as zf:
         for info in zf.infolist():
             name = PurePosixPath(info.filename).name
-            if info.is_dir() or not name.lower().endswith((".tif", ".tiff")):
+            if info.is_dir():
+                continue
+            lower = name.lower()
+            if lower.endswith((".tif", ".tiff")):
+                wanted, into = chart_series.wants_tif(name), out_dir
+            elif lower.endswith(".pdf"):
+                wanted, into = chart_series.wants_pdf(name), out_dir / "pdf"
+            else:
                 continue
             seen += 1
-            if not chart_series.wants_tif(name):
+            if not wanted:
                 continue
-            target = out_dir / name
+            into.mkdir(parents=True, exist_ok=True)
+            target = into / name
             part = target.with_name(target.name + ".part")
             with zf.open(info) as src, open(part, "wb") as dst:
                 shutil.copyfileobj(src, dst, CHUNK)
             os.replace(part, target)
             written.append(target)
     if not seen:
-        raise RuntimeError(f"no .tif in {zip_path.name}")
+        raise RuntimeError(f"no chart file in {zip_path.name}")
     return written
 
 
@@ -80,7 +93,7 @@ def fetch(url: str, out_dir: Path, chart_series: Series) -> list[Path]:
     zip_path = Path(tmp)
     try:
         download(url, zip_path)
-        return extract_tifs(zip_path, out_dir, chart_series)
+        return extract_members(zip_path, out_dir, chart_series)
     finally:
         zip_path.unlink(missing_ok=True)
 

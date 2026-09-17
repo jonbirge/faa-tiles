@@ -452,6 +452,20 @@ function start(initialMeta) {
     return new Cesium.ImageryLayer(provider, { rectangle: rectangle });
   }
 
+  // Magnification is a property of each imagery layer, not of the scene, so it
+  // is the one rendering control that does not survive a layer swap. Every path
+  // that builds layers goes through relayer(), so it re-applies it here;
+  // otherwise changing source silently dropped "magnify" back to Cesium's
+  // LINEAR while the menu still read "nearest".
+  function applyMagnification() {
+    const mag = el("magfilter").value === "nearest"
+      ? Cesium.TextureMagnificationFilter.NEAREST
+      : Cesium.TextureMagnificationFilter.LINEAR;
+    for (let i = 0; i < viewer.imageryLayers.length; i++) {
+      viewer.imageryLayers.get(i).magnificationFilter = mag;
+    }
+  }
+
   function relayer() {
     const showingGrid = gridLayer !== null;
     viewer.imageryLayers.removeAll();
@@ -459,6 +473,7 @@ function start(initialMeta) {
     viewer.imageryLayers.add(baseLayer);
     gridLayer = showingGrid ? newGridLayer() : null;
     if (gridLayer) viewer.imageryLayers.add(gridLayer);
+    applyMagnification();
   }
 
   function cameraIsInside(rect) {
@@ -669,12 +684,7 @@ function start(initialMeta) {
     viewer.resolutionScale = scale;
     viewer.scene.msaaSamples = Number(el("msaa").value) || 1;
 
-    const nearest = el("magfilter").value === "nearest";
-    const mag = nearest ? Cesium.TextureMagnificationFilter.NEAREST
-                        : Cesium.TextureMagnificationFilter.LINEAR;
-    for (let i = 0; i < viewer.imageryLayers.length; i++) {
-      viewer.imageryLayers.get(i).magnificationFilter = mag;
-    }
+    applyMagnification();
     // The filter is baked into the texture at upload, so existing tiles keep
     // the old one until the surface is rebuilt.
     viewer.scene.globe._surface.invalidateAllTiles();

@@ -1,4 +1,4 @@
-"""Download every current GeoTIFF in an FAA chart series.
+"""Download every current chart file in an FAA chart series.
 
     python scripts/fetch_charts.py SERIES [--workers N] [--out DIR] [--list]
 
@@ -9,6 +9,10 @@ Finds the current edition by listing the series' index and taking the latest
 edition's directory before it takes effect, so "newest" is wrong. Then lists
 that edition's zips, keeps the ones the series wants, and runs a team of
 ``fetch_chart.py`` processes over them, WORKERS at a time.
+
+A series that renders vector PDFs (``pdf_zip_pattern``) fetches those zips in
+the same pass, into ``source/SERIES/pdf/``. The GeoTIFFs are downloaded either
+way: they carry the georeferencing the renders borrow.
 
 Standard library only.
 """
@@ -66,21 +70,31 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"parallel downloads (default {WORKERS})")
     ap.add_argument("--out", type=Path, help="output directory (default: the series directory)")
     ap.add_argument("--list", action="store_true", help="print the zips that would be fetched, then stop")
+    ap.add_argument("--tifs", action=argparse.BooleanOptionalAction, default=None,
+                    help="download the GeoTIFFs (default: yes, unless the series renders PDFs, "
+                         "which needs them only for re-detection)")
     args = ap.parse_args(argv)
     chart_series = series(args.series)
     out = args.out or chart_series.directory
+    want_tifs = chart_series.fetches_tifs if args.tifs is None else args.tifs
 
     date, edition_url = current_edition(chart_series.index_url, dt.date.today())
     files_url = urljoin(edition_url, chart_series.files_path)
-    zips = sorted(
-        u for u in list_links(files_url)
-        if chart_series.wants_zip(PurePosixPath(urlparse(u).path).name)
-    )
-    if not zips:
+    links = list_links(files_url)
+    tif_zips = sorted(u for u in links if chart_series.wants_zip(PurePosixPath(urlparse(u).path).name))
+    pdf_zips = sorted(u for u in links
+                      if chart_series.wants_pdf_zip(PurePosixPath(urlparse(u).path).name))
+    if not tif_zips:
         print(f"no wanted zips found at {files_url}", file=sys.stderr)
         return 1
+    if chart_series.pdf_zip_pattern and not pdf_zips:
+        print(f"no PDF zips found at {files_url}", file=sys.stderr)
+        return 1
+    zips = (tif_zips if want_tifs else []) + pdf_zips
 
-    print(f"{chart_series.title}, edition {date:%Y-%m-%d}: {len(zips)} zips from {files_url}")
+    kinds = ", ".join(k for k in (f"{len(tif_zips)} GeoTIFF" if want_tifs else "",
+                                  f"{len(pdf_zips)} vector PDF" if pdf_zips else "") if k)
+    print(f"{chart_series.title}, edition {date:%Y-%m-%d}: {kinds} zips from {files_url}")
     if args.list:
         for u in zips:
             print("  " + PurePosixPath(urlparse(u).path).name)

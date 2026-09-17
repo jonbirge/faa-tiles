@@ -478,6 +478,20 @@ def test_viewer_msaa_defaults_to_none(tmp_path, source):
     assert '<option value="4">4x</option>' in html
 
 
+def test_viewer_reapplies_magnification_when_layers_are_rebuilt(tmp_path, source):
+    """Magnification lives on the imagery layer, not the scene, so it is the one
+    rendering control a source change drops. Every rebuild goes through
+    relayer(), which must re-apply it; the user saw "magnify" silently revert to
+    linear while the menu still read nearest."""
+    result = build_tileset(source, tmp_path / "out", quiet=True)
+    html = render_viewer(_meta(result))
+    relayer = html.split("function relayer()", 1)[1].split("\n  }", 1)[0]
+    assert "applyMagnification();" in relayer
+    # And it is still wired to the menu, from the one definition.
+    assert html.count("function applyMagnification()") == 1
+    assert 'el("magfilter").value === "nearest"' in html
+
+
 def test_viewer_has_no_title_heading(tmp_path, source):
     result = build_tileset(source, tmp_path / "out", quiet=True, title="Test Chart")
     html = render_viewer(_meta(result))

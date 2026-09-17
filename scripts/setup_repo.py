@@ -35,8 +35,11 @@ from layout import REPO, SOURCE, venv_python  # noqa: E402
 MIN_PYTHON = (3, 10)
 VENV = REPO / ".venv"
 CHECK = (
-    "from osgeo import gdal; import rasterio, numpy, torch, spandrel, cesiumtiles, geotransfer; "
-    "print('  gdal', gdal.__version__, '| rasterio', rasterio.__version__, '| torch', torch.__version__)"
+    "from osgeo import gdal; import rasterio, numpy, torch, spandrel, pypdfium2, "
+    "cesiumtiles, geotransfer; "
+    "print('  gdal', gdal.__version__, '| rasterio', rasterio.__version__, "
+    "'| torch', torch.__version__, "
+    "'| pypdfium2', pypdfium2.version.PYPDFIUM_INFO.version)"
 )
 
 
@@ -86,8 +89,8 @@ def main(argv=None) -> int:
     print(f"""
 Setup complete. Next:
 
-  {shown} scripts/build_sectionals.py      # download + tile VFR sectionals   (~25 min)
-  {shown} scripts/build_ifr_low.py         # download + tile IFR low enroute  (~10 min)
+  {shown} scripts/build_sectionals.py      # download + tile VFR sectionals   (~7 min)
+  {shown} scripts/build_ifr_low.py         # download + tile IFR low enroute  (~5 min)
   {shown} scripts/build_wall_planning.py   # wall planning chart; needs files in source/wall-planning/
   {shown} -m cesiumtiles.serve .           # tile tester at http://127.0.0.1:8000/
 """)

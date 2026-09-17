@@ -3,8 +3,13 @@
 
     .venv/Scripts/python scripts/build_ifr_low.py [--no-fetch] [--detect] [--resume]
 
-Runs fetch_charts.py ifr-low, then build_chart_tileset.py ifr-low, which replaces
-the tileset. Takes about 10 minutes on 24 cores and writes ~0.9 GB.
+Runs fetch_charts.py, render_pdfs.py, heal_frames.py and build_chart_tileset.py
+for the ifr-low series, replacing the tileset.
+
+The sheets are drawn from the FAA's vector PDFs at 2x, not from its GeoTIFFs,
+which are badly rasterised; only the PDFs are downloaded. ``--detect`` also
+fetches the GeoTIFFs and re-derives both manifests from them, which is the only
+thing they are needed for.
 """
 
 import sys
