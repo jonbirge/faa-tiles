@@ -14,7 +14,7 @@ each its own script so it can be rerun alone:
                                  for every new edition.
                                    sectionals: detect_sectional_areas.py
                                    ifr-low:    detect_ifr_areas.py
-  3. render_pdfs.py SERIES       (ifr-low) draw the sheets from their PDFs at 2x
+  3. render_pdfs.py SERIES       (ifr-low) draw the sheets from their PDFs at 4x
   4. heal_frames.py SERIES       (ifr-low) paint over the frame rule
   5. this script                 mosaic the sheets into z/x/y tiles
 

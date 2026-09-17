@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from render_pdfs import BLOCK, blocks  # noqa: E402
+from render_pdfs import BLOCK, blocks, expected_size  # noqa: E402
 
 # Measured against ENR_L27: 31868 px rendered completely, 35324 px began
 # dropping content, 47900 px lost everything past ~32000.
@@ -41,6 +41,16 @@ def test_blocks_tile_the_whole_extent_exactly(total):
     for (offset, length), (next_offset, _) in zip(got, got[1:]):
         assert offset + length == next_offset
     assert all(0 < length <= BLOCK for _, length in got)
+
+
+def test_expected_size_scales_the_window_not_the_page():
+    """A render's size comes from the sheet's window, so the L-06 panels differ
+    from each other and from a whole-page sheet."""
+    whole = {"window": [0, 0, 24000, 8000]}
+    panel = {"window": [2000, 0, 14000, 8000]}
+    assert expected_size(whole, 2) == (48000, 16000)
+    assert expected_size(whole, 4) == (96000, 32000)
+    assert expected_size(panel, 4) == (56000, 32000)
 
 
 def test_a_full_sheet_is_split_in_both_axes():

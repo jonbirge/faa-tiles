@@ -57,6 +57,13 @@ __all__ = [
 EARTH_RADIUS = 6378137.0
 MAX_LATITUDE = 85.0511287798066
 TILE_SIZE = 256
+
+# Burning the map-area masks is memory-bound, not CPU-bound: GDAL sizes its
+# rasterise buffer from the GDAL cache, and there is only one mask per sheet.
+# Running them on the wide render pool exhausted memory on the 48000 px IFR
+# sheets, so they get their own narrow pool and a small cache.
+MASK_WORKERS = 4
+MASK_CACHE_MB = 64
 # Lon/lat edges are densified at this spacing before projecting, so a
 # neatline that follows a parallel stays on it in pixel space.
 DENSIFY_DEGREES = 0.01
@@ -468,6 +475,13 @@ def _init_worker(sources, tile_dir, suffix, creation_options, resampling, resume
     )
 
 
+def _init_mask_worker() -> None:
+    gdal.UseExceptions()
+    # GDALRasterizeLayers sizes its scanline buffer from the GDAL cache, so this
+    # is what bounds the big allocation in _write_mask, not just what is cached.
+    gdal.SetCacheMax(MASK_CACHE_MB * 1024 * 1024)
+
+
 def _write_mask(source: PreparedSource) -> str:
     """Burn a source's map area into a Byte mask the size of the source."""
     dataset = gdal.Open(source.path)
@@ -693,14 +707,23 @@ def build_mosaic(
     workers = workers or os.cpu_count() or 1
     initargs = (prepared, str(tile_dir), suffix, options, resampling, resume, cache_mb)
 
+    # Masks are burnt first, in a small pool of their own, and deliberately not
+    # on the render pool. GDALRasterizeLayers allocates a chunk buffer sized
+    # from the GDAL cache, so a 24-wide render pool -- each worker already
+    # holding a 256 MB cache -- ran the machine out of memory on the 48000 px
+    # IFR sheets ("cannot allocate 268416000 bytes"), with the parent also
+    # holding a 716k-tile z13 plan. There are only as many masks as sheets, so
+    # a few at a time costs seconds and nothing else.
+    masked = [p for p in prepared if p.mask_path]
+    if masked:
+        progress = _Progress("masks", len(masked), quiet, every=5.0)
+        with mp.get_context("spawn").Pool(max(1, min(workers, MASK_WORKERS)),
+                                          _init_mask_worker) as mask_pool:
+            for _ in mask_pool.imap_unordered(_write_mask, masked):
+                progress.step()
+
     try:
         with mp.get_context("spawn").Pool(workers, _init_worker, initargs) as pool:
-            masked = [p for p in prepared if p.mask_path]
-            if masked:
-                progress = _Progress("masks", len(masked), quiet, every=5.0)
-                for _ in pool.imap_unordered(_write_mask, masked):
-                    progress.step()
-
             tasks = [(top, x, y, plan[(x, y)]) for x, y in sorted(plan)]
             progress = _Progress(f"z{top}", len(tasks), quiet)
             written = set()

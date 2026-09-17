@@ -16,7 +16,7 @@ window into the page come from the reviewed manifest that
 divided by the scale, leaving the sheet on exactly the same ground at twice the
 resolution.
 
-Pages are rendered in blocks, both because a whole sheet at 2x is about 2 GB of
+Pages are rendered in blocks, both because a whole sheet at 4x is about 9 GB of
 RGB and because pdfium silently stops drawing past ~32767 px (see ``BLOCK``).
 A render newer than its PDF and the manifest is skipped unless ``--force``.
 """
@@ -51,6 +51,26 @@ CREATION = ["COMPRESS=DEFLATE", "PREDICTOR=2", "TILED=YES", "BIGTIFF=YES", "NUM_
 # starts dropping content, 47900 px loses everything past ~32000. 8192 is also a
 # multiple of the 256 px TIFF tile grid.
 BLOCK = 8192
+
+
+def expected_size(entry: dict, scale: int) -> tuple[int, int]:
+    """The pixel size a render of ``entry`` at ``scale`` should have."""
+    _x, _y, width, height = entry["window"]
+    return width * scale, height * scale
+
+
+def _is_current_size(target: Path, entry: dict, scale: int) -> bool:
+    """Whether an existing render was drawn at the scale now configured.
+
+    The other skip checks are mtimes, which say nothing about ``pdf_scale``:
+    raising it leaves every render older-but-present, so they would all be
+    kept at the wrong resolution and the build would tile them happily.
+    """
+    try:
+        raster = gdal.Open(str(target))
+    except RuntimeError:
+        return False
+    return (raster.RasterXSize, raster.RasterYSize) == expected_size(entry, scale)
 
 
 def blocks(total: int, size: int = BLOCK):
@@ -135,7 +155,8 @@ def main(argv=None) -> int:
         target = out_dir / name
         if (not args.force and target.is_file()
                 and target.stat().st_mtime >= pdf_path.stat().st_mtime
-                and target.stat().st_mtime >= stamp):
+                and target.stat().st_mtime >= stamp
+                and _is_current_size(target, entry, chart_series.pdf_scale)):
             continue
         todo.append((str(pdf_path), str(target), entry, chart_series.pdf_scale))
     print(f"{len(todo)} of {len(names)} sheet(s) to render at {chart_series.pdf_scale}x -> {out_dir}",

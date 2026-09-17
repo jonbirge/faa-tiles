@@ -6,7 +6,7 @@
 Runs fetch_charts.py, render_pdfs.py, heal_frames.py and build_chart_tileset.py
 for the ifr-low series, replacing the tileset.
 
-The sheets are drawn from the FAA's vector PDFs at 2x, not from its GeoTIFFs,
+The sheets are drawn from the FAA's vector PDFs at 4x, not from its GeoTIFFs,
 which are badly rasterised; only the PDFs are downloaded. ``--detect`` also
 fetches the GeoTIFFs and re-derives both manifests from them, which is the only
 thing they are needed for.

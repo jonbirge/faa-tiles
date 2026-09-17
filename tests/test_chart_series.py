@@ -38,7 +38,7 @@ def test_sectionals_are_upsampled_from_the_downloaded_geotiffs():
 
 def test_ifr_low_is_drawn_from_the_vector_pdfs_and_never_upsampled():
     s = series("ifr-low")
-    assert s.pdf_scale == 2 and s.pixel_scale == 2
+    assert s.pdf_scale == 4 and s.pixel_scale == 4
     # The PDFs carry no georeferencing, so a routine build skips the GeoTIFFs;
     # they are an input to re-detection only.
     assert not s.fetches_tifs

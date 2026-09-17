@@ -412,10 +412,19 @@ Detection lessons, each learnt from a wrong outline:
   super-resolution experiments below. The published GeoTIFFs are badly
   rasterised at source, so no upsampler can recover the edges; the same charts
   ship as true vector PDFs (`DELUS<odd>.zip`, two sheets each), which
-  `render_pdfs.py` draws at `pdf_scale=2` times their 400 dpi. **Do not call
+  `render_pdfs.py` draws at `pdf_scale` times their 400 dpi. **Do not call
   this upsampling and do not add an upsampler to this path** -- every pixel
-  comes from the vector geometry. Measured: ~35 s/sheet, 6.4 min for all 37 on
-  6 workers, and 1.7 GB of renders.
+  comes from the vector geometry. Measured at 4x: ~161 s/sheet, and 5.2 GB of
+  renders.
+- **`pdf_scale` is tied to `max_zoom` and must be revisited with it.** A z13
+  tile is ~14.7 m/px where these sheets sit. At `pdf_scale=2` the source is
+  23.15 m/px, so the warp *magnified* 1.58x and the tiles were finer than the
+  source feeding them -- an oversight when z12 became z13. At 4x the source is
+  11.58 m/px and the warp minifies (0.79x), which is the regime GDAL's kernel
+  widening handles properly. **Raising it does not invalidate existing renders
+  by mtime**, so `render_pdfs.py` also compares each render's pixel size
+  against `window x scale`; without that every sheet is silently kept at the
+  old resolution.
 - **Those PDFs carry no georeferencing** (their `.htm` metadata says so, giving
   only four bounding corners), so `detect_pdf_windows.py` registers each
   GeoTIFF against its PDF once per edition and commits the affine, CRS and page

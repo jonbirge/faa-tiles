@@ -36,10 +36,11 @@ tilesets you want and open the tester:
 **Budget disk and time before the sectionals.** That build upsamples all 55
 sheets 2x first, which is ~48 GB of intermediates and ~35 minutes on an NVIDIA
 GPU (hours without one — see `requirements.txt` on the CUDA index), and z13
-tiles are roughly 34 GB on top. The IFR build is far lighter: ~155 MB of PDFs
-in, ~6 GB of tiles out. Measured figures for the last builds actually run were
-~2.1 GB for the sectionals at z11 and 1.45 GB for the IFR set at z12; the z13
-numbers above are estimates until someone runs them.
+tiles are roughly 34 GB on top. The IFR build downloads only ~155 MB of PDFs
+but renders 5.2 GB of intermediates at 4x, plus healed copies, before tiling.
+Measured figures for builds actually run: ~2.1 GB for the sectionals at z11
+(not upsampled) and 1.45 GB for the IFR set at z12 from 2x renders. The z13
+figures above are estimates until someone runs them.
 
 Each wrapper runs its stages as separate scripts, in order: download, then any
 preparation the series needs (the IFR charts are rendered from vector PDFs and
@@ -584,9 +585,11 @@ The CONUS low enroute charts, L-01 to L-36, build the same way:
   published GeoTIFFs are badly rasterised — every edge staircases, and no
   amount of super-resolution recovers what the rasteriser threw away. The same
   charts are also published as true vector PDFs, which `render_pdfs.py` draws
-  at 2x the GeoTIFF's 400 dpi. That is *rendering*, not upsampling: each pixel
-  comes from the vector geometry, so type and line work antialias properly.
-  A sheet takes about 35 s, and all 37 render in 6.4 minutes on 6 workers.
+  at 4x the GeoTIFF's 400 dpi (1600 dpi). That is *rendering*, not upsampling:
+  each pixel comes from the vector geometry, so type and line work antialias
+  properly. A sheet takes about 160 s, and the 37 renders total 5.2 GB. The
+  scale is chosen against `max_zoom`: at 4x a z13 tile's warp *minifies*, which
+  is the regime that resamples cleanly.
   **Rendering is done in 8192 px blocks**, not whole sheets: pdfium stops
   drawing past ~32767 px without any error, and a 48000 px sheet silently loses
   its right third (see CLAUDE.md).

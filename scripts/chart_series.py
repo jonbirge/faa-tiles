@@ -57,8 +57,9 @@ class Series:
     heal_frames: bool = False
     # Lossless WebP tiles instead of lossy q90.
     lossless: bool = False
-    # Deepest zoom level tiled. z11 for both series is the user's call, to see
-    # how it compares with z12 (roughly a quarter of the tiles).
+    # Deepest zoom level tiled. Both series are at z13; see each one's note.
+    # Keep this in step with any stage that changes resolution (pdf_scale,
+    # upsample_scale) -- they determine whether the warp magnifies or minifies.
     max_zoom: int = 11
 
     @property
@@ -209,18 +210,25 @@ SERIES = {
             # ENR_L06N and ENR_L06S, both part of the chart.
             tif_pattern=r"ENR_L\d\d[NS]?\.tif",
             # The same 36 charts as vector PDFs, two per zip (DELUS1 is L-01
-            # and L-02, and so on through DELUS35). Rendered at 2x the
+            # and L-02, and so on through DELUS35). Rendered above the
             # GeoTIFF's 400 dpi, they antialias properly instead of carrying
             # the FAA raster's baked-in staircasing -- the user's call after
             # seeing the two side by side.
             pdf_zip_pattern=r"DELUS\d{1,2}\.zip",
             pdf_pattern=r"ENR_L\d\d\.pdf",
-            pdf_scale=2,
+            # 4x, i.e. 1600 dpi. This is tied to max_zoom and must be revisited
+            # with it: a z13 tile is ~14.7 m/px on the ground where these sheets
+            # sit, so at 2x (23.15 m/px) the warp was *magnifying* 1.58x and the
+            # tiles were finer than the source feeding them. At 4x the source is
+            # 11.58 m/px and the warp minifies (0.79x), which is the regime
+            # GDAL's kernel widening handles properly -- and the extra detail is
+            # real vector, not interpolation.
+            pdf_scale=4,
             # The user's call, after seeing overlap artefacts with name order.
             reverse_order=True,
             # The user's call, after black seams between every pair of charts.
             heal_frames=True,
-            # Rendered at 2x the sheets resolve to z13 exactly, which is where
+            # Rendered at 4x the sheets resolve past z13, which is where
             # the user asked to tile them. The earlier z11 and z12 were trials.
             max_zoom=13,
             # The user's call: IFR charts are thin linework and small type on
