@@ -27,7 +27,7 @@ tilesets you want and open the tester:
 ```bash
 .venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   z13, 2x upsampled
 .venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute  z13, lossless
-.venv/Scripts/python scripts/build_wall_planning.py   # VFR wall planning chart, z11 (see below)
+.venv/Scripts/python scripts/build_wall_planning.py   # VFR wall planning  ~3 min, 441 MB (z11)
 .venv/Scripts/cesiumtiles-serve .                     # http://127.0.0.1:8000/
 ```
 

@@ -488,12 +488,14 @@ Detection lessons, each learnt from a wrong outline:
 - The source rasters under `source/` are large (3.2 GB of sectionals, 386 MB of
   IFR charts, a 250 MB wall chart). Never `cat`/`Read` them, and don't let them
   into a commit.
-- `tileset-planning/` is build output; regenerate rather than preserve. It was
-  ~180 MB at the auto-detected z10; `build_wall_planning.py` now asks for
-  **z11** (the user's call, one level past the ~z9.9 the 2x upsample reaches)
-  and for the **denoise3x** weights, which the wrapper used to leave to
+- `tileset-planning/` (**98,014 tiles / 440.6 MB at z11**, built in 3.2 min) is
+  build output; regenerate rather than preserve. It was ~180 MB at the
+  auto-detected z10; `build_wall_planning.py` now asks for **z11** (the user's
+  call, one level past the z10 the 2x upsample reaches) and for the
+  **denoise3x** weights, which the wrapper used to leave to
   `build_vfr_tileset.py`'s no-denoise default — so re-running it quietly built
-  a different chart from the one on disk. Not yet rebuilt at these settings. It
+  a different chart from the one on disk. Its upsample measured **45.7
+  blocks/s** on the GPU against 2.3 on CPU: 1.1 min rather than ~21. It
   holds `tiles/` and `metadata.json` only - **no index.html**. The tile tester is
   rendered by `cesiumtiles-serve` and served from memory at `/`.
 - **The tester page is `src/cesiumtiles/viewer.html`** - plain HTML, edit it
