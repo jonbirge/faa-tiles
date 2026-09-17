@@ -64,6 +64,24 @@ TILE_SIZE = 256
 # sheets, so they get their own narrow pool and a small cache.
 MASK_WORKERS = 4
 MASK_CACHE_MB = 64
+
+# Max-zoom tiles are warped a square block at a time, not one at a time. Almost
+# all of a per-tile warp is per-call overhead -- building a PROJ transformer,
+# resolving the source window -- not per-pixel work: measured 13.31 ms/tile
+# warping tiles singly against 2.41 ms/tile warping 8x8 blocks of the same
+# ground. Blocks also let the exact transformer be affordable (see below).
+BLOCK_TILES = 8
+
+# gdal.Warp approximates the transformer with a polynomial fitted over the
+# destination region, to a default tolerance of 0.125 destination pixels. On
+# chart hairlines that is not a subtle difference: measured against an exact
+# warp, *any* non-zero threshold left ~1% of pixels wrong by up to the full
+# 0..255 range, because a fraction of a pixel decides whether a 1 px black line
+# covers a given cell. It also makes the result depend on how the destination is
+# divided, so a block would not agree with the tiles inside it. Exactness costs
+# about 4x in the kernel, which blocking more than pays for: 10.25 ms/tile
+# blocked and exact against 13.31 ms/tile singly and approximate.
+ERROR_THRESHOLD = 0.0
 # Lon/lat edges are densified at this spacing before projecting, so a
 # neatline that follows a parallel stays on it in pixel space.
 DENSIFY_DEGREES = 0.01
@@ -563,31 +581,48 @@ def _finish(accum_color: np.ndarray, accum_alpha: np.ndarray):
 
 
 def _render_top(task):
-    """Warp and composite one max-zoom tile. Returns ``(x, y, written)``."""
-    z, x, y, contributors = task
-    path = _tile_path(z, x, y)
-    if _worker["resume"] and path.exists():
-        return x, y, True
+    """Warp and composite one block of max-zoom tiles.
 
+    ``task`` is ``(z, block_x, block_y, cells)``, where ``cells`` maps each
+    planned ``(x, y)`` in the block to its contributors. Every source that
+    reaches the block is warped **once** over the whole block and composited
+    there; the result is then sliced into tiles. A source that only covers part
+    of the block is transparent over the rest, so compositing the union of the
+    block's contributors gives each tile exactly what it would have got alone.
+
+    Returns ``(tiles planned in this block, list of (x, y) written)``.
+    """
+    z, block_x, block_y, cells = task
     span = 2 * MERCATOR_HALF_WORLD / (1 << z)
-    west = -MERCATOR_HALF_WORLD + x * span
-    north = MERCATOR_HALF_WORLD - y * span
+    side = BLOCK_TILES
+    west = -MERCATOR_HALF_WORLD + block_x * span
+    north = MERCATOR_HALF_WORLD - block_y * span
+    pixels_across = side * TILE_SIZE
 
-    color = np.zeros((3, TILE_SIZE, TILE_SIZE), np.float32)
-    alpha = np.zeros((TILE_SIZE, TILE_SIZE), np.float32)
+    if _worker["resume"] and all(_tile_path(z, x, y).exists() for x, y in cells):
+        return len(cells), list(cells)
+
+    # A source can reach a block in more than one copy of the world near the
+    # antimeridian, so the warp is keyed on (source, wrap), not source alone.
+    layers = sorted({pair for contributors in cells.values() for pair in contributors})
+
+    color = np.zeros((3, pixels_across, pixels_across), np.float32)
+    alpha = np.zeros((pixels_across, pixels_across), np.float32)
     # Composite front to back ("under"): the last source is on top, so start
-    # there and stop as soon as the tile is opaque; sources beneath are hidden.
-    for index, wrap in reversed(contributors):
-        tile_west = west + wrap * 2 * MERCATOR_HALF_WORLD
+    # there and stop once the block is opaque; sources beneath are hidden.
+    for index, wrap in reversed(layers):
+        block_west = west + wrap * 2 * MERCATOR_HALF_WORLD
         warped = gdal.Warp(
             "", _dataset(index), format="MEM",
-            outputBounds=(tile_west, north - span, tile_west + span, north),
-            width=TILE_SIZE, height=TILE_SIZE, dstSRS=_worker["mercator_wkt"],
+            outputBounds=(block_west, north - side * span,
+                          block_west + side * span, north),
+            width=pixels_across, height=pixels_across, dstSRS=_worker["mercator_wkt"],
             dstAlpha=True, resampleAlg=_worker["resampling"],
+            errorThreshold=ERROR_THRESHOLD,
         )
-        pixels = warped.ReadAsArray().astype(np.float32)
-        layer_alpha = pixels[-1] / 255.0
-        rgb = pixels[:3] if pixels.shape[0] >= 4 else np.repeat(pixels[:1], 3, axis=0)
+        values = warped.ReadAsArray().astype(np.float32)
+        layer_alpha = values[-1] / 255.0
+        rgb = values[:3] if values.shape[0] >= 4 else np.repeat(values[:1], 3, axis=0)
 
         weight = (1.0 - alpha) * layer_alpha
         color += weight * rgb
@@ -595,10 +630,16 @@ def _render_top(task):
         if alpha.min() >= 1.0 - 1e-6:
             break
 
-    if alpha.max() <= 0.5 / 255.0:
-        return x, y, False
-    _write_tile(path, *_finish(color, alpha))
-    return x, y, True
+    written = []
+    for (x, y) in cells:
+        r0, c0 = (y - block_y) * TILE_SIZE, (x - block_x) * TILE_SIZE
+        tile_alpha = alpha[r0:r0 + TILE_SIZE, c0:c0 + TILE_SIZE]
+        if tile_alpha.max() <= 0.5 / 255.0:
+            continue
+        tile_color = color[:, r0:r0 + TILE_SIZE, c0:c0 + TILE_SIZE]
+        _write_tile(_tile_path(z, x, y), *_finish(tile_color, tile_alpha))
+        written.append((x, y))
+    return len(cells), written
 
 
 def _render_parent(task):
@@ -639,8 +680,8 @@ class _Progress:
         self.done = 0
         self.start = self.last = time.monotonic()
 
-    def step(self) -> None:
-        self.done += 1
+    def step(self, count: int = 1) -> None:
+        self.done += count
         now = time.monotonic()
         if not self.quiet and (now - self.last >= self.every or self.done == self.total):
             self.last = now
@@ -724,13 +765,19 @@ def build_mosaic(
 
     try:
         with mp.get_context("spawn").Pool(workers, _init_worker, initargs) as pool:
-            tasks = [(top, x, y, plan[(x, y)]) for x, y in sorted(plan)]
-            progress = _Progress(f"z{top}", len(tasks), quiet)
+            # Group the planned tiles into square blocks, which is the unit the
+            # warp works in. A block holds only the tiles actually planned, so
+            # a ragged edge of coverage costs nothing extra.
+            grouped: dict[tuple[int, int], dict] = {}
+            for x, y in sorted(plan):
+                key = (x - x % BLOCK_TILES, y - y % BLOCK_TILES)
+                grouped.setdefault(key, {})[(x, y)] = plan[(x, y)]
+            tasks = [(top, bx, by, cells) for (bx, by), cells in sorted(grouped.items())]
+            progress = _Progress(f"z{top}", len(plan), quiet)
             written = set()
-            for x, y, ok in pool.imap_unordered(_render_top, tasks, chunksize=16):
-                if ok:
-                    written.add((x, y))
-                progress.step()
+            for planned, done in pool.imap_unordered(_render_top, tasks, chunksize=1):
+                written.update(done)
+                progress.step(planned)   # count tiles, not blocks
 
             for z in range(top - 1, min_zoom - 1, -1):
                 parents = sorted({(x >> 1, y >> 1) for x, y in written})
