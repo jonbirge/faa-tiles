@@ -362,6 +362,9 @@ Detection lessons, each learnt from a wrong outline:
   series, the user's call after seeing overlap artefacts), so L-01 is on top of
   L-02 and so on. `build_chart_tileset.py --[no-]reverse-order` overrides a
   series' default. Still a placeholder for a real overlap rule.
+- **IFR low tiles are lossless WebP** (`lossless=True` in its series, the user's
+  call); sectionals stay lossy q90. `build_chart_tileset.py --[no-]lossless`
+  overrides the series default.
 - **IFR map areas come from the frame rule, not the collar.** The map is mostly
   white, so `detect_sectional_areas.py` cannot work on them. The frame is a
   fully dark run 6-10 px thick across the middle of the sheet (L-12's is 6;

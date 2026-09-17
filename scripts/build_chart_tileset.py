@@ -21,6 +21,9 @@ paints in reverse, putting the earliest name on top; each series sets its own
 default (on for ``ifr-low``), and ``--no-reverse-order`` overrides it. Either way
 it is a placeholder for a smarter rule, not a considered choice.
 
+Tiles are lossy WebP q90 unless the series sets ``lossless`` (``ifr-low`` does);
+``--[no-]lossless`` overrides it.
+
 Max zoom is z12 for both series. For sectionals, only the 1:250,000 Honolulu
 inset would ask for z13, which quadruples the tileset; for IFR low charts, the
 finest sheets (the 32 m/px coastal ones) land at about z12.0.
@@ -41,7 +44,7 @@ from cesiumtiles.mosaic import MapArea, MosaicSource, build_mosaic  # noqa: E402
 from chart_series import SERIES, series  # noqa: E402
 
 MAX_ZOOM = 12
-QUALITY = 90  # lossy WebP: these tilesets are large, and q90 keeps chart type legible
+QUALITY = 90  # lossy WebP where a series is not lossless: large tilesets, and q90 keeps type legible
 
 
 def sources(chart_series, directory: Path, manifest: dict) -> list[MosaicSource]:
@@ -69,7 +72,9 @@ def main(argv=None) -> int:
                          "subdirectory for a series that heals frames)")
     ap.add_argument("--max-zoom", type=int, default=MAX_ZOOM)
     ap.add_argument("--min-zoom", type=int, default=0)
-    ap.add_argument("--quality", type=int, default=QUALITY)
+    ap.add_argument("--quality", type=int, default=QUALITY, help="lossy WebP quality (default: %(default)s)")
+    ap.add_argument("--lossless", action=argparse.BooleanOptionalAction, default=None,
+                    help="lossless WebP tiles (default: the series' setting)")
     ap.add_argument("--workers", type=int, default=None, help="render processes (default: all cores)")
     ap.add_argument("--only", nargs="+", metavar="NAME",
                     help="build from just these charts (file name prefixes)")
@@ -102,9 +107,12 @@ def main(argv=None) -> int:
     print(f"paint order: {'reverse ' if reverse else ''}file name, "
           f"{Path(chosen[-1].path).name} on top", flush=True)
 
+    lossless = chart_series.lossless if args.lossless is None else args.lossless
+    print(f"tiles: WebP {'lossless' if lossless else f'q{args.quality}'}", flush=True)
+
     result = build_mosaic(
         chosen, out,
-        min_zoom=args.min_zoom, max_zoom=args.max_zoom, quality=args.quality,
+        min_zoom=args.min_zoom, max_zoom=args.max_zoom, quality=args.quality, lossless=lossless,
         workers=args.workers, resume=args.resume, overwrite=args.overwrite,
         title=chart_series.title,
     )

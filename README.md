@@ -575,7 +575,9 @@ The CONUS low enroute charts, L-01 to L-36, build the same way:
   nearest clean row or column outward (~12 px, ~0.5-1 km per side), which the
   build tiles. That closed 31 of 32 seams; L-29/L-30 still has a straight
   ~450 m sliver where the FAA's two georeferenced sheets simply do not meet.
-- **Same engine and choices** as the sectionals: z12 and WebP q90. Overlaps are
+- **Same engine** as the sectionals at z12, but **lossless WebP**: IFR charts
+  are thin linework and small type on white, which lossy q90 softens.
+  `build_chart_tileset.py --[no-]lossless` overrides a series' default. Overlaps are
   painted in *reverse* file-name order, so the lower-numbered chart is on top;
   `build_chart_tileset.py --[no-]reverse-order` overrides a series' default.
 

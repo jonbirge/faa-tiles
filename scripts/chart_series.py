@@ -40,6 +40,8 @@ class Series:
     # the rule is painted over (heal_frames.py) and the build tiles the healed
     # copies. Needs a manifest with a "frame" per sheet (detect_ifr_areas.py).
     heal_frames: bool = False
+    # Lossless WebP tiles instead of lossy q90.
+    lossless: bool = False
 
     @property
     def directory(self) -> Path:
@@ -106,6 +108,9 @@ SERIES = {
             reverse_order=True,
             # The user's call, after black seams between every pair of charts.
             heal_frames=True,
+            # The user's call: IFR charts are thin linework and small type on
+            # white, which lossy compression softens.
+            lossless=True,
         ),
     )
 }
