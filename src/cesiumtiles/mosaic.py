@@ -640,7 +640,7 @@ def build_mosaic(
     max_zoom: int | None = None,
     quality: int = 90,
     lossless: bool = False,
-    resampling: str = "lanczos",
+    resampling: str = "cubic",
     workers: int | None = None,
     cache_mb: int = 256,
     resume: bool = False,

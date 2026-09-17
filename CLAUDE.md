@@ -242,7 +242,8 @@ bytes, average tile size, cache hits), with a reset button.
   `visibleTiles()` filters on `tile.imageryLayer === baseLayer` or every tally
   doubles. Canvas-drawn, so it never touches the traffic counters.
 - **Grid colour is a continuous deep-blue -> almost-red ramp**, computed from
-  `level / maxzoom` (hue 212 + 173*f, HSL, 50% alpha) so it re-scales for any
+  `level / maxzoom` (OKLCH, hue 264 -> 29, chroma 0.25, 75% opaque -- the user
+  asked for 25% transparency and more saturation) so it re-scales for any
   source. The user asked for exactly this after an earlier alternating-hue
   version. Worth remembering rather than re-deriving: a smooth ramp separates
   *adjacent* levels least, and adjacent levels are what Cesium renders together
@@ -294,8 +295,9 @@ exclusions, download directory, manifest (`scripts/<series>_areas.json`) and
 tileset directory. Add a series there, not by copying scripts.
 
 The sectionals came first, and the notes below are mostly theirs.
-Decided with the user, with measurements: **z12** (the "finest pixel" rule gives
-z13, driven only by the 1:250k Honolulu inset, at 4x the tiles), **WebP q90**,
+Decided with the user, with measurements: **z12** at first (the "finest pixel"
+rule gives z13, driven only by the 1:250k Honolulu inset, at 4x the tiles), then
+**z11 for both series** as a trial (`max_zoom` in the series), **WebP q90**,
 **overlaps by file name, later on top** (an acknowledged placeholder), map areas
 **detected once, reviewed, committed** as `scripts/sectionals_areas.json`, and
 lower zooms **box-filtered from children**. **Guam and Samoa are excluded**
@@ -362,6 +364,17 @@ Detection lessons, each learnt from a wrong outline:
   series, the user's call after seeing overlap artefacts), so L-01 is on top of
   L-02 and so on. `build_chart_tileset.py --[no-]reverse-order` overrides a
   series' default. Still a placeholder for a real overlap rule.
+- **All pipelines warp with `cubic`**, not `lanczos` (the user's call, on the
+  earlier measurement that lanczos rang most and cubic halved it at nearly the
+  same sharpness): `build_tileset`, the CLI, `build_mosaic` and the wall chart
+  build. Overview cascades are untouched.
+- **Real-CUGAN over the IFR sheets was tried and shelved.** Measured 2.3
+  blocks/s on CPU PyTorch: ~9.5 h for the 78,930 blocks of the 37 frames. The
+  user skipped it. If it comes back: the no-denoise weights (the user ruled
+  denoise out for IFR charts), and `upsample.py` now crops with `window=` and
+  scales all four geotransform terms, which rotated sheets need.
+- **The wall planning chart now uses the denoise3x Real-CUGAN weights** (the
+  user asked to try them); earlier builds used no-denoise.
 - **IFR low tiles are lossless WebP** (`lossless=True` in its series, the user's
   call); sectionals stay lossy q90. `build_chart_tileset.py --[no-]lossless`
   overrides the series default.

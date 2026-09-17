@@ -24,9 +24,10 @@ it is a placeholder for a smarter rule, not a considered choice.
 Tiles are lossy WebP q90 unless the series sets ``lossless`` (``ifr-low`` does);
 ``--[no-]lossless`` overrides it.
 
-Max zoom is z12 for both series. For sectionals, only the 1:250,000 Honolulu
-inset would ask for z13, which quadruples the tileset; for IFR low charts, the
-finest sheets (the 32 m/px coastal ones) land at about z12.0.
+Max zoom comes from the series (``max_zoom``), currently z11 for both, and
+``--max-zoom`` overrides it. The sheets' native resolution is about z12 -- the
+lower 48 sectionals ~z11.6, the finest IFR sheets ~z12.0 -- so z11 trades some
+detail for about a quarter of the tiles.
 """
 
 from __future__ import annotations
@@ -43,8 +44,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cesiumtiles.mosaic import MapArea, MosaicSource, build_mosaic  # noqa: E402
 from chart_series import SERIES, series  # noqa: E402
 
-MAX_ZOOM = 12
 QUALITY = 90  # lossy WebP where a series is not lossless: large tilesets, and q90 keeps type legible
+
+
+def check_stages(chart_series) -> None:
+    """Refuse to tile a preparation stage that is missing or older than its input."""
+    stages = [chart_series.directory]
+    if chart_series.heal_frames:
+        stages.append(chart_series.healed_directory)
+    scripts = {chart_series.healed_directory: "heal_frames.py"}
+    names = sorted(p.name for p in chart_series.directory.glob("*.tif") if chart_series.wants_tif(p.name))
+    for before, after in zip(stages, stages[1:]):
+        stale = [n for n in names if not (after / n).is_file()
+                 or (after / n).stat().st_mtime < (before / n).stat().st_mtime]
+        if stale:
+            raise SystemExit(f"{len(stale)} sheet(s) missing or out of date in {after}, e.g. {stale[0]}; "
+                             f"run scripts/{scripts[after]} {chart_series.name} first")
 
 
 def sources(chart_series, directory: Path, manifest: dict) -> list[MosaicSource]:
@@ -70,7 +85,7 @@ def main(argv=None) -> int:
     ap.add_argument("--charts", type=Path,
                     help="directory of GeoTIFFs (default: source/SERIES, or its healed/ "
                          "subdirectory for a series that heals frames)")
-    ap.add_argument("--max-zoom", type=int, default=MAX_ZOOM)
+    ap.add_argument("--max-zoom", type=int, default=None, help="default: the series' setting")
     ap.add_argument("--min-zoom", type=int, default=0)
     ap.add_argument("--quality", type=int, default=QUALITY, help="lossy WebP quality (default: %(default)s)")
     ap.add_argument("--lossless", action=argparse.BooleanOptionalAction, default=None,
@@ -89,13 +104,8 @@ def main(argv=None) -> int:
 
     manifest = json.loads(chart_series.manifest.read_text(encoding="utf-8"))
     directory = args.charts or chart_series.build_directory
-    if chart_series.heal_frames and not args.charts:
-        raw = sorted(p.name for p in chart_series.directory.glob("*.tif") if chart_series.wants_tif(p.name))
-        stale = [n for n in raw if not (directory / n).is_file()
-                 or (directory / n).stat().st_mtime < (chart_series.directory / n).stat().st_mtime]
-        if stale:
-            raise SystemExit(f"{len(stale)} sheet(s) not healed or out of date, e.g. {stale[0]}; "
-                             f"run scripts/heal_frames.py {chart_series.name} first")
+    if not args.charts:
+        check_stages(chart_series)
     chosen = sources(chart_series, directory, manifest)
     if args.only:
         chosen = [s for s in chosen if any(Path(s.path).name.startswith(n) for n in args.only)]
@@ -112,7 +122,8 @@ def main(argv=None) -> int:
 
     result = build_mosaic(
         chosen, out,
-        min_zoom=args.min_zoom, max_zoom=args.max_zoom, quality=args.quality, lossless=lossless,
+        min_zoom=args.min_zoom, max_zoom=args.max_zoom if args.max_zoom is not None else chart_series.max_zoom,
+        quality=args.quality, lossless=lossless,
         workers=args.workers, resume=args.resume, overwrite=args.overwrite,
         title=chart_series.title,
     )

@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
                      help="use lossy compression for webp (much smaller; may ring on fine linework)")
     img.add_argument("--quality", type=int, default=95, metavar="N",
                      help="quality for lossy webp/jpeg, 1-100 (default: %(default)s)")
-    img.add_argument("--resampling", default="lanczos", help="warp kernel for the top zoom (default: %(default)s)")
+    img.add_argument("--resampling", default="cubic", help="warp kernel for the top zoom (default: %(default)s)")
     img.add_argument("--overview-resampling", default="lanczos",
                      help="kernel used to build lower zooms (default: %(default)s)")
     img.add_argument("--skip-blank", action="store_true",

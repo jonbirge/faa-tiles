@@ -42,6 +42,9 @@ class Series:
     heal_frames: bool = False
     # Lossless WebP tiles instead of lossy q90.
     lossless: bool = False
+    # Deepest zoom level tiled. z11 for both series is the user's call, to see
+    # how it compares with z12 (roughly a quarter of the tiles).
+    max_zoom: int = 11
 
     @property
     def directory(self) -> Path:

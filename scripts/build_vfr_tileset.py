@@ -296,10 +296,10 @@ def main(argv=None) -> int:
         tile_format=args.tile_format,
         lossless=args.lossless,
         quality=args.quality,
-        # lanczos on both the warp and the overview cascade. The alternatives
-        # GDAL offers (bilinear, cubic, average, mode, ...) are all available,
-        # but lanczos keeps hairline symbology sharpest.
-        resampling="lanczos",
+        # cubic for the warp: measured on this chart, lanczos rang the most of
+        # GDAL's kernels and cubic halved that at nearly the same sharpness.
+        # The overview cascade keeps lanczos; it only downsamples.
+        resampling="cubic",
         overview_resampling="lanczos",
         threads=args.threads,
         skip_blank=args.skip_blank,

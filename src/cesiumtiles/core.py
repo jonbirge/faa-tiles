@@ -258,7 +258,7 @@ def build_tileset(
     tile_format: str = "webp",
     lossless: bool = True,
     quality: int = 95,
-    resampling: str = "lanczos",
+    resampling: str = "cubic",
     overview_resampling: str = "lanczos",
     threads: str | int = "ALL_CPUS",
     skip_blank: bool = False,

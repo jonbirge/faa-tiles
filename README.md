@@ -300,7 +300,7 @@ out.
 | `--format webp\|png\|jpeg` | Default `webp`. |
 | `--lossy` / `--quality N` | Lossy webp. Roughly 4x smaller, but can ring around hairline linework and text. |
 | `--min-zoom` / `--max-zoom` | Override the automatic range. |
-| `--resampling` / `--overview-resampling` | GDAL kernels; both default to `lanczos`. |
+| `--resampling` / `--overview-resampling` | GDAL kernels for the warp and the overview cascade; `cubic` and `lanczos` by default. |
 | `--skip-blank` | Omit fully transparent tiles. Smaller, but the viewer will generate 404s for them. |
 | `--threads` | Worker count, or `ALL_CPUS` (default). |
 | `--resume` | Write only missing tiles. |
@@ -494,10 +494,11 @@ piecewise-constant, where it rings. The strongest approach is likely to segment
 the two — the palette-indexed original is a natural source for that mask — and
 resample each with what suits it.
 
-**A cheap win independent of all this:** the tiling warp currently defaults to
+**A cheap win independent of all this — *done*:** the tiling warp defaulted to
 `lanczos`, which measured worst for ringing. For the reprojection step, which
 resamples at roughly 1:1, `cubic` halves the ringing at nearly the same
-sharpness. Worth testing as the default.
+sharpness, so every pipeline now warps with `cubic` (single-chart tiling, the
+chart-series mosaic, and the wall planning build).
 
 ### Tile the VFR sectional set — *done*
 

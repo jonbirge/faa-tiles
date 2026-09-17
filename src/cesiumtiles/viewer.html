@@ -168,8 +168,8 @@ const GRID_HUE_START = 264;   // deep blue
 const GRID_HUE_END = 29;      // almost red
 const GRID_LIGHT_START = 0.55;  // blue end kept darker, so it reads as deep
 const GRID_LIGHT_END = 0.63;
-const GRID_CHROMA = 0.17;
-const GRID_ALPHA = 0.5;
+const GRID_CHROMA = 0.25;   // more saturated, per the user; the browser gamut-maps what sRGB cannot show
+const GRID_ALPHA = 0.75;   // 25% transparent, per the user
 
 function gridColor(level, maxzoom, alpha) {
   const span = Math.max(1, maxzoom);

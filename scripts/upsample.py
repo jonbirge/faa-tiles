@@ -36,7 +36,8 @@ gdal.UseExceptions()
 SCALE = 2
 
 # Real-CUGAN, chosen on a side-by-side of APISR, Real-CUGAN and waifu2x over the
-# whole chart. Weights are fetched rather than vendored, into source/models.
+# whole chart. Weights are fetched rather than vendored, into source/models. The
+# denoise3x variant sits beside it; pass --model to use it.
 DEFAULT_MODEL = MODELS / "realcugan-up2x-no-denoise.pth"
 DEFAULT_MODEL_URL = (
     "https://huggingface.co/spaces/saber2022/Real-CUGAN/resolve/main/"
@@ -129,20 +130,32 @@ def _cropped(source: Path, bbox):
                      cutlineSRS=ds.GetProjection(), resampleAlg="near")
 
 
-def upsample_raster(source, out, model, *, bbox=None, block=256, overlap=16,
+def upsample_raster(source, out, model, *, bbox=None, window=None, block=256, overlap=16,
                     limit=0, quiet=False) -> Path:
-    """Write a 2x upsampled GeoTIFF of ``source`` (optionally cropped to ``bbox``).
+    """Write a 2x upsampled GeoTIFF of ``source``.
+
+    Optionally cropped: ``bbox`` is a rectangle in the source CRS (resampled
+    north-up), ``window`` is ``(x0, y0, x1, y1)`` in source pixels (no
+    resampling; keeps a rotated geotransform). An output pixel ``(u, v)`` maps
+    to source pixel ``(x0 + u / 2, y0 + v / 2)``.
 
     ``model`` is a callable taking and returning (3, H, W) arrays, as returned by
     :func:`load_model`.
     """
     source, out = Path(source), Path(out)
-    src = _cropped(source, bbox)
+    if window is not None:
+        x0, y0, x1, y1 = window
+        src = gdal.Translate("", str(source), format="VRT", srcWin=[x0, y0, x1 - x0, y1 - y0])
+    else:
+        src = _cropped(source, bbox)
     w, h = src.RasterXSize, src.RasterYSize
 
+    # All four linear terms, not just the pixel sizes: a sheet can be rotated in
+    # its projection (every IFR enroute chart is), and halving only gt[1] and
+    # gt[5] would shear it off its own map.
     gt = list(src.GetGeoTransform())
-    gt[1] /= SCALE
-    gt[5] /= SCALE
+    for i in (1, 2, 4, 5):
+        gt[i] /= SCALE
 
     out.parent.mkdir(parents=True, exist_ok=True)
     dst = gdal.GetDriverByName("GTiff").Create(
