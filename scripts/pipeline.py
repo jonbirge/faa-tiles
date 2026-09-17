@@ -54,9 +54,7 @@ def chart_series_main(series: str, detector: list[str], description: str, argv=N
         run(*detector)
         if this.pdf_scale:
             run("detect_pdf_windows.py", series)
-    if this.pdf_scale:
-        run("render_pdfs.py", series)
-    if this.heal_frames:
-        run("heal_frames.py", series)
+    for script, _output in this.stages:
+        run(script, series)
     run("build_chart_tileset.py", series, "--resume" if args.resume else "--overwrite", *passthrough)
     return 0

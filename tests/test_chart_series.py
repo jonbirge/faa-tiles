@@ -20,32 +20,65 @@ def test_unknown_series_is_refused():
         series("ifr-high")
 
 
-def test_sectionals_tile_the_downloaded_geotiffs():
+def test_sectionals_are_upsampled_from_the_downloaded_geotiffs():
     s = series("sectionals")
-    assert s.fetches_tifs and s.pixel_scale == 1
-    assert s.build_directory == s.directory
+    # No vector source exists for these, so the GeoTIFFs are the input.
+    assert s.fetches_tifs
     assert not s.wants_pdf_zip("DELUS1.zip") and not s.wants_pdf("ENR_L01.pdf")
     # Guam and Samoa are excluded per GeoTIFF: they ship in a zip we do want.
     assert s.wants_tif("Hawaiian Islands SEC.tif")
     assert not s.wants_tif("Mariana Islands Inset SEC.tif")
+    # One stage: super-resolution, which doubles the manifests' pixel scale.
+    assert s.upsample_scale == 2 and s.pixel_scale == 2
+    assert s.upsample_model.endswith(".pth")
+    assert [script for script, _ in s.stages] == ["upsample_charts.py"]
+    assert s.input_directory("upsample_charts.py") == s.directory
+    assert s.build_directory == s.upscaled_directory
 
 
-def test_ifr_low_is_drawn_from_the_vector_pdfs():
+def test_ifr_low_is_drawn_from_the_vector_pdfs_and_never_upsampled():
     s = series("ifr-low")
     assert s.pdf_scale == 2 and s.pixel_scale == 2
     # The PDFs carry no georeferencing, so a routine build skips the GeoTIFFs;
     # they are an input to re-detection only.
     assert not s.fetches_tifs
+    # Vector geometry has nothing for a super-resolver to recover, and the user
+    # ruled denoise out for these charts besides.
+    assert s.upsample_scale == 0 and not s.upsample_model
 
 
 def test_ifr_low_stage_directories_chain():
     s = series("ifr-low")
     assert s.pdf_directory == s.directory / "pdf"
     # Downloaded PDFs -> renders -> healed copies, and the build tiles the last.
-    assert s.raster_directory == s.render_directory
+    assert [script for script, _ in s.stages] == ["render_pdfs.py", "heal_frames.py"]
+    assert s.input_directory("render_pdfs.py") == s.directory
+    assert s.input_directory("heal_frames.py") == s.render_directory
     assert s.build_directory == s.healed_directory
     assert s.pdf_manifest.name == "ifr_low_pdf.json"
     assert s.manifest.name == "ifr_low_areas.json"
+
+
+def test_a_stage_a_series_does_not_run_has_no_input():
+    with pytest.raises(KeyError):
+        series("ifr-low").input_directory("upsample_charts.py")
+    with pytest.raises(KeyError):
+        series("sectionals").input_directory("render_pdfs.py")
+
+
+def test_every_stage_reads_the_previous_stages_output():
+    for s in SERIES.values():
+        previous = s.directory
+        for script, output in s.stages:
+            assert s.input_directory(script) == previous
+            previous = output
+        assert s.build_directory == previous
+
+
+@pytest.mark.parametrize("name, zoom", [("sectionals", 13), ("ifr-low", 13)])
+def test_max_zoom(name, zoom):
+    """The user's call: both series tile to z13."""
+    assert series(name).max_zoom == zoom
 
 
 @pytest.mark.parametrize("name, wanted", [

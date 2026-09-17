@@ -59,26 +59,27 @@ def ensure_weights(path: Path, url: str = DEFAULT_MODEL_URL) -> Path:
 class SpandrelModel:
     """Any architecture spandrel recognises: RealCUGAN, ESRGAN/RRDB, SwinIR..."""
 
-    def __init__(self, path: Path, threads: int):
+    def __init__(self, path: Path, threads: int, device: str):
         from spandrel import ModelLoader
 
         descriptor = ModelLoader().load_from_file(str(path))
         if descriptor.scale != SCALE:
             raise SystemExit(f"{path.name} is a {descriptor.scale}x model; this script does 2x")
         torch.set_num_threads(threads)
-        self.net = descriptor.eval().cpu()
-        self.name = f"{descriptor.architecture.name} ({path.name})"
+        self.device = device
+        self.net = descriptor.eval().to(device)
+        self.name = f"{descriptor.architecture.name} ({path.name}) on {device}"
 
     @torch.inference_mode()
     def __call__(self, rgb: np.ndarray) -> np.ndarray:
-        x = torch.from_numpy(rgb).float().div_(255.0).unsqueeze(0)
-        return self.net(x).clamp_(0, 1).squeeze(0).mul_(255.0).numpy()
+        x = torch.from_numpy(rgb).float().div_(255.0).unsqueeze(0).to(self.device)
+        return self.net(x).clamp_(0, 1).squeeze(0).mul_(255.0).cpu().numpy()
 
 
 class Waifu2xModel:
     """nunif's waifu2x. Its CUNet architecture is not one spandrel knows."""
 
-    def __init__(self, threads: int, noise_level: int = 0):
+    def __init__(self, threads: int, noise_level: int = 0, device: str = "cpu"):
         vendor = VENDOR / "nunif"
         if not vendor.is_dir():
             raise SystemExit(
@@ -92,11 +93,11 @@ class Waifu2xModel:
         torch.set_num_threads(threads)
         self.runner = Waifu2x(
             model_dir=str(vendor / "waifu2x" / "pretrained_models" / "cunet" / "art"),
-            gpus=[-1],
+            gpus=[0] if device.startswith("cuda") else [-1],   # nunif: -1 is CPU
         )
         self.method, self.noise_level = "noise_scale", noise_level
         self.runner.load_model(self.method, self.noise_level)
-        self.name = f"waifu2x cunet/art (noise {noise_level})"
+        self.name = f"waifu2x cunet/art (noise {noise_level}) on {device}"
 
     @torch.inference_mode()
     def __call__(self, rgb: np.ndarray) -> np.ndarray:
@@ -107,15 +108,22 @@ class Waifu2xModel:
         return y.clamp_(0, 1).mul_(255.0).cpu().numpy()
 
 
-def load_model(spec: str | Path, threads: int = 0):
+def best_device() -> str:
+    """CUDA where it is available. The CPU build of torch reports no CUDA, so
+    this quietly falls back rather than failing on a machine without it."""
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def load_model(spec: str | Path, threads: int = 0, device: str | None = None):
     """`spec` is a path to spandrel-loadable weights, or the literal 'waifu2x'."""
     threads = threads or torch.get_num_threads()
+    device = device or best_device()
     if str(spec) == "waifu2x":
-        return Waifu2xModel(threads)
+        return Waifu2xModel(threads, device=device)
     path = Path(spec)
     if path == DEFAULT_MODEL:
         ensure_weights(path)
-    return SpandrelModel(path, threads)
+    return SpandrelModel(path, threads, device)
 
 
 def _cropped(source: Path, bbox):

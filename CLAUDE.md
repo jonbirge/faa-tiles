@@ -43,9 +43,15 @@ venv; it has been run against an existing venv, not from a truly fresh clone.
 
 ## Environment
 
-- Windows 11, **Python 3.14.7**, venv at `.venv/`. 24 cores, NVIDIA GPU
-  (Windows reports an RTX 5070 Ti Laptop; the user has said 4070 Ti — reconcile
-  before picking a CUDA build, since Blackwell needs cu128 and Ada does not).
+- Windows 11, **Python 3.14.7**, venv at `.venv/`. 24 cores and an
+  **RTX 4070 SUPER, 12 GB** — `nvidia-smi` settles the earlier confusion
+  between a "5070 Ti Laptop" and a "4070 Ti". It is Ada (sm_89), so **cu126**,
+  not cu128: cu128 is for Blackwell and trails a torch release besides.
+  `requirements.txt` carries that index, and `upsample.py:best_device()` falls
+  back to CPU where CUDA is absent.
+- **`pip install "torch>=2.14"` will not move you off a CPU build.** pip reads
+  `2.14.0+cpu` as satisfying it and reports "already satisfied". Pin the exact
+  local version, `torch==2.14.0+cu126`, to switch.
 - **Windows is not a limitation here, and assuming it is has been wrong twice.**
   GDAL bindings install from the cgohlke index; PyTorch has `cp314` win_amd64
   wheels including CUDA ones. Check before claiming a platform blocks something.
@@ -91,7 +97,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 173 tests, ~50s
+.venv/Scripts/python -m pytest                        # 177 tests, ~47s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -326,7 +332,11 @@ manifests themselves; they are the reviewed record.
 The sectionals came first, and the notes below are mostly theirs.
 Decided with the user, with measurements: **z12** at first (the "finest pixel"
 rule gives z13, driven only by the 1:250k Honolulu inset, at 4x the tiles), then
-**z11 for both series** as a trial (`max_zoom` in the series), **WebP q90**,
+**z11 for both series** as a trial, and now **z13 for both** (`max_zoom` in the
+series) once the IFR sheets came from vector PDFs and the sectionals were
+upsampled. **The z13 sectionals have not been built and will not fit as things
+stand**: ~34 GB of tiles on top of ~48 GB of upsampled sheets, against ~62 GB
+free. Sort the disk out before starting that one. **WebP q90**,
 **overlaps by file name, later on top** (an acknowledged placeholder), map areas
 **detected once, reviewed, committed** as `scripts/sectionals_areas.json`, and
 lower zooms **box-filtered from children**. **Guam and Samoa are excluded**
@@ -419,11 +429,24 @@ Detection lessons, each learnt from a wrong outline:
   when `pdf_scale` is set), ~130 MB against 386 MB of GeoTIFFs. The GeoTIFFs
   are an input to re-detection alone: `build_ifr_low.py --detect` passes
   `fetch_charts.py --tifs` and reruns both detectors.
+- **The sectionals are upsampled 2x with Real-CUGAN denoise3x**
+  (`upsample_charts.py`, `upsample_model`/`upsample_scale` in the series). The
+  user compared it against a plain build of the same three sheets at the same
+  zoom and kept it. There is no vector escape here as there is for the IFR
+  charts: the sectional PDFs wrap the very same rasters.
+  **Whole sheets are upsampled, not their map areas.** Cropping first would be
+  faster but puts an offset as well as a scale between the reviewed manifests
+  and the raster, and `pixel_scale` is deliberately only a scale.
+  It is not cheap in disk: ~900 MB per upsampled sheet, so ~48 GB for all 55.
+- **Run the upsampler on the GPU.** Measured on the 4070 SUPER: **80.2
+  blocks/s against 2.3 on CPU**, a 35x difference — about 35 min for the
+  sectionals' ~171k blocks instead of ~14 h. `load_model(..., device=)` and
+  `best_device()` handle it; the old CPU figure is why Real-CUGAN was shelved
+  for the IFR sheets before the PDFs turned up.
 - **Real-CUGAN over the IFR sheets was tried and shelved** before the PDFs were
-  found. Measured 2.3 blocks/s on CPU PyTorch: ~9.5 h for the 78,930 blocks of
-  the 37 frames, and it did not remove the staircasing anyway, because that is
-  baked into the FAA raster. `upsample.py` crops with `window=` and scales all
-  four geotransform terms, which rotated sheets need.
+  found; it did not remove the staircasing anyway, because that is baked into
+  the FAA raster. Do not revive it there. `upsample.py` crops with `window=`
+  and scales all four geotransform terms, which rotated sheets need.
 - **The wall planning chart now uses the denoise3x Real-CUGAN weights** (the
   user asked to try them); earlier builds used no-denoise.
 - **IFR low tiles are lossless WebP** (`lossless=True` in its series, the user's
@@ -465,7 +488,12 @@ Detection lessons, each learnt from a wrong outline:
 - The source rasters under `source/` are large (3.2 GB of sectionals, 386 MB of
   IFR charts, a 250 MB wall chart). Never `cat`/`Read` them, and don't let them
   into a commit.
-- `tileset-planning/` (~280 MB) is build output; regenerate rather than preserve. It
+- `tileset-planning/` is build output; regenerate rather than preserve. It was
+  ~180 MB at the auto-detected z10; `build_wall_planning.py` now asks for
+  **z11** (the user's call, one level past the ~z9.9 the 2x upsample reaches)
+  and for the **denoise3x** weights, which the wrapper used to leave to
+  `build_vfr_tileset.py`'s no-denoise default — so re-running it quietly built
+  a different chart from the one on disk. Not yet rebuilt at these settings. It
   holds `tiles/` and `metadata.json` only - **no index.html**. The tile tester is
   rendered by `cesiumtiles-serve` and served from memory at `/`.
 - **The tester page is `src/cesiumtiles/viewer.html`** - plain HTML, edit it

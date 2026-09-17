@@ -88,7 +88,7 @@ def main(argv=None) -> int:
     chart_series = series(args.series)
 
     manifest = json.loads(chart_series.manifest.read_text(encoding="utf-8"))
-    in_dir = chart_series.raster_directory
+    in_dir = chart_series.input_directory("heal_frames.py")
     names = args.charts or sorted(p.name for p in in_dir.glob("*.tif")
                                   if chart_series.wants_tif(p.name))
     if not names:

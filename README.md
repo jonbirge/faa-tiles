@@ -25,13 +25,21 @@ their own package indexes) and checks the imports. Then build whichever
 tilesets you want and open the tester:
 
 ```bash
-.venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   ~7 min, ~2.1 GB (z11)
-.venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute ~28 min, ~1.4 GB (z12, lossless)
-.venv/Scripts/python scripts/build_wall_planning.py   # VFR wall planning chart (see below)
+.venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   z13, 2x upsampled
+.venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute  z13, lossless
+.venv/Scripts/python scripts/build_wall_planning.py   # VFR wall planning chart, z11 (see below)
 .venv/Scripts/cesiumtiles-serve .                     # http://127.0.0.1:8000/
 ```
 
 (On Linux and macOS the venv interpreter is `.venv/bin/python`.)
+
+**Budget disk and time before the sectionals.** That build upsamples all 55
+sheets 2x first, which is ~48 GB of intermediates and ~35 minutes on an NVIDIA
+GPU (hours without one — see `requirements.txt` on the CUDA index), and z13
+tiles are roughly 34 GB on top. The IFR build is far lighter: ~155 MB of PDFs
+in, ~6 GB of tiles out. Measured figures for the last builds actually run were
+~2.1 GB for the sectionals at z11 and 1.45 GB for the IFR set at z12; the z13
+numbers above are estimates until someone runs them.
 
 Each wrapper runs its stages as separate scripts, in order: download, then any
 preparation the series needs (the IFR charts are rendered from vector PDFs and
@@ -506,13 +514,21 @@ chart-series mosaic, and the wall planning build).
 ### Tile the VFR sectional set — *done*
 
 The sectional series is 55 sheets that overlap at their edges, each in its own
-Lambert Conformal Conic, each inside a printed collar. Three scripts build it:
+Lambert Conformal Conic, each inside a printed collar. Four scripts build it:
 
 ```bash
 .venv/Scripts/python scripts/fetch_charts.py sectionals          # current edition -> source/sectionals
 .venv/Scripts/python scripts/detect_sectional_areas.py --sheet review/
+.venv/Scripts/python scripts/upsample_charts.py sectionals       # -> source/sectionals/upscaled
 .venv/Scripts/python scripts/build_chart_tileset.py sectionals   # -> ./tileset-sectionals
 ```
+
+- **Upsampling** runs Real-CUGAN 2x (denoise3x weights) over every sheet before
+  tiling. The FAA's sectional rasters staircase at any zoom and, unlike the IFR
+  charts, there is no vector source to fall back on — their PDFs wrap the same
+  rasters. Whole sheets are upsampled rather than just their map areas, so the
+  reviewed manifests differ from the raster by a scale and no offset. This is
+  the expensive stage: ~35 minutes on a GPU, hours on a CPU, ~900 MB per sheet.
 
 - **Fetching** picks the newest edition directory that is not in the future
   (the FAA posts the next one early) and runs `WORKERS` downloaders at once.

@@ -15,10 +15,16 @@ pillow>=12
 # scripts/detect_pdf_windows.py), which is how the IFR sheets are drawn.
 pypdfium2>=5.13
 
-# Super-resolution upsampling (scripts/upsample.py). CPU builds: the PyTorch
-# index serves `+cpu` wheels, which pip prefers over PyPI's by version label.
-# A CUDA build needs a different index -- see CLAUDE.md on which GPU this is.
---extra-index-url https://download.pytorch.org/whl/cpu
+# Super-resolution upsampling (scripts/upsample.py and upsample_charts.py).
+#
+# CUDA build: this machine has an RTX 4070 SUPER (Ada, sm_89), which cu126
+# covers -- cu128 is for Blackwell and lags a torch release behind anyway. The
+# index serves `+cu126` wheels, which pip prefers over PyPI's by version label.
+# Upsampling all 55 sectionals is minutes on the GPU against hours on the CPU,
+# so this matters. On a machine with no NVIDIA GPU, swap the index for
+# https://download.pytorch.org/whl/cpu -- upsample.py falls back by itself
+# (`best_device`), it is only slow.
+--extra-index-url https://download.pytorch.org/whl/cu126
 torch>=2.14
 torchvision>=0.29
 spandrel>=0.4

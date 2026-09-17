@@ -43,6 +43,11 @@ class Series:
     # those instead (0: tile the GeoTIFFs as downloaded). This is rendering,
     # not upsampling -- every pixel is drawn from the vector geometry.
     pdf_scale: int = 0
+    # Super-resolve the sheets before tiling (0: do not). Weights are a file
+    # name under source/models. Only for series whose sheets are rasters at
+    # source; a series that renders vector PDFs has nothing to recover.
+    upsample_model: str = ""
+    upsample_scale: int = 0
     # Paint order where sheets overlap. Sheets are drawn in file-name order and
     # a later sheet lands on top; reverse puts the earliest name on top instead.
     reverse_order: bool = False
@@ -72,19 +77,45 @@ class Series:
         return self.directory / "rendered"
 
     @property
+    def upscaled_directory(self) -> Path:
+        """Where upsample_charts.py writes super-resolved copies of the sheets."""
+        return self.directory / "upscaled"
+
+    @property
     def healed_directory(self) -> Path:
         """Where heal_frames.py writes frame-healed copies of the sheets."""
         return self.directory / "healed"
 
     @property
-    def raster_directory(self) -> Path:
-        """The rasters before healing: PDF renders if the series renders PDFs."""
-        return self.render_directory if self.pdf_scale else self.directory
+    def stages(self) -> tuple[tuple[str, Path], ...]:
+        """Each preparation stage as ``(script, output directory)``, in order.
+
+        The first reads what was downloaded; each later one reads the previous
+        one's output; the build tiles the last. A series with no stages is
+        tiled straight from its download.
+        """
+        out = []
+        if self.pdf_scale:
+            out.append(("render_pdfs.py", self.render_directory))
+        if self.upsample_scale:
+            out.append(("upsample_charts.py", self.upscaled_directory))
+        if self.heal_frames:
+            out.append(("heal_frames.py", self.healed_directory))
+        return tuple(out)
+
+    def input_directory(self, script: str) -> Path:
+        """Where the stage run by ``script`` reads its rasters from."""
+        previous = self.directory
+        for name, output in self.stages:
+            if name == script:
+                return previous
+            previous = output
+        raise KeyError(f"{self.name} has no {script} stage")
 
     @property
     def build_directory(self) -> Path:
-        """The rasters a build tiles: healed copies if the series heals frames."""
-        return self.healed_directory if self.heal_frames else self.raster_directory
+        """The rasters a build tiles: the last preparation stage's output."""
+        return self.stages[-1][1] if self.stages else self.directory
 
     @property
     def fetches_tifs(self) -> bool:
@@ -103,9 +134,10 @@ class Series:
         """Pixels in a built raster per pixel of the downloaded GeoTIFF.
 
         The reviewed manifests are in GeoTIFF pixel space, so pixel polygons and
-        frame bands are scaled by this before they are used against a render.
+        frame bands are scaled by this before they are used against a prepared
+        raster. Stages that change resolution multiply together.
         """
-        return self.pdf_scale or 1
+        return (self.pdf_scale or 1) * (self.upsample_scale or 1)
 
     @property
     def manifest(self) -> Path:
@@ -153,6 +185,16 @@ SERIES = {
                 "Mariana Islands Inset SEC.tif",   # Guam
                 "Samoan Islands Inset SEC.tif",    # American Samoa
             }),
+            # The FAA's sectional rasters staircase, and unlike the IFR charts
+            # there is no vector source to fall back on -- the sectional PDFs
+            # wrap the same rasters. Real-CUGAN 2x it is; the user compared
+            # denoise3x against a plain z12 build of the same three sheets and
+            # kept the upsampling.
+            upsample_model="realcugan-up2x-denoise3x.pth",
+            upsample_scale=2,
+            # Upsampled, the sheets resolve to about z12.6 (z11.6 native), so
+            # z13 is a little past it. The user's call.
+            max_zoom=13,
         ),
         Series(
             name="ifr-low",
@@ -178,10 +220,9 @@ SERIES = {
             reverse_order=True,
             # The user's call, after black seams between every pair of charts.
             heal_frames=True,
-            # Rendered at 2x, the sheets resolve past z12, and the PDF test the
-            # user approved was z12. The earlier z11 was a trial against the
-            # GeoTIFFs, which do not hold that much detail.
-            max_zoom=12,
+            # Rendered at 2x the sheets resolve to z13 exactly, which is where
+            # the user asked to tile them. The earlier z11 and z12 were trials.
+            max_zoom=13,
             # The user's call: IFR charts are thin linework and small type on
             # white, which lossy compression softens.
             lossless=True,

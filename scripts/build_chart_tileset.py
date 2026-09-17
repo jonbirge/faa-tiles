@@ -57,25 +57,23 @@ def check_stages(chart_series) -> None:
     for a series that draws its own rasters from them.
     """
     if chart_series.pdf_scale:
+        # Nothing but PDFs is downloaded, so the sheet list comes from the
+        # reviewed registration rather than from a directory of GeoTIFFs.
         manifest = json.loads(chart_series.pdf_manifest.read_text(encoding="utf-8"))
         names = sorted(n for n in manifest if chart_series.wants_tif(n))
-        first = {n: chart_series.pdf_directory / manifest[n]["pdf"] for n in names}
-        stages = [(chart_series.render_directory, "render_pdfs.py")]
+        previous = {n: chart_series.pdf_directory / manifest[n]["pdf"] for n in names}
     else:
         names = sorted(p.name for p in chart_series.directory.glob("*.tif")
                        if chart_series.wants_tif(p.name))
-        first = {n: chart_series.directory / n for n in names}
-        stages = []
-    if chart_series.heal_frames:
-        stages.append((chart_series.healed_directory, "heal_frames.py"))
+        previous = {n: chart_series.directory / n for n in names}
 
-    for after, script in stages:
+    for script, after in chart_series.stages:
         stale = [n for n in names if not (after / n).is_file()
-                 or (after / n).stat().st_mtime < first[n].stat().st_mtime]
+                 or (after / n).stat().st_mtime < previous[n].stat().st_mtime]
         if stale:
             raise SystemExit(f"{len(stale)} sheet(s) missing or out of date in {after}, e.g. {stale[0]}; "
                              f"run scripts/{script} {chart_series.name} first")
-        first = {n: after / n for n in names}
+        previous = {n: after / n for n in names}
 
 
 def sources(chart_series, directory: Path, manifest: dict) -> list[MosaicSource]:

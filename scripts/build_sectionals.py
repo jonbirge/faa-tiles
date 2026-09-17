@@ -3,8 +3,13 @@
 
     .venv/Scripts/python scripts/build_sectionals.py [--no-fetch] [--detect] [--resume]
 
-Runs fetch_charts.py sectionals, then build_chart_tileset.py sectionals, which
-replaces the tileset. Takes about 7 minutes on 24 cores and writes ~2.1 GB (z11).
+Runs fetch_charts.py, upsample_charts.py and build_chart_tileset.py for the
+sectionals series, replacing the tileset.
+
+The sheets are super-resolved 2x with Real-CUGAN first: the FAA's rasters
+staircase and, unlike the IFR charts, there is no vector source to fall back on.
+Budget for it -- ~48 GB of upsampled sheets and ~35 min on a GPU (hours on a
+CPU), then ~34 GB of z13 tiles.
 """
 
 import sys

@@ -20,19 +20,32 @@ or both of
 
 and runs build_vfr_tileset.py, which georeferences the render, crops to the
 neatline, upsamples 2x with Real-CUGAN (the winner of the side-by-side against
-APISR and waifu2x; weights download on first use) and tiles to z10. Options are
-passed through, e.g. --dry-run, --lossless, --max-zoom 7.
+APISR and waifu2x; weights download on first use) and tiles to z11. Options are
+passed through and override the defaults below, e.g. --dry-run, --lossless,
+--max-zoom 7.
 """
 
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from layout import WALL_PLANNING  # noqa: E402
+from layout import MODELS, WALL_PLANNING  # noqa: E402
 from pipeline import run  # noqa: E402
 
 COMBINED = "vfr_wall_planning_geo.tif"
 ORIGINALS = ("vfr_geotiff_original.tif", "vfr_wall_planning.tif")
+
+# build_vfr_tileset.py is the general chart builder and keeps its own defaults
+# (no-denoise weights, resolution-derived zoom). These are this product's.
+DEFAULTS = {
+    # The user asked to try denoise3x on this chart and kept it. Earlier builds
+    # used no-denoise, and the wrapper did not pass this, so re-running it
+    # quietly produced a different chart from the one on disk.
+    "--model": str(MODELS / "realcugan-up2x-denoise3x.pth"),
+    # Native is 262 m/px, about z8.9, which the 2x upsample lifts to ~z9.9.
+    # z11 is one level past that -- the user's call, over the auto-detected z10.
+    "--max-zoom": "11",
+}
 
 
 def main(argv=None) -> int:
@@ -49,7 +62,9 @@ def main(argv=None) -> int:
             print(f"  {name}", file=sys.stderr)
         print(f"(or supply {COMBINED} alone). See --help.", file=sys.stderr)
         return 1
-    run("build_vfr_tileset.py", *argv)
+    defaults = [part for flag, value in DEFAULTS.items() if flag not in argv
+                for part in (flag, value)]
+    run("build_vfr_tileset.py", *defaults, *argv)
     return 0
 
 
