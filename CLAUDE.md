@@ -570,26 +570,41 @@ Things that have already bitten here:
 - Measure threads against processes before blaming the GIL. It was wrongly
   blamed for encoding here, and the real lock was specific to opening files.
 
-Two IFR sheets, z0-z13: **CPU 2.0 min, GPU 0.9 min**.
+Two IFR sheets, z0-z13: **CPU 2.0 min, GPU 0.7 min** (built on E:, under the exclusion).
 
-**Where it stops: the GPU is no longer a bottleneck anywhere.**
+**Where it stops -- and a measurement mistake worth not repeating.**
 
-- **z13 is CPU-bound on lossless WebP encoding.** A real IFR tile takes ~3.5 ms
-  to encode (283/s on one core), and with every core encoding this i7-14700KF
-  reaches only ~2,700/s -- ~40% of linear, as E-cores, all-core clocks and
-  hyperthreading allow. 45k tiles is ~158 core-seconds; z13 runs in ~25 s while
-  also decoding its sources.
+- **Build and benchmark on E:, never on C:.** Every comparison build up to the
+  Defender test wrote into Claude's scratch directory on C:, which is NTFS, not
+  the Dev Drive, and writes small files at ~2,500-4,500/s against ~14,000/s on
+  E:. That produced "the dispatcher is blocked on encoders 11 s" and, from it,
+  a wrong conclusion that z13 was CPU-bound on encoding. Built onto E: the
+  encoders are never blocked. Scratch builds now go in `.bench/` inside the repo
+  (git-ignored), which is on the Dev Drive and under its Defender exclusion.
+- **z13 is paced by the main thread's GPU-side work** -- chunk upload and
+  prefilter, sampling -- not by encoding.
 - **Encoder worker processes were built, measured and reverted.** Shared-memory
-  tile slots, 24 processes: z13 25.4 s against 24.8 with threads, pyramid 885
-  tiles/s against 888. The encoders were never GIL-starved; they are CPU-bound.
-  Do not rebuild this expecting a win.
+  tile slots, 24 processes: no gain (z13 25.4 s against 24.8 with threads,
+  pyramid 885 against 888 tiles/s). Their isolated benchmark wrote to E:, so
+  that verdict stands. Do not rebuild them expecting a win.
 - **Benchmark encoding on real, varied tiles.** One tile encoded repeatedly ran
-  at 454/s against 283/s for real ones, and made the process pool look 70%
-  better than it was.
-- **The pyramid is bounded by Windows Defender**, which scans each freshly
-  written tile when the pyramid first reads it back (~7,600/s fresh against
-  ~15,900/s on a second read): about its whole 7 s decode wait on two sheets.
-  An exclusion for the tileset output is the user's call.
+  at 454/s against 283/s for real ones.
+- **Windows Defender scans every freshly written tile on its first open, and it
+  is expensive**: logged with typeperf, `MsMpEng` used ~15.6 cores while 60k
+  fresh tiles were read on E: (~2.9 ms of CPU per tile, about what encoding one
+  costs), and 0.5 cores on a second read. **The Dev Drive's performance mode
+  does not remove this** -- it defers scans ("open now, scan later"), it does not
+  skip them; only an exclusion does. The user excluded the whole repo folder.
+  Measured on two sheets: the pyramid went from 941 to 1,625 tiles/s (its
+  decode wait 8.3 -> 2.6 s), z13 was unchanged (its tiles are not read back),
+  and the build from 0.8 to 0.7 min. Note `source/` (FAA downloads) is now
+  unscanned too, by the user's choice.
+- **`(Get-MpPreference).PerformanceModeStatus`** reads 1 on this machine while
+  the Security app shows Dev Drive protection on and `fsutil devdrv query E:`
+  says trusted. Microsoft documents 0=enable/1=disable only for the Intune
+  value; do not assume the PowerShell number means the same. The Security app's
+  *See volumes* screen is the documented check. Tamper Protection is on, so
+  `Set-MpPreference` changes from PowerShell silently do nothing.
 - **Profile with torch.profiler before optimising the GPU side.** Stage timers
   and isolated microbenchmarks both misled here: a random sampling grid made
   bicubic look 17x its real cost, and a microbenchmark called downloads cheap
