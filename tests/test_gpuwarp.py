@@ -237,3 +237,55 @@ def test_an_oversized_window_raises_instead_of_allocating(monkeypatch, tmp_path)
     with pytest.raises(gpuwarp.WindowTooLarge):
         gpuwarp.warp_dataset_block(ds, US_IFR, mx - 10_000.0, my + 10_000.0,
                                    20_000.0, 64, "cpu")
+
+
+def test_integer_pyramid_average_matches_the_cpu_cascade():
+    """The GPU pyramid reduces each child on its own, in integers. It must give
+    what the CPU cascade's premultiplied float average gives, including where
+    alpha is partial and where a child is missing (all zeros)."""
+    from cesiumtiles.gpumosaic import _average_parents
+
+    rng = np.random.default_rng(11)
+    children = rng.integers(0, 256, (3, 2, 2, 256, 256, 4), dtype=np.uint8)
+    children[0, ..., 3] = 255                        # opaque
+    children[1, ..., 3] = rng.choice([0, 128, 255], size=children[1, ..., 3].shape)
+    children[2, 1, 1] = 0                            # a missing child
+
+    parents, alive = _average_parents(children, "cpu")
+
+    # The CPU cascade, as _render_parent does it: premultiply, mean, _finish.
+    canvas = np.zeros((3, 512, 512, 4), np.float32)
+    for dy in (0, 1):
+        for dx in (0, 1):
+            px = children[:, dy, dx].astype(np.float32)
+            a = px[..., 3:4] / 255.0
+            canvas[:, dy * 256:(dy + 1) * 256, dx * 256:(dx + 1) * 256, :3] = px[..., :3] * a
+            canvas[:, dy * 256:(dy + 1) * 256, dx * 256:(dx + 1) * 256, 3:] = a
+    small = canvas.reshape(3, 256, 2, 256, 2, 4).mean(axis=(2, 4))
+    alpha8 = np.clip(np.rint(small[..., 3] * 255.0), 0, 255)
+    safe = np.where(small[..., 3] > 0, small[..., 3], 1.0)
+    colour8 = np.clip(np.rint(small[..., :3] / safe[..., None]), 0, 255)
+    expected = np.concatenate([colour8, alpha8[..., None]], axis=-1)
+
+    diff = np.abs(parents.astype(int) - expected.astype(int))
+    # Identical but for float rounding exactly at .5 boundaries.
+    assert diff.max() <= 1
+    assert (diff > 0).mean() < 0.01
+    assert alive.tolist() == [True, True, True]
+
+
+def test_encode_webp_is_lossless_and_drops_alpha_when_opaque():
+    import imagecodecs
+    from cesiumtiles.core import encode_webp
+
+    rng = np.random.default_rng(12)
+    rgba = rng.integers(0, 256, (256, 256, 4), dtype=np.uint8)
+    back = imagecodecs.webp_decode(encode_webp(rgba, True, 90))
+    assert back.shape == (256, 256, 4)
+    visible = rgba[..., 3] > 0
+    assert np.array_equal(back[visible], rgba[visible])
+
+    rgba[..., 3] = 255
+    back = imagecodecs.webp_decode(encode_webp(rgba, True, 90))
+    assert back.shape == (256, 256, 3)               # opaque tiles are stored RGB
+    assert np.array_equal(back, rgba[..., :3])

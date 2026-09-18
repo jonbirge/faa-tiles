@@ -99,7 +99,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 201 tests, ~60s
+.venv/Scripts/python -m pytest                        # 203 tests, ~60s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -550,8 +550,23 @@ Things that have already bitten here:
   940/s on 22; processes reached ~4,400/s. `imagecodecs.webp_decode` on the
   file's bytes does 6,300/s on 1 thread and ~18,700/s on 22, pixel-identical.
   That took the pyramid from 536 to 865 tiles/s. **Encoding was measured the
-  same way and is *not* lock-bound** -- threads beat processes -- so it stays
-  on GDAL; imagecodecs encodes ~28% faster, a possible later step.
+  same way and is *not* lock-bound** -- threads beat processes.
+- **Mosaic tiles are encoded with imagecodecs too** (`core.encode_webp`,
+  used by both backends through `mosaic.write_pixels`): ~28% faster than
+  GDAL's driver, and the output is unchanged -- lossless decodes exactly, and
+  lossy q90 is **byte-identical** to GDAL's (150 of 150 sectional tiles), as
+  both call the same libwebp. It removed z13's encoder bound (32 -> 27 s on
+  two sheets, encoders never blocking). `build_tileset` still uses GDAL.
+- **Per-item Python overhead is what the GIL actually costs here**, not the
+  codecs. Decoding children through paths, per-child tasks and an extra copy
+  was ~150 us of GIL time per child; one task per parent and
+  `webp_decode(..., hasalpha=True, out=...)` straight into the batch buffer
+  brought the real function to ~4,400 parents/s.
+- **Windows Defender slows reading freshly written files about 2x** (it scans
+  on first open): 7,600/s read+decode fresh vs 15,900/s on a second read. The
+  pyramid reads every tile the level above wrote seconds earlier, so this is
+  about half its decode wait. Changing Defender is the user's call, not ours;
+  an exclusion for the tileset output directories is the suggested fix.
 - Measure threads against processes before blaming the GIL. It was wrongly
   blamed for encoding here, and the real lock was specific to opening files.
 

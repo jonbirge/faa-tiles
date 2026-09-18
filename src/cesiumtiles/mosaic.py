@@ -42,7 +42,9 @@ from xml.sax.saxutils import escape
 import numpy as np
 from osgeo import gdal, ogr, osr
 
-from cesiumtiles.core import TileBuildError, TilesetResult, _scan_tiles, webp_options
+from cesiumtiles.core import (
+    TileBuildError, TilesetResult, _scan_tiles, encode_webp, webp_options, webp_params,
+)
 from cesiumtiles.scheme import MERCATOR_HALF_WORLD, WEB_MERCATOR
 
 gdal.UseExceptions()
@@ -571,22 +573,24 @@ def _write_tile(path: Path, color: np.ndarray, alpha: np.ndarray) -> None:
 
 
 def write_tile(path: Path, color: np.ndarray, alpha: np.ndarray, creation_options) -> None:
-    """Encode one tile, RGB if it is fully opaque and RGBA otherwise.
+    """Encode one tile from planar ``(3, H, W)`` colour and ``(H, W)`` alpha."""
+    pixels = np.empty((TILE_SIZE, TILE_SIZE, 4), np.uint8)
+    pixels[:, :, :3] = color.transpose(1, 2, 0)
+    pixels[:, :, 3] = alpha
+    write_pixels(path, pixels, creation_options)
 
-    Safe to call from many threads at once: nothing is shared, and GDAL releases
-    the GIL while encoding, which is how the GPU pipeline gets ~1,300 tiles/s
-    out of 22 threads in one process without pickling tiles between processes.
+
+def write_pixels(path: Path, pixels: np.ndarray, creation_options) -> None:
+    """Encode one ``(H, W, 4)`` uint8 tile and write it atomically.
+
+    Safe to call from many threads at once: nothing is shared and libwebp runs
+    without the GIL, which is how the GPU pipeline encodes on 22 threads in one
+    process without pickling tiles between processes.
     """
-    opaque = bool(alpha.min() == 255)
-    bands = 3 if opaque else 4
-    mem = gdal.GetDriverByName("MEM").Create("", TILE_SIZE, TILE_SIZE, bands, gdal.GDT_Byte)
-    for b in range(3):
-        mem.GetRasterBand(b + 1).WriteArray(color[b])
-    if not opaque:
-        mem.GetRasterBand(4).WriteArray(alpha)
+    data = encode_webp(pixels, *webp_params(creation_options))
     path.parent.mkdir(parents=True, exist_ok=True)
     part = path.with_name(path.name + ".part")
-    gdal.GetDriverByName("WEBP").CreateCopy(str(part), mem, options=creation_options)
+    part.write_bytes(data)
     os.replace(part, path)
 
 

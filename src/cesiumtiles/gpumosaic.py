@@ -131,22 +131,22 @@ class _Encoder:
     """Encoder threads with a bounded queue, so the GPU cannot run ahead of them
     and fill RAM with finished tiles waiting to be written."""
 
-    def __init__(self, threads: int, write_tile, tile_path, creation_options):
+    def __init__(self, threads: int, write_pixels, tile_path, creation_options):
         self.pool = ThreadPoolExecutor(threads, thread_name_prefix="encode")
         # Deep enough (~0.5 GB of finished tiles) that the encoders keep working
         # through the main thread's pauses; a shallow queue left them idle for
         # every chunk decode, and the stages ran in turn instead of together.
         self.slots = threading.BoundedSemaphore(ENCODE_QUEUE)
-        self.write_tile, self.tile_path = write_tile, tile_path
+        self.write_pixels, self.tile_path = write_pixels, tile_path
         self.options = creation_options
         self.written: set[tuple[int, int]] = set()
         self.lock = threading.Lock()
         self.errors: list[BaseException] = []
         self.waited = 0.0   # seconds the main thread spent blocked on a full queue
 
-    def _run(self, x, y, color, alpha):
+    def _run(self, x, y, pixels):
         try:
-            self.write_tile(self.tile_path(x, y), color, alpha, self.options)
+            self.write_pixels(self.tile_path(x, y), pixels, self.options)
             with self.lock:
                 self.written.add((x, y))
         except BaseException as exc:  # surfaced on the main thread
@@ -154,13 +154,14 @@ class _Encoder:
         finally:
             self.slots.release()
 
-    def submit(self, x, y, color: np.ndarray, alpha: np.ndarray) -> None:
+    def submit(self, x, y, pixels: np.ndarray) -> None:
+        """Queue one ``(H, W, 4)`` straight uint8 tile for encoding."""
         if self.errors:
             raise self.errors[0]
         started = time.perf_counter()
         self.slots.acquire()
         self.waited += time.perf_counter() - started
-        self.pool.submit(self._run, x, y, color, alpha)
+        self.pool.submit(self._run, x, y, pixels)
 
     def close(self) -> None:
         self.pool.shutdown(wait=True)
@@ -259,7 +260,7 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
     does not implement is warped with GDAL on threads instead, and fed through
     the same compositing, so a series can mix the two.
     """
-    from cesiumtiles.mosaic import ERROR_THRESHOLD, TileBuildError, source_view, write_tile
+    from cesiumtiles.mosaic import ERROR_THRESHOLD, TileBuildError, source_view, write_pixels
 
     device = device or gpuwarp.best_device()
     gpuwarp.limit_memory(device, MEMORY_SHARE)
@@ -284,7 +285,7 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
             by_source.setdefault(index, []).append((x, y, wrap))
 
     total = len(remaining)
-    encoder = _Encoder(threads, write_tile, tile_path, creation_options)
+    encoder = _Encoder(threads, write_pixels, tile_path, creation_options)
     encoder.written.update(already)
     readers = ThreadPoolExecutor(READERS, thread_name_prefix="decode")
     # One thread that runs a whole chunk's decode (itself fanned out over the
@@ -336,14 +337,13 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                 item = handoff.get()
                 if item is None:
                     return
-                single_keys, finished, multi_keys, layers = item
+                single_keys, finished, alive, multi_keys, layers = item
                 for j, key in enumerate(single_keys):
                     remaining[key] = 0
                     state["done"] += 1
-                    tile = finished[j]
-                    if tile[3].max() == 0:
+                    if not alive[j]:
                         continue                  # nothing of this sheet here
-                    encoder.submit(key[0], key[1], tile[:3], tile[3])
+                    encoder.submit(key[0], key[1], finished[j])
                 for j, key in enumerate(multi_keys):
                     layer = layers[j].astype(np.float32)
                     if key in partials:
@@ -355,9 +355,9 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                         partials.put(key, layer)
                         continue
                     state["done"] += 1
-                    done = _unpremultiply_uint8(torch.from_numpy(layer[None]))[0].numpy()
-                    if done[3].max() > 0:
-                        encoder.submit(key[0], key[1], done[:3], done[3])
+                    done = _unpremultiply_uint8(torch.from_numpy(layer[None]))[0]
+                    if int(done[3].max()) > 0:
+                        encoder.submit(key[0], key[1], done.permute(1, 2, 0).contiguous().numpy())
                 report()
         except BaseException as exc:
             dispatch_errors.append(exc)
@@ -378,11 +378,16 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
             raise dispatch_errors[0]
         single = [i for i, k in enumerate(keys) if sheets_per_tile[k] == 1]
         multi = [i for i, k in enumerate(keys) if sheets_per_tile[k] > 1]
-        finished = (_unpremultiply_uint8(contributions[single]).cpu().numpy()
-                    if single else None)
+        finished = alive = None
+        if single:
+            straight = _unpremultiply_uint8(contributions[single])        # B,4,H,W
+            # Decided on the GPU, so the dispatcher does not scan every tile.
+            alive = (straight[:, 3].amax(dim=(1, 2)) > 0).cpu().numpy()
+            finished = straight.permute(0, 2, 3, 1).contiguous().cpu().numpy()
         layers = (contributions[multi].to(torch.float16).cpu().numpy()
                   if multi else None)
-        handoff.put(([keys[i] for i in single], finished, [keys[i] for i in multi], layers))
+        handoff.put(([keys[i] for i in single], finished, alive,
+                     [keys[i] for i in multi], layers))
 
     try:
         for index in sorted(by_source):
@@ -579,41 +584,56 @@ def _decode_children(tile_dir: Path, z: int, parents, readers: ThreadPoolExecuto
     import imagecodecs
 
     out = np.zeros((len(parents), 2, 2, TILE, TILE, 4), np.uint8)
+    level = os.path.join(str(tile_dir), str(z + 1))
 
-    def load(job):
-        i, dy, dx, path = job
-        try:
-            data = path.read_bytes()
-        except FileNotFoundError:
-            return
-        pixels = imagecodecs.webp_decode(data)
-        out[i, dy, dx, :, :, :pixels.shape[2]] = pixels
-        if pixels.shape[2] == 3:
-            out[i, dy, dx, :, :, 3] = 255
+    def load(i):
+        # One task per parent, and each child decoded *into* the batch buffer
+        # with alpha forced on: the Python around each decode -- paths, tasks,
+        # an extra copy -- holds the GIL, and at ~45k children a level it, not
+        # the codec, was what the pyramid waited for.
+        x, y = parents[i]
+        for dy in (0, 1):
+            for dx in (0, 1):
+                try:
+                    with open(os.path.join(level, str(2 * x + dx), f"{2 * y + dy}.webp"), "rb") as f:
+                        data = f.read()
+                except FileNotFoundError:
+                    continue
+                imagecodecs.webp_decode(data, hasalpha=True, out=out[i, dy, dx])
 
-    jobs = [(i, dy, dx, tile_dir / str(z + 1) / str(2 * x + dx) / f"{2 * y + dy}.webp")
-            for i, (x, y) in enumerate(parents) for dy in (0, 1) for dx in (0, 1)]
-    list(readers.map(load, jobs))
+    list(readers.map(load, range(len(parents))))
     return out
 
 
-def _average_parents(children: np.ndarray, device: str) -> np.ndarray:
-    """Box-filter children into parents, in premultiplied space, on the device.
+def _average_parents(children: np.ndarray, device: str):
+    """Box-filter children into parents on the device.
 
-    Premultiplied so transparent pixels do not darken edges -- the same rule as
-    the CPU cascade's ``_render_parent``, and the same rounding (round half to
-    even, colour divided by the unrounded alpha). Returns ``(P, 4, 256, 256)``
-    straight uint8.
+    Returns ``(P, 256, 256, 4)`` straight uint8, and a ``(P,)`` bool of which
+    parents have anything opaque at all.
+
+    A 2x2 box never straddles two children, so each child is reduced on its own
+    and the four 128 px results are placed side by side -- no 512 px canvas. And
+    it is done in integers on the uint8 data: with ``c`` colour and ``a`` alpha
+    in 0..255, the premultiplied average the CPU cascade computes reduces to
+    parent colour ``round(sum(c*a) / sum(a))`` and alpha ``round(sum(a) / 4)``.
+    The first version built float32 canvases and spent 16.6 ms of a 29.5 ms
+    batch on the arithmetic; this touches a fraction of the memory.
     """
-    batch = torch.from_numpy(children).to(device)                  # P,2,2,H,W,4 uint8
-    count = batch.shape[0]
-    pixels = batch.to(torch.float32).div_(255.0)
-    # P,2(dy),2(dx),H,W,4 -> P,4,2H,2W
-    canvas = pixels.permute(0, 5, 1, 3, 2, 4).reshape(count, 4, 2 * TILE, 2 * TILE)
-    alpha = canvas[:, 3:4]
-    premultiplied = torch.cat((canvas[:, :3] * alpha, alpha), dim=1)
-    pooled = F.avg_pool2d(premultiplied, 2)
-    return _unpremultiply_uint8(pooled).cpu().numpy()
+    batch = torch.from_numpy(children).to(device)          # P,2,2,H,W,4 uint8
+    count, half = batch.shape[0], TILE // 2
+    quads = batch.view(count, 2, 2, half, 2, half, 2, 4)
+    alpha = quads[..., 3:4].to(torch.int32)
+    weighted = (quads[..., :3].to(torch.int32) * alpha).sum(dim=(4, 6))   # P,2,2,h,h,3
+    alpha_sum = alpha.sum(dim=(4, 6))                                      # P,2,2,h,h,1
+    colour = torch.where(alpha_sum > 0,
+                         torch.round(weighted.float() / alpha_sum.clamp(min=1).float()),
+                         torch.zeros_like(weighted, dtype=torch.float32))
+    parent_alpha = torch.round(alpha_sum.float() / 4.0)
+    pixels = torch.cat((colour, parent_alpha), dim=-1).to(torch.uint8)    # P,2,2,h,h,4
+    # (P, dy, dx, row, col, band) -> (P, dy*h + row, dx*h + col, band)
+    parents = pixels.permute(0, 1, 3, 2, 4, 5).reshape(count, TILE, TILE, 4)
+    alive = (parents[..., 3].amax(dim=(1, 2)) > 0).cpu().numpy()
+    return parents.cpu().numpy(), alive
 
 
 def render_overviews(tile_dir, written, top: int, min_zoom: int, creation_options, *,
@@ -624,7 +644,7 @@ def render_overviews(tile_dir, written, top: int, min_zoom: int, creation_option
     Levels run in order, each finishing before the next starts, because a level
     is read back from the tiles the one above it wrote.
     """
-    from cesiumtiles.mosaic import write_tile
+    from cesiumtiles.mosaic import write_pixels
 
     device = device or gpuwarp.best_device()
     gpuwarp.limit_memory(device, MEMORY_SHARE)
@@ -645,28 +665,38 @@ def render_overviews(tile_dir, written, top: int, min_zoom: int, creation_option
                 parents = [p for p in parents if p not in done]
             else:
                 done = set()
-            encoder = _Encoder(threads, write_tile, tile_path, creation_options)
+            encoder = _Encoder(threads, write_pixels, tile_path, creation_options)
             encoder.written.update(done)
+            # Main-thread seconds per stage; "decode" is waiting on the prefetch.
+            timing = dict(decode=0.0, average=0.0, submit=0.0)
             batches = [parents[i:i + PARENT_BATCH] for i in range(0, len(parents), PARENT_BATCH)]
             pending = (prefetcher.submit(_decode_children, tile_dir, z, batches[0], readers)
                        if batches else None)
             for k, batch in enumerate(batches):
+                clock = time.perf_counter()
                 children = pending.result()
+                timing["decode"] += time.perf_counter() - clock
                 pending = (prefetcher.submit(_decode_children, tile_dir, z, batches[k + 1], readers)
                            if k + 1 < len(batches) else None)
-                averaged = _average_parents(children, device)
+                clock = time.perf_counter()
+                averaged, alive = _average_parents(children, device)
+                timing["average"] += time.perf_counter() - clock
                 del children
+                clock = time.perf_counter()
                 for j, (x, y) in enumerate(batch):
-                    tile = averaged[j]
-                    if tile[3].max() == 0:
-                        continue
-                    encoder.submit(x, y, tile[:3], tile[3])
+                    if alive[j]:
+                        encoder.submit(x, y, averaged[j])
+                timing["submit"] += time.perf_counter() - clock
+            clock = time.perf_counter()
             encoder.close()
+            drain = time.perf_counter() - clock
             written = encoder.written
             if not quiet:
                 elapsed = time.monotonic() - started
+                parts = ", ".join(f"{k} {v:.1f}s" for k, v in timing.items())
                 say(f"  z{z} (gpu): {len(written):,} tiles in {elapsed:.1f}s "
-                    f"({len(parents) / max(elapsed, 1e-9):,.0f} tiles/s)")
+                    f"({len(parents) / max(elapsed, 1e-9):,.0f} tiles/s); main thread: {parts} "
+                    f"(blocked on encoders {encoder.waited:.1f}s), final drain {drain:.1f}s")
     finally:
         prefetcher.shutdown(wait=True)
         readers.shutdown(wait=True)
