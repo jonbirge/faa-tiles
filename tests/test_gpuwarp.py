@@ -251,7 +251,7 @@ def test_integer_pyramid_average_matches_the_cpu_cascade():
     children[1, ..., 3] = rng.choice([0, 128, 255], size=children[1, ..., 3].shape)
     children[2, 1, 1] = 0                            # a missing child
 
-    parents, alive = _average_parents(children, "cpu")
+    parents, alive = _average_parents(torch.from_numpy(children))
 
     # The CPU cascade, as _render_parent does it: premultiply, mean, _finish.
     canvas = np.zeros((3, 512, 512, 4), np.float32)

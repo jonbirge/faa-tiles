@@ -568,29 +568,37 @@ def _render_with_gdal(view_path, keys, wests, norths, span, mercator_wkt,
 # Parents averaged per GPU call: children arrive as uint8, 1 MB per parent,
 # and the float32 canvas is 4 MB per parent.
 PARENT_BATCH = 128
+# Batches of children decoded ahead of the GPU; the ring holds one more buffer
+# than this (~134 MB of pinned memory each).
+AHEAD = 2
 
 
-def _decode_children(tile_dir: Path, z: int, parents, readers: ThreadPoolExecutor) -> np.ndarray:
-    """``(P, 2, 2, 256, 256, 4)`` straight uint8 children; zeros where one is
-    missing, which is what the CPU cascade treats it as too.
+def _decode_children(tile_dir: Path, z: int, parents, readers: ThreadPoolExecutor,
+                     out: np.ndarray | None = None) -> np.ndarray:
+    """Decode ``parents``' children into ``out[:len(parents)]``, shaped
+    ``(P, 2, 2, 256, 256, 4)`` straight uint8; zeros where a child is missing,
+    which is what the CPU cascade treats it as too.
 
     Decoded with imagecodecs straight from the file's bytes. Opening each tile
     as a GDAL dataset cost far more than decoding it and serialised the threads:
     measured on z13 IFR tiles, GDAL managed 720/s on one thread and *fell* to
     940/s on 22, while imagecodecs does 6,300/s on one and ~18,700/s on 22 --
     with identical pixels (500 of 500 checked). Pillow holds the GIL outright.
-    An opaque tile is stored as RGB, so its alpha is filled in.
+
+    ``out`` is normally a pinned staging buffer being reused, so every slot is
+    written, missing children included.
     """
     import imagecodecs
 
-    out = np.zeros((len(parents), 2, 2, TILE, TILE, 4), np.uint8)
+    if out is None:
+        out = np.zeros((len(parents), 2, 2, TILE, TILE, 4), np.uint8)
     level = os.path.join(str(tile_dir), str(z + 1))
 
     def load(i):
-        # One task per parent, and each child decoded *into* the batch buffer
-        # with alpha forced on: the Python around each decode -- paths, tasks,
-        # an extra copy -- holds the GIL, and at ~45k children a level it, not
-        # the codec, was what the pyramid waited for.
+        # One task per parent, and each child decoded *into* the buffer with
+        # alpha forced on: the Python around each decode -- paths, tasks, an
+        # extra copy -- holds the GIL, and at ~45k children a level it, not the
+        # codec, was what the pyramid waited for.
         x, y = parents[i]
         for dy in (0, 1):
             for dx in (0, 1):
@@ -598,6 +606,7 @@ def _decode_children(tile_dir: Path, z: int, parents, readers: ThreadPoolExecuto
                     with open(os.path.join(level, str(2 * x + dx), f"{2 * y + dy}.webp"), "rb") as f:
                         data = f.read()
                 except FileNotFoundError:
+                    out[i, dy, dx] = 0
                     continue
                 imagecodecs.webp_decode(data, hasalpha=True, out=out[i, dy, dx])
 
@@ -605,11 +614,12 @@ def _decode_children(tile_dir: Path, z: int, parents, readers: ThreadPoolExecuto
     return out
 
 
-def _average_parents(children: np.ndarray, device: str):
+def _average_parents(batch: torch.Tensor):
     """Box-filter children into parents on the device.
 
-    Returns ``(P, 256, 256, 4)`` straight uint8, and a ``(P,)`` bool of which
-    parents have anything opaque at all.
+    ``batch`` is ``(P, 2, 2, 256, 256, 4)`` uint8 children on the device.
+    Returns ``(P, 256, 256, 4)`` straight uint8 on the host, and a ``(P,)``
+    bool of which parents have anything opaque at all.
 
     A 2x2 box never straddles two children, so each child is reduced on its own
     and the four 128 px results are placed side by side -- no 512 px canvas. And
@@ -619,8 +629,7 @@ def _average_parents(children: np.ndarray, device: str):
     The first version built float32 canvases and spent 16.6 ms of a 29.5 ms
     batch on the arithmetic; this touches a fraction of the memory.
     """
-    batch = torch.from_numpy(children).to(device)          # P,2,2,H,W,4 uint8
-    count, half = batch.shape[0], TILE // 2
+    count, half = batch.shape[0], TILE // 2                  # P,2,2,H,W,4 uint8
     quads = batch.view(count, 2, 2, half, 2, half, 2, 4)
     alpha = quads[..., 3:4].to(torch.int32)
     weighted = (quads[..., :3].to(torch.int32) * alpha).sum(dim=(4, 6))   # P,2,2,h,h,3
@@ -651,7 +660,12 @@ def render_overviews(tile_dir, written, top: int, min_zoom: int, creation_option
     threads = threads or max(1, (os.cpu_count() or 2) - 2)
     tile_dir = Path(tile_dir)
     readers = ThreadPoolExecutor(threads, thread_name_prefix="decode")
-    prefetcher = ThreadPoolExecutor(1, thread_name_prefix="prefetch")
+    prefetcher = ThreadPoolExecutor(AHEAD, thread_name_prefix="prefetch")
+    cuda = device.startswith("cuda")
+    shape = (PARENT_BATCH, 2, 2, TILE, TILE, 4)
+    ring = [torch.empty(shape, dtype=torch.uint8, pin_memory=cuda) for _ in range(AHEAD + 1)]
+    ring_np = [buffer.numpy() for buffer in ring]
+    uploaded: list = [None] * len(ring)
     try:
         for z in range(top - 1, min_zoom - 1, -1):
             started = time.monotonic()
@@ -670,18 +684,35 @@ def render_overviews(tile_dir, written, top: int, min_zoom: int, creation_option
             # Main-thread seconds per stage; "decode" is waiting on the prefetch.
             timing = dict(decode=0.0, average=0.0, submit=0.0)
             batches = [parents[i:i + PARENT_BATCH] for i in range(0, len(parents), PARENT_BATCH)]
-            pending = (prefetcher.submit(_decode_children, tile_dir, z, batches[0], readers)
-                       if batches else None)
+            # Decode runs AHEAD batches in front of the GPU, into a ring of
+            # pinned buffers. Pinned memory uploads ~1.7x faster and without a
+            # staging copy; the ring lets decode, upload and the average overlap
+            # rather than take turns. A slot is refilled only once the upload
+            # that last read it has finished (its CUDA event).
+            def fill(k, batch):
+                slot = k % len(ring)
+                if uploaded[slot] is not None:
+                    uploaded[slot].synchronize()
+                _decode_children(tile_dir, z, batch, readers, out=ring_np[slot])
+                return slot
+
+            pending = {k: prefetcher.submit(fill, k, batches[k])
+                       for k in range(min(AHEAD, len(batches)))}
             for k, batch in enumerate(batches):
                 clock = time.perf_counter()
-                children = pending.result()
+                slot = pending.pop(k).result()
                 timing["decode"] += time.perf_counter() - clock
-                pending = (prefetcher.submit(_decode_children, tile_dir, z, batches[k + 1], readers)
-                           if k + 1 < len(batches) else None)
                 clock = time.perf_counter()
-                averaged, alive = _average_parents(children, device)
+                staged = ring[slot][:len(batch)]
+                on_device = staged.to(device, non_blocking=True) if cuda else staged.clone()
+                if cuda:
+                    uploaded[slot] = torch.cuda.Event()
+                    uploaded[slot].record()
+                if k + AHEAD < len(batches):
+                    pending[k + AHEAD] = prefetcher.submit(fill, k + AHEAD, batches[k + AHEAD])
+                averaged, alive = _average_parents(on_device)
+                del on_device
                 timing["average"] += time.perf_counter() - clock
-                del children
                 clock = time.perf_counter()
                 for j, (x, y) in enumerate(batch):
                     if alive[j]:
