@@ -11,7 +11,6 @@
   :root {
     --bar: #151922;
     --text: #d8dde8;
-    --muted: #8a93a6;
     --button: #232a36;
     --button-hover: #2e3746;
     --accent: #3d7bd9;
@@ -22,23 +21,29 @@
     background: var(--bar); color: var(--text);
     font: 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  body { display: flex; flex-direction: column; }
+  /* The globe fills the window; the tileset buttons float over its top left,
+     clear of Cesium's scene-mode picker in the top right. */
+  #globe { position: fixed; inset: 0; }
   nav {
+    position: fixed; top: 8px; left: 8px; right: 56px; z-index: 1;
     display: flex; flex-wrap: wrap; gap: 6px;
-    padding: 8px 16px; background: var(--bar);
-    border-bottom: 1px solid #0006;
+    pointer-events: none;            /* the gaps between buttons stay draggable */
   }
+  nav > * { pointer-events: auto; }
   nav button {
-    font: inherit; color: var(--text); background: var(--button);
-    border: 1px solid #ffffff14; border-radius: 6px;
+    font: inherit; color: var(--text); background: color-mix(in srgb, var(--button) 85%, transparent);
+    border: 1px solid #ffffff1f; border-radius: 6px;
     padding: 6px 12px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 4px #0006;
   }
   nav button:hover { background: var(--button-hover); }
   nav button[aria-pressed="true"] {
     background: var(--accent); color: var(--accent-text); border-color: transparent;
   }
-  nav .status { color: var(--muted); padding: 6px 0; }
-  #globe { flex: 1; min-height: 0; position: relative; }
+  nav .status {
+    color: var(--text); padding: 6px 12px; border-radius: 6px;
+    background: color-mix(in srgb, var(--bar) 85%, transparent);
+  }
 </style>
 </head>
 <body>

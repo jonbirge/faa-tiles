@@ -83,3 +83,9 @@ def test_page_finds_tilesets_by_manifest_then_by_listing():
     assert "fromListing" in PAGE
     # It must recognise itself when a server answers the folder with index.html.
     assert '<meta name="faa-tiles-index"' in PAGE
+
+
+def test_globe_fills_the_window_with_the_buttons_floating_over_it():
+    assert "#globe { position: fixed; inset: 0; }" in PAGE
+    nav = PAGE[PAGE.index("  nav {"):PAGE.index("}", PAGE.index("  nav {"))]
+    assert "position: fixed" in nav and "z-index" in nav
