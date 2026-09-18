@@ -570,7 +570,32 @@ Things that have already bitten here:
 - Measure threads against processes before blaming the GIL. It was wrongly
   blamed for encoding here, and the real lock was specific to opening files.
 
-Two IFR sheets, z0-z13: **CPU 2.0 min, GPU 1.0 min**.
+Two IFR sheets, z0-z13: **CPU 2.0 min, GPU 0.9 min**.
+
+**Where it stops: the GPU is no longer a bottleneck anywhere.**
+
+- **z13 is CPU-bound on lossless WebP encoding.** A real IFR tile takes ~3.5 ms
+  to encode (283/s on one core), and with every core encoding this i7-14700KF
+  reaches only ~2,700/s -- ~40% of linear, as E-cores, all-core clocks and
+  hyperthreading allow. 45k tiles is ~158 core-seconds; z13 runs in ~25 s while
+  also decoding its sources.
+- **Encoder worker processes were built, measured and reverted.** Shared-memory
+  tile slots, 24 processes: z13 25.4 s against 24.8 with threads, pyramid 885
+  tiles/s against 888. The encoders were never GIL-starved; they are CPU-bound.
+  Do not rebuild this expecting a win.
+- **Benchmark encoding on real, varied tiles.** One tile encoded repeatedly ran
+  at 454/s against 283/s for real ones, and made the process pool look 70%
+  better than it was.
+- **The pyramid is bounded by Windows Defender**, which scans each freshly
+  written tile when the pyramid first reads it back (~7,600/s fresh against
+  ~15,900/s on a second read): about its whole 7 s decode wait on two sheets.
+  An exclusion for the tileset output is the user's call.
+- **Profile with torch.profiler before optimising the GPU side.** Stage timers
+  and isolated microbenchmarks both misled here: a random sampling grid made
+  bicubic look 17x its real cost, and a microbenchmark called downloads cheap
+  when the profiler showed pageable copies taking half the main thread.
+- The remaining lever is a trade-off, not a win: lossless effort 25 instead of
+  75 encodes ~14% faster for ~8% larger tiles.
 
 ## Repo hygiene
 
