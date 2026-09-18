@@ -109,7 +109,7 @@ def main(argv=None) -> int:
                     help="lossless WebP tiles (default: the series' setting)")
     ap.add_argument("--workers", type=int, default=None,
                     help="render processes (default: all cores on the CPU backend, 4 on the GPU)")
-    ap.add_argument("--warp", choices=("gpu", "cpu"), default="gpu",
+    ap.add_argument("--warp", choices=("gpu", "cpu"), default="cpu",
                     help="how max-zoom tiles are resampled (default: %(default)s). "
                          "gpu evaluates the projection per pixel in torch and "
                          "prefilters isotropically; cpu uses gdal.Warp. Sources "

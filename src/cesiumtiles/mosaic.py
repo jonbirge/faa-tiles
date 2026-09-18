@@ -768,7 +768,7 @@ def build_mosaic(
     quality: int = 90,
     lossless: bool = False,
     resampling: str = "cubic",
-    backend: str = "gpu",
+    backend: str = "cpu",
     workers: int | None = None,
     cache_mb: int = 256,
     resume: bool = False,

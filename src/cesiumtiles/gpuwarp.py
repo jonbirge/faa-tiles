@@ -1,7 +1,7 @@
 """Warp chart sheets into Web Mercator tiles on the GPU.
 
 An alternative to ``gdal.Warp`` for the max-zoom tiles, selected with
-``build_chart_tileset.py --warp gpu`` (the default; ``--warp cpu`` keeps GDAL).
+``build_chart_tileset.py --warp gpu`` (``--warp cpu``, the default, keeps GDAL).
 What it does differently:
 
 * **The projection is exact.** It is evaluated per output pixel in closed form,

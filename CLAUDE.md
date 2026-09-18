@@ -493,7 +493,8 @@ Detection lessons, each learnt from a wrong outline:
 
 ## GPU backend (`--warp gpu`)
 
-`build_chart_tileset.py --warp gpu|cpu`, default **gpu**; both are kept and
+`build_chart_tileset.py --warp gpu|cpu`, default **cpu** since the full IFR
+trial (below; it was gpu before); both are kept and
 tested (the user's call). Built after a comparison showed the *first* GPU design
 lost to the CPU, and the user laid out the architecture that works:
 
@@ -611,6 +612,17 @@ Two IFR sheets, z0-z13: **CPU 2.0 min, GPU 0.7 min** (built on E:, under the exc
   when the profiler showed pageable copies taking half the main thread.
 - The remaining lever is a trade-off, not a win: lossless effort 25 instead of
   75 encodes ~14% faster for ~8% larger tiles.
+
+**Full IFR trial (2026-09-18), and why the default went back to cpu.** All 37
+sheets, z0-z13, GPU: **28.8 min** against the CPU build's 31.2 (which predates
+the imagecodecs encoder, so not a fair baseline). z13 took 24.4 min, and its
+main thread spent 794 s in hand-off to the **single dispatcher thread**
+compositing seam partials (up to 19,796 held at once) -- two sheets have
+almost no seams, which is why the two-sheet benchmark showed 2x. Output:
+97.7% of z13 pixels identical, p99 4; the 255-level outliers are 1 px shifts
+of mask/sheet edges, and the GPU writes 9 more z13 edge tiles. GPU tiles
+compress **8.6% worse** under the same encoder (the pixels, not the encoder).
+The user set cpu as default; next steps are in a GitHub issue.
 
 ## Public site (`www/`)
 
