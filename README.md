@@ -25,7 +25,7 @@ their own package indexes) and checks the imports. Then build whichever
 tilesets you want and open the tester:
 
 ```bash
-.venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   z13, 2x upsampled
+.venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   z12, 2x upsampled
 .venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute ~31 min, 3.0 GB (z13, lossless)
 .venv/Scripts/python scripts/build_wall_planning.py   # VFR wall planning  ~3 min, 441 MB (z11)
 .venv/Scripts/cesiumtiles-serve .                     # http://127.0.0.1:8000/
@@ -35,8 +35,8 @@ tilesets you want and open the tester:
 
 **Budget disk and time before the sectionals.** That build upsamples all 55
 sheets 2x first, which is ~48 GB of intermediates and ~35 minutes on an NVIDIA
-GPU (hours without one — see `requirements.txt` on the CUDA index), and z13
-tiles are roughly 34 GB on top, and that build has not been run. The IFR build
+GPU (hours without one — see `requirements.txt` on the CUDA index), and z12
+tiles are roughly 8.5 GB on top, and that build has not been run. The IFR build
 downloads only ~155 MB of PDFs but renders 5.2 GB of intermediates at 4x, plus
 healed copies, before tiling; it is measured, at 953,205 tiles / 3.05 GB in
 31 minutes. The sectionals' last actual build was ~2.1 GB at z11, before
@@ -617,9 +617,9 @@ The CONUS low enroute charts, L-01 to L-36, build the same way:
   nearest clean row or column outward (~12 px, ~0.5-1 km per side), which the
   build tiles. That closed 31 of 32 seams; L-29/L-30 still has a straight
   ~450 m sliver where the FAA's two georeferenced sheets simply do not meet.
-- **Same engine** as the sectionals, at **z12** and **lossless WebP**: IFR
+- **Same engine** as the sectionals, at **z13** and **lossless WebP**: IFR
   charts are thin linework and small type on white, which lossy q90 softens.
-  The 2x renders reach z13 natively; z12 is where the current build stops.
+  The 4x renders reach z14 natively, so z13 tiles are genuine vector detail.
   `build_chart_tileset.py --[no-]lossless` overrides a series' default. Overlaps are
   painted in *reverse* file-name order, so the lower-numbered chart is on top;
   `build_chart_tileset.py --[no-]reverse-order` overrides a series' default.

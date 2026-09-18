@@ -9,7 +9,7 @@ sectionals series, replacing the tileset.
 The sheets are super-resolved 2x with Real-CUGAN first: the FAA's rasters
 staircase and, unlike the IFR charts, there is no vector source to fall back on.
 Budget for it -- ~48 GB of upsampled sheets and ~35 min on a GPU (hours on a
-CPU), then ~34 GB of z13 tiles.
+CPU), then ~8.5 GB of z12 tiles (an estimate; not yet built).
 """
 
 import sys

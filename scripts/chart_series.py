@@ -57,7 +57,7 @@ class Series:
     heal_frames: bool = False
     # Lossless WebP tiles instead of lossy q90.
     lossless: bool = False
-    # Deepest zoom level tiled. Both series are at z13; see each one's note.
+    # Deepest zoom level tiled; see each series' note (sectionals z12, IFR z13).
     # Keep this in step with any stage that changes resolution (pdf_scale,
     # upsample_scale) -- they determine whether the warp magnifies or minifies.
     max_zoom: int = 11
@@ -193,9 +193,13 @@ SERIES = {
             # kept the upsampling.
             upsample_model="realcugan-up2x-denoise3x.pth",
             upsample_scale=2,
-            # Upsampled, the sheets resolve to about z12.6 (z11.6 native), so
-            # z13 is a little past it. The user's call.
-            max_zoom=13,
+            # The median lower-48 sheet is 42.3 m/px, native z11.5; upsampled
+            # 2x it is z12.5. So z12 tiles (30 m/px) are slightly *coarser* than
+            # the upsampled source and the warp minifies, which is where the
+            # upsampling pays off. z13 (15 m/px) would be 1.4x finer than even the
+            # upsampled sheets -- interpolation for ~4x the tiles, disk and time.
+            # The user's call, on those numbers, after first choosing z13.
+            max_zoom=12,
         ),
         Series(
             name="ifr-low",

@@ -75,9 +75,10 @@ def test_every_stage_reads_the_previous_stages_output():
         assert s.build_directory == previous
 
 
-@pytest.mark.parametrize("name, zoom", [("sectionals", 13), ("ifr-low", 13)])
+@pytest.mark.parametrize("name, zoom", [("sectionals", 12), ("ifr-low", 13)])
 def test_max_zoom(name, zoom):
-    """The user's call: both series tile to z13."""
+    """The user's call. Each matches where its prepared sheets stop holding
+    detail: IFR renders from vector at 4x reach z14, upsampled sectionals z12.5."""
     assert series(name).max_zoom == zoom
 
 

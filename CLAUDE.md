@@ -334,11 +334,16 @@ manifests themselves; they are the reviewed record.
 The sectionals came first, and the notes below are mostly theirs.
 Decided with the user, with measurements: **z12** at first (the "finest pixel"
 rule gives z13, driven only by the 1:250k Honolulu inset, at 4x the tiles), then
-**z11 for both series** as a trial, and now **z13 for both** (`max_zoom` in the
-series) once the IFR sheets came from vector PDFs and the sectionals were
-upsampled. **The z13 sectionals have not been built and will not fit as things
-stand**: ~34 GB of tiles on top of ~48 GB of upsampled sheets, against ~62 GB
-free. Sort the disk out before starting that one. **WebP q90**,
+**z11 for both series** as a trial, and now **IFR z13, sectionals z12, wall
+planning z11** (the user's call). Each is where its prepared source stops
+holding detail: IFR renders from vector at 4x reach z14; the sectionals are
+42.3 m/px (native z11.5), z12.5 upsampled, so z13 would be 1.4x finer than even
+the upsampled sheets for ~4x the tiles; the planning chart is native ~z9.9
+upsampled, z11 being one level past by choice. **Match max_zoom to the
+prepared source's resolution** -- the IFR sheets went a build at z13 from 2x
+renders, magnifying, before that was noticed. The z12 sectionals have not been
+built: ~8.5 GB of tiles (estimate) on top of ~48 GB of upsampled sheets.
+**WebP q90**,
 **overlaps by file name, later on top** (an acknowledged placeholder), map areas
 **detected once, reviewed, committed** as `scripts/sectionals_areas.json`, and
 lower zooms **box-filtered from children**. **Guam and Samoa are excluded**
