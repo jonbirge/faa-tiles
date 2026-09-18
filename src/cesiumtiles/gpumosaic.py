@@ -79,6 +79,11 @@ READERS = 8
 # smooth at tile scale; the filter margin covers what a 5x5 lattice misses.
 LATTICE = 5
 
+# Stage timers force a GPU sync when this is set, so each bucket is exact at the
+# cost of stopping the CPU running ahead of the GPU; otherwise they are cheap
+# and approximate. `CESIUMTILES_PROFILE=1` in the environment turns it on.
+PROFILE = os.environ.get("CESIUMTILES_PROFILE") == "1"
+
 # Share of the card this process may allocate before torch raises, instead of
 # the Windows driver spilling into system RAM (see gpuwarp.limit_memory).
 MEMORY_SHARE = 0.8
@@ -303,10 +308,13 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
     # what the pass is waiting on; "encoder" is time blocked on a full queue.
     # "decode" is only time spent *waiting* for a prefetched chunk; "prefilter"
     # includes uploading it.
-    timing = dict(footprints=0.0, decode=0.0, prefilter=0.0, sample=0.0, deliver=0.0)
+    timing = dict(footprints=0.0, decode=0.0, prefilter=0.0, sample=0.0, deliver=0.0,
+                  dispatcher=0.0)
 
     def timed(stage, started_at):
-        if device.startswith("cuda"):
+        # Syncing makes each bucket exact but stops the CPU running ahead of the
+        # GPU, so it is only done when asked for (see PROFILE).
+        if PROFILE and device.startswith("cuda"):
             torch.cuda.synchronize()
         timing[stage] += time.perf_counter() - started_at
 
@@ -337,6 +345,7 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                 item = handoff.get()
                 if item is None:
                     return
+                busy_from = time.perf_counter()
                 single_keys, finished, alive, multi_keys, layers = item
                 for j, key in enumerate(single_keys):
                     remaining[key] = 0
@@ -359,6 +368,7 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                     if int(done[3].max()) > 0:
                         encoder.submit(key[0], key[1], done.permute(1, 2, 0).contiguous().numpy())
                 report()
+                timing["dispatcher"] += time.perf_counter() - busy_from
         except BaseException as exc:
             dispatch_errors.append(exc)
             while handoff.get() is not None:      # drain so the producer never blocks
@@ -522,9 +532,12 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
             f"at most {partials.peak:,} seam tiles held at once, "
             f"{len(partials.spilled)} spilled")
         wall = time.monotonic() - started
+        dispatcher = timing.pop("dispatcher")
         parts = ", ".join(f"{k} {v:.1f}s" for k, v in timing.items())
-        say(f"  z{top} (gpu): {wall:.1f}s wall; main thread: {parts} "
-            f"(of which blocked on encoders {encoder.waited:.1f}s)")
+        exact = "" if PROFILE else " (approximate; CESIUMTILES_PROFILE=1 for exact)"
+        say(f"  z{top} (gpu): {wall:.1f}s wall; main thread: {parts}{exact}; "
+            f"dispatcher busy {dispatcher:.1f}s, of which blocked on encoders "
+            f"{encoder.waited:.1f}s")
     if any(remaining.values()):
         left = sum(1 for v in remaining.values() if v)
         raise TileBuildError(f"{left} tiles never received all their sheets")
