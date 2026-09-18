@@ -271,18 +271,46 @@ def _upload_window(strips, width: int, height: int, factor: int, device: str) ->
     for row, raw in strips:
         if raw.ndim == 2:
             raw = raw[None]
-        pixels = torch.from_numpy(raw).to(device).to(torch.float32).div_(255.0)
-        if pixels.shape[0] >= 4:
-            rgb, alpha = pixels[:3], pixels[3:4]
-        else:
-            rgb = pixels[:3] if pixels.shape[0] == 3 else pixels[:1].expand(3, -1, -1)
-            alpha = torch.ones_like(rgb[:1])
-        block = torch.cat((rgb * alpha, alpha), dim=0)
-        if factor > 1:
-            block = F.avg_pool2d(block.unsqueeze(0), factor).squeeze(0)
+        block = _premultiplied(torch.from_numpy(raw).to(device), factor)
         r0 = row // factor
         out[:, r0:r0 + block.shape[1]] = block
     return out
+
+
+def _premultiplied(pixels: torch.Tensor, factor: int = 1) -> torch.Tensor:
+    """``(bands, h, w)`` uint8 on the device to premultiplied float32
+    ``(4, h/factor, w/factor)``, box-reduced after premultiplying so masked-out
+    collar cannot bleed colour across the map's edge."""
+    pixels = pixels.to(torch.float32).div_(255.0)
+    if pixels.shape[0] >= 4:
+        rgb, alpha = pixels[:3], pixels[3:4]
+    else:
+        rgb = pixels[:3] if pixels.shape[0] == 3 else pixels[:1].expand(3, -1, -1)
+        alpha = torch.ones_like(rgb[:1])
+    block = torch.cat((rgb * alpha, alpha), dim=0)
+    if factor > 1:
+        block = F.avg_pool2d(block.unsqueeze(0), factor).squeeze(0)
+    return block
+
+
+def _decode_into(path: str, x0: int, y0: int, width: int, height: int,
+                 staging: np.ndarray, readers: ThreadPoolExecutor) -> int:
+    """Decode a full-resolution window straight into ``staging`` (a pinned
+    buffer), band by band, in row strips on several threads. Returns the band
+    count. GDAL writes into the buffer it is given, so there is no copy between
+    decoding and the DMA to the GPU."""
+    bands = gdal.Open(path).RasterCount
+    window = staging[:bands * height * width].reshape(bands, height, width)
+
+    def decode(row):
+        dataset = gdal.Open(path)
+        rows = min(READ_ROWS, height - row)
+        for band in range(bands):
+            dataset.GetRasterBand(band + 1).ReadAsArray(
+                x0, y0 + row, width, rows, buf_obj=window[band, row:row + rows])
+
+    list(readers.map(decode, range(0, height, READ_ROWS)))
+    return bands
 
 
 def _footprints(lcc, inverse, wests, norths, span):
@@ -397,6 +425,12 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
     sheets_per_tile = {key: count for key, count in remaining.items()}
     cuda = device.startswith("cuda")
     out_pool = _PinnedPool(OUT_BUFFERS, (BATCH, TILE, TILE, 4), pinned=cuda)
+    # Two pinned buffers for source chunks: one being decoded into while the
+    # other is uploaded. Sized for the largest chunk MAX_CHUNK_PIXELS allows.
+    staging = [torch.empty(4 * MAX_CHUNK_PIXELS, dtype=torch.uint8, pin_memory=cuda)
+               for _ in range(2)]
+    staging_np = [buffer.numpy() for buffer in staging]
+    uploaded: list = [None, None]
     handoff: queue.Queue = queue.Queue(maxsize=HANDOFF_QUEUE)
     dispatch_errors: list[BaseException] = []
 
@@ -444,6 +478,11 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
             while handoff.get() is not None:      # drain so the producer never blocks
                 pass
 
+    def seams_last(indices, keys_all):
+        """``indices`` reordered single-sheet tiles first, seam tiles last, each
+        group keeping its order -- what deliver() needs to split by slicing."""
+        return sorted(indices, key=lambda i: sheets_per_tile[keys_all[i]] > 1)
+
     dispatcher = threading.Thread(target=dispatch, name="dispatch", daemon=True)
     dispatcher.start()
 
@@ -456,11 +495,18 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
         """
         if dispatch_errors:
             raise dispatch_errors[0]
-        single = [i for i, k in enumerate(keys) if sheets_per_tile[k] == 1]
-        multi = [i for i, k in enumerate(keys) if sheets_per_tile[k] > 1]
+        # Callers order tiles single-sheet first (see seams_last), so the batch
+        # splits into two slices. Indexing with a Python list instead copies an
+        # index tensor from pageable memory, which syncs the whole stream.
+        seam = [sheets_per_tile[k] > 1 for k in keys]
+        split = seam.index(True) if True in seam else len(keys)
+        if not all(seam[split:]):
+            raise AssertionError("deliver() needs single-sheet tiles before seam tiles")
+        single = range(split)
+        multi = range(split, len(keys))
         slot = copied = None
         if single:
-            straight = _unpremultiply_uint8(contributions[single])        # B,4,H,W
+            straight = _unpremultiply_uint8(contributions[:split])        # B,4,H,W
             slot = out_pool.acquire(lambda: dispatch_errors[0] if dispatch_errors else None)
             count = len(single)
             # Into pinned memory by DMA; the main thread moves on at once.
@@ -473,7 +519,7 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                 copied = torch.cuda.Event()
                 copied.record()
         # Seam tiles are few; they take the simple, blocking path.
-        layers = (contributions[multi].to(torch.float16).cpu().numpy()
+        layers = (contributions[split:].to(torch.float16).cpu().numpy()
                   if multi else None)
         handoff.put(([keys[i] for i in single], slot, copied,
                      [keys[i] for i in multi], layers))
@@ -496,7 +542,8 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
             if not gpuwarp.supports(wkt):
                 _render_with_gdal(view_path, keys_all, wests_np, norths_np, span,
                                   mercator_wkt, resampling, ERROR_THRESHOLD,
-                                  readers, device, deliver)
+                                  readers, device, deliver,
+                                  seams_last(range(len(keys_all)), keys_all))
                 gdal.Unlink(view_path)
                 continue
 
@@ -511,7 +558,7 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
             timed("footprints", clock)
             factor = gpuwarp.mip_factor(float(scale.max()))
             misses = (col1 < 0) | (row1 < 0) | (col0 > width) | (row0 > height)
-            missed = np.nonzero(misses)[0]
+            missed = seams_last([int(i) for i in np.nonzero(misses)[0]], keys_all)
             for start in range(0, len(missed), BATCH):
                 part = missed[start:start + BATCH]
                 deliver([keys_all[i] for i in part],
@@ -523,6 +570,7 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                 key = (int(max(0.0, col0[i]) // factor // CHUNK),
                        int(max(0.0, row0[i]) // factor // CHUNK))
                 chunks.setdefault(key, []).append(int(i))
+            chunks = {key: seams_last(members, keys_all) for key, members in chunks.items()}
 
             # Plan every chunk's window first, so the next one can be decoded on
             # the reader threads while this one is on the GPU.
@@ -553,30 +601,62 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                         "refusing rather than exhausting memory")
                 windows.append((members, x0, y0, x1 - x0, y1 - y0, w_px, h_px))
 
-            def fetch(window):
-                _, wx, wy, ww, wh, _, _ = window
-                return prefetcher.submit(_decode_window, view_path, wx, wy, ww, wh,
-                                         factor, readers)
+            # Every tile's corner, in window order, on the device in one transfer
+            # per sheet. Building each batch's indices from a Python list and
+            # copying them over instead forced a full stream sync per batch --
+            # PyTorch syncs after any copy from pageable memory -- which the
+            # profiler put at 47% of the main thread's time.
+            order = np.concatenate([np.asarray(w[0], dtype=np.int64) for w in windows]) \
+                if windows else np.zeros(0, np.int64)
+            ordered = torch.from_numpy(order).to(device)
+            wests_ordered, norths_ordered = wests[ordered], norths[ordered]
+            starts = np.cumsum([0] + [len(w[0]) for w in windows])
 
-            pending = fetch(windows[0]) if windows else None
+            def fetch(k):
+                _, wx, wy, ww, wh, _, _ = windows[k]
+                if factor == 1 and 4 * ww * wh <= staging[0].numel():
+                    # Straight into a pinned buffer, once its last upload is done.
+                    slot = k % len(staging)
+
+                    def job():
+                        if uploaded[slot] is not None:
+                            uploaded[slot].synchronize()
+                        bands = _decode_into(view_path, wx, wy, ww, wh,
+                                             staging_np[slot], readers)
+                        return ("pinned", slot, bands)
+                    return prefetcher.submit(job)
+                # Mip reads (below native zoom) keep the strip path.
+                return prefetcher.submit(lambda: ("strips", _decode_window(
+                    view_path, wx, wy, ww, wh, factor, readers), None))
+
+            pending = fetch(0) if windows else None
             for k, window in enumerate(windows):
                 members, x0, y0, full_w, full_h, w_px, h_px = window
                 clock = time.perf_counter()
-                strips = pending.result()           # usually already decoded
+                kind, payload, bands = pending.result()     # usually already decoded
                 timed("decode", clock)
-                pending = fetch(windows[k + 1]) if k + 1 < len(windows) else None
+                pending = fetch(k + 1) if k + 1 < len(windows) else None
                 clock = time.perf_counter()
-                chunk = _upload_window(strips, full_w, full_h, factor, device)
-                del strips
+                if kind == "pinned":
+                    staged = staging[payload][:bands * full_h * full_w].view(bands, full_h, full_w)
+                    on_device = staged.to(device, non_blocking=True)
+                    if cuda:
+                        uploaded[payload] = torch.cuda.Event()
+                        uploaded[payload].record()
+                    chunk = _premultiplied(on_device)
+                    del on_device
+                else:
+                    chunk = _upload_window(payload, full_w, full_h, factor, device)
                 chunk = gpuwarp.prefilter(chunk, float(scale[members].max()) / factor)
                 timed("prefilter", clock)
 
                 for start in range(0, len(members), BATCH):
                     batch = members[start:start + BATCH]
                     clock = time.perf_counter()
-                    picked = torch.as_tensor(batch, device=device)
+                    at = int(starts[k]) + start
                     grid = gpuwarp.sampling_grid(
-                        lcc, inverse, wests[picked], norths[picked], span, TILE,
+                        lcc, inverse, wests_ordered[at:at + len(batch)],
+                        norths_ordered[at:at + len(batch)], span, TILE,
                         origin=(x0, y0), factor=factor, extent=(w_px, h_px))
                     sampled = F.grid_sample(
                         chunk.unsqueeze(0), grid.reshape(1, len(batch) * TILE, TILE, 2),
@@ -624,9 +704,10 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
 
 
 def _render_with_gdal(view_path, keys, wests, norths, span, mercator_wkt,
-                      resampling, error_threshold, readers, device, deliver):
+                      resampling, error_threshold, readers, device, deliver, order):
     """The fallback for a projection the GPU sampler does not implement: warp
-    each tile with GDAL on threads, then composite through the same path."""
+    each tile with GDAL on threads, then composite through the same path.
+    ``order`` lists tile indices single-sheet first, as deliver() requires."""
 
     def warp(i):
         dataset = gdal.Open(view_path)
@@ -640,8 +721,8 @@ def _render_with_gdal(view_path, keys, wests, norths, span, mercator_wkt,
         rgb = values[:3] if values.shape[0] >= 4 else np.repeat(values[:1], 3, axis=0)
         return np.concatenate((rgb * alpha, alpha), axis=0)
 
-    for start in range(0, len(keys), BATCH):
-        batch = list(range(start, min(start + BATCH, len(keys))))
+    for start in range(0, len(order), BATCH):
+        batch = order[start:start + BATCH]
         stack = np.stack(list(readers.map(warp, batch)))
         deliver([keys[i] for i in batch], torch.from_numpy(stack).to(device))
 
