@@ -30,3 +30,6 @@ source/
 # Scratch builds and benchmarks: inside the repo so they land on the Dev Drive
 # (and under its Defender exclusion), but never committed.
 /.bench/
+
+# Written on the server by www/update_tilesets.py
+/www/tilesets.json

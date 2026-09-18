@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAA Charts</title>
+<meta name="faa-tiles-index" content="1">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.135/Build/Cesium/Widgets/widgets.css">
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.135/Build/Cesium/Cesium.js"></script>
+<style>
+  :root {
+    --bar: #151922;
+    --text: #d8dde8;
+    --muted: #8a93a6;
+    --button: #232a36;
+    --button-hover: #2e3746;
+    --accent: #3d7bd9;
+    --accent-text: #ffffff;
+  }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bar); color: var(--text);
+    font: 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  body { display: flex; flex-direction: column; }
+  nav {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 8px 16px; background: var(--bar);
+    border-bottom: 1px solid #0006;
+  }
+  nav button {
+    font: inherit; color: var(--text); background: var(--button);
+    border: 1px solid #ffffff14; border-radius: 6px;
+    padding: 6px 12px; cursor: pointer; white-space: nowrap;
+  }
+  nav button:hover { background: var(--button-hover); }
+  nav button[aria-pressed="true"] {
+    background: var(--accent); color: var(--accent-text); border-color: transparent;
+  }
+  nav .status { color: var(--muted); padding: 6px 0; }
+  #globe { flex: 1; min-height: 0; position: relative; }
+</style>
+</head>
+<body>
+<nav id="tilesets" aria-label="Tilesets"><span class="status">Looking for tilesets…</span></nav>
+<div id="globe"></div>
+<script>
+"use strict";
+
+// Where the page lives, as a directory URL. Tileset paths resolve against it.
+const HERE = new URL(".", location.href);
+
+// ---- finding tilesets ------------------------------------------------------
+//
+// A browser page cannot list a directory, so the scan asks the server:
+//   1. tilesets.json beside this page, if there is one: a list of
+//      {"path", "name"} objects, the format cesiumtiles-serve and
+//      update_tilesets.py both write;
+//   2. otherwise the server's own directory listing of this folder, where it
+//      gives one (nginx autoindex, Apache, Caddy browse, python -m http.server).
+//      Most servers show index.html instead of a listing once it exists, which
+//      is what (1) is for.
+// Either way a directory counts only if it holds a readable metadata.json.
+
+async function fromManifest() {
+  const response = await fetch(new URL("tilesets.json", HERE), { cache: "no-store" });
+  if (!response.ok) return null;
+  const listing = await response.json();
+  if (!Array.isArray(listing)) return null;
+  return listing.map((item) => (typeof item === "string" ? item : item.path)).filter(Boolean);
+}
+
+async function fromListing() {
+  const response = await fetch(HERE, { cache: "no-store" });
+  if (!response.ok) return [];
+  const html = await response.text();
+  const page = new DOMParser().parseFromString(html, "text/html");
+  if (page.querySelector('meta[name="faa-tiles-index"]')) return [];  // got this page back
+  const found = new Set();
+  for (const link of page.querySelectorAll("a[href]")) {
+    let url;
+    try { url = new URL(link.getAttribute("href"), HERE); } catch { continue; }
+    if (url.origin !== HERE.origin || url.search || !url.pathname.endsWith("/")) continue;
+    const rest = url.pathname.slice(HERE.pathname.length);
+    // Immediate subdirectories only: not the parent, not this folder, not deeper.
+    if (!url.pathname.startsWith(HERE.pathname) || !rest || rest.slice(0, -1).includes("/")) continue;
+    found.add(decodeURIComponent(rest.slice(0, -1)));
+  }
+  return [...found].sort();
+}
+
+async function describe(path) {
+  const base = new URL(path.replace(/\/*$/, "/"), HERE);
+  try {
+    const response = await fetch(new URL("metadata.json", base), { cache: "no-store" });
+    if (!response.ok) return null;
+    const meta = await response.json();
+    if (!meta.url_template) return null;
+    const dir = decodeURIComponent(base.pathname.replace(/\/$/, "").split("/").pop()) || "tiles";
+    // url_template is relative to the tileset's own directory, not this page.
+    return { key: dir, dir, meta, template: new URL(meta.url_template, base).href };
+  } catch {
+    return null;
+  }
+}
+
+async function findTilesets() {
+  let paths = null;
+  try { paths = await fromManifest(); } catch { paths = null; }
+  if (!paths) {
+    try { paths = await fromListing(); } catch { paths = []; }
+  }
+  const tilesets = (await Promise.all(paths.map(describe))).filter(Boolean);
+  // Label with the tileset's own name; where two share one, add the directory.
+  const counts = {};
+  for (const t of tilesets) counts[t.meta.name] = (counts[t.meta.name] || 0) + 1;
+  for (const t of tilesets) {
+    const name = t.meta.name || t.dir;
+    t.label = counts[t.meta.name] > 1 ? `${name} (${t.dir})` : name;
+  }
+  return tilesets;
+}
+
+// ---- extents ---------------------------------------------------------------
+//
+// The imagery rectangle must be the unsnapped data extent: an edge landing
+// exactly on a tile boundary makes Cesium throw from its render loop. An extent
+// across the antimeridian (west > east) is given to the imagery as the full
+// longitude band, because UrlTemplateImageryProvider keeps only west..180 of it;
+// the camera takes the true extent.
+
+function extentOf(meta) {
+  return meta.data_bounds || meta.bounds || [-180, -85, 180, 85];
+}
+
+function imageryExtentOf(meta) {
+  const e = extentOf(meta);
+  return e[0] > e[2] ? [-180 + 1e-5, e[1], 180 - 1e-5, e[3]] : e;
+}
+
+const toRectangle = (e) => Cesium.Rectangle.fromDegrees(e[0], e[1], e[2], e[3]);
+
+// ---- the globe -------------------------------------------------------------
+
+const viewer = new Cesium.Viewer("globe", {
+  // No controls beyond the tileset buttons.
+  animation: false,
+  baseLayerPicker: false,
+  fullscreenButton: false,
+  geocoder: false,
+  homeButton: false,
+  infoBox: false,
+  navigationHelpButton: false,
+  sceneModePicker: false,
+  selectionIndicator: false,
+  timeline: false,
+  // No Ion token: the chart tiles are the only imagery, over plain ellipsoid.
+  baseLayer: false,
+});
+viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10131a");
+// Cesium otherwise renders at CSS pixels, ignoring devicePixelRatio, so a 2x
+// display gets half the sharpness it can show. Everything else stays default.
+viewer.useBrowserRecommendedResolution = false;
+viewer.resolutionScale = 1.0;
+window.viewer = viewer;
+
+let layer = null;
+
+function show(tileset, { moveCamera }) {
+  const meta = tileset.meta;
+  const provider = new Cesium.UrlTemplateImageryProvider({
+    url: tileset.template,
+    tilingScheme: meta.scheme === "geographic"
+      ? new Cesium.GeographicTilingScheme()
+      : new Cesium.WebMercatorTilingScheme(),
+    rectangle: toRectangle(imageryExtentOf(meta)),
+    minimumLevel: meta.minzoom || 0,
+    maximumLevel: meta.maxzoom,
+    tileWidth: meta.tilesize || 256,
+    tileHeight: meta.tilesize || 256,
+    hasAlphaChannel: meta.format !== "jpeg",
+    credit: new Cesium.Credit(meta.name || tileset.dir, false),
+  });
+  if (layer) viewer.imageryLayers.remove(layer, true);
+  layer = new Cesium.ImageryLayer(provider);
+  viewer.imageryLayers.add(layer);
+  if (moveCamera) viewer.camera.setView({ destination: toRectangle(extentOf(meta)) });
+
+  for (const button of document.querySelectorAll("#tilesets button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.key === tileset.key));
+  }
+  history.replaceState(null, "", "#" + encodeURIComponent(tileset.key));
+}
+
+(async function main() {
+  const nav = document.getElementById("tilesets");
+  const tilesets = await findTilesets();
+  nav.textContent = "";
+  if (!tilesets.length) {
+    const status = document.createElement("span");
+    status.className = "status";
+    status.textContent = "No tilesets found beside this page.";
+    nav.append(status);
+    return;
+  }
+  for (const tileset of tilesets) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = tileset.label;
+    button.dataset.key = tileset.key;
+    button.setAttribute("aria-pressed", "false");
+    button.addEventListener("click", () => show(tileset, { moveCamera: true }));
+    nav.append(button);
+  }
+  const wanted = decodeURIComponent(location.hash.slice(1));
+  show(tilesets.find((t) => t.key === wanted) || tilesets[0], { moveCamera: true });
+})();
+</script>
+</body>
+</html>
