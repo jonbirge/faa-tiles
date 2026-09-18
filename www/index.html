@@ -172,10 +172,17 @@ const viewer = new Cesium.Viewer("globe", {
   })),
 });
 viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10131a");
+// The tile tester's rendering defaults (src/cesiumtiles/viewer.html), so the
+// site looks and performs as charts did while they were being checked.
 // Cesium otherwise renders at CSS pixels, ignoring devicePixelRatio, so a 2x
-// display gets half the sharpness it can show. Everything else stays default.
+// display gets half the sharpness it can show.
 viewer.useBrowserRecommendedResolution = false;
 viewer.resolutionScale = 1.0;
+viewer.scene.globe.maximumScreenSpaceError = 2;
+// Cesium defaults to 4x MSAA. On top of full device resolution that
+// multisamples every pixel of a high-DPI framebuffer, and it buys nothing for
+// imagery draped on the globe: it only smooths geometry edges.
+viewer.scene.msaaSamples = 1;
 window.viewer = viewer;
 
 let layer = null;

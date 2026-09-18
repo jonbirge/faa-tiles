@@ -50,6 +50,16 @@ def test_page_renders_at_the_displays_full_resolution():
     assert "viewer.resolutionScale = 1.0" in PAGE
 
 
+def test_page_uses_the_tile_testers_rendering_defaults():
+    # Cesium's 4x MSAA at full device resolution made the site sluggish; the
+    # tester's defaults are no MSAA and a screen-space error of 2.
+    assert "viewer.scene.msaaSamples = 1" in PAGE
+    assert "viewer.scene.globe.maximumScreenSpaceError = 2" in PAGE
+    tester = (WWW.parent / "src" / "cesiumtiles" / "viewer.html").read_text(encoding="utf-8")
+    assert '<option value="1" selected>none</option>' in tester
+    assert 'id="sse" type="number" min="0.25" max="8" step="0.25" value="2"' in tester
+
+
 def test_page_has_no_controls_but_tileset_buttons_and_scene_mode():
     for widget in ("animation", "baseLayerPicker", "fullscreenButton", "geocoder",
                    "homeButton", "infoBox", "navigationHelpButton",
