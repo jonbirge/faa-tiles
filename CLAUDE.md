@@ -99,7 +99,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 213 tests, ~60s
+.venv/Scripts/python -m pytest                        # 214 tests, ~60s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -629,7 +629,8 @@ The user set cpu as default; next steps are in a GitHub issue.
 `www/index.html` is the page the user deploys as `index.html` beside their
 tilesets: one button per tileset floating over a full-window globe, plus Cesium's 3D/2D/Columbus
 picker, and nothing else (the user's call). **Switching never moves the camera**
--- no zoom to extents, on load either -- so charts compare in place. Under the
+-- no zoom to extents; it starts over CONUS via Cesium's default view -- so
+charts compare in place. Under the
 charts is Esri's Light Gray Canvas (public `services.arcgisonline.com` tiles).
 Cesium's rendering defaults except
 `useBrowserRecommendedResolution = false` so it renders at the display's full

@@ -146,6 +146,11 @@ const toRectangle = (e) => Cesium.Rectangle.fromDegrees(e[0], e[1], e[2], e[3]);
 
 // ---- the globe -------------------------------------------------------------
 
+// Start over the contiguous US. This is Cesium's default view, set before the
+// viewer exists; nothing moves the camera after that.
+Cesium.Camera.DEFAULT_VIEW_RECTANGLE = Cesium.Rectangle.fromDegrees(-125, 24, -66, 50);
+Cesium.Camera.DEFAULT_VIEW_FACTOR = 0;
+
 const viewer = new Cesium.Viewer("globe", {
   // No controls beyond the tileset buttons and the 3D / 2D / Columbus picker.
   animation: false,

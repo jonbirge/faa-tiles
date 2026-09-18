@@ -65,6 +65,12 @@ def test_switching_tilesets_never_moves_the_camera():
         assert move not in PAGE, move
 
 
+def test_page_starts_over_conus():
+    # Cesium's default view, set before the viewer: not a camera move.
+    assert "Cesium.Camera.DEFAULT_VIEW_RECTANGLE = Cesium.Rectangle.fromDegrees(-125, 24, -66, 50)" in PAGE
+    assert PAGE.index("DEFAULT_VIEW_RECTANGLE") < PAGE.index("new Cesium.Viewer(")
+
+
 def test_page_has_a_background_map_under_the_charts():
     assert "World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}" in PAGE
     # Switching removes only the chart layer, never the base map.
