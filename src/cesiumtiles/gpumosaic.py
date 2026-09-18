@@ -550,3 +550,117 @@ def _render_with_gdal(view_path, keys, wests, norths, span, mercator_wkt,
         batch = list(range(start, min(start + BATCH, len(keys))))
         stack = np.stack(list(readers.map(warp, batch)))
         deliver([keys[i] for i in batch], torch.from_numpy(stack).to(device))
+
+
+# -- overviews ----------------------------------------------------------------
+#
+# Each lower zoom is built from the four children beneath it. Per parent, on
+# one core: decoding the four children took 4.4 ms, the 2x2 premultiplied
+# average 14.7 ms, and encoding 5.5 ms -- the arithmetic, not the codecs, was
+# 60% of it. The average is trivial for a GPU in batches, so it runs there,
+# while decoding and encoding stay on threads.
+
+# Parents averaged per GPU call: children arrive as uint8, 1 MB per parent,
+# and the float32 canvas is 4 MB per parent.
+PARENT_BATCH = 128
+
+
+def _decode_children(tile_dir: Path, z: int, parents, readers: ThreadPoolExecutor) -> np.ndarray:
+    """``(P, 2, 2, 256, 256, 4)`` straight uint8 children; zeros where one is
+    missing, which is what the CPU cascade treats it as too.
+
+    Decoded with GDAL, not Pillow: GDAL releases the GIL, Pillow's WebP decode
+    does not. Measured on z13 IFR tiles: Pillow peaked at ~2,300 tiles/s however
+    many threads, GDAL reached ~4,600 on 8. The two decode identically (checked
+    on 3,000 tiles). An opaque tile is stored as RGB, so alpha is filled in.
+    """
+    out = np.zeros((len(parents), 2, 2, TILE, TILE, 4), np.uint8)
+
+    def load(job):
+        i, dy, dx, path = job
+        if not path.exists():
+            return
+        bands = gdal.Open(str(path)).ReadAsArray()
+        out[i, dy, dx, :, :, :bands.shape[0]] = bands.transpose(1, 2, 0)
+        if bands.shape[0] == 3:
+            out[i, dy, dx, :, :, 3] = 255
+
+    jobs = [(i, dy, dx, tile_dir / str(z + 1) / str(2 * x + dx) / f"{2 * y + dy}.webp")
+            for i, (x, y) in enumerate(parents) for dy in (0, 1) for dx in (0, 1)]
+    list(readers.map(load, jobs))
+    return out
+
+
+def _average_parents(children: np.ndarray, device: str) -> np.ndarray:
+    """Box-filter children into parents, in premultiplied space, on the device.
+
+    Premultiplied so transparent pixels do not darken edges -- the same rule as
+    the CPU cascade's ``_render_parent``, and the same rounding (round half to
+    even, colour divided by the unrounded alpha). Returns ``(P, 4, 256, 256)``
+    straight uint8.
+    """
+    batch = torch.from_numpy(children).to(device)                  # P,2,2,H,W,4 uint8
+    count = batch.shape[0]
+    pixels = batch.to(torch.float32).div_(255.0)
+    # P,2(dy),2(dx),H,W,4 -> P,4,2H,2W
+    canvas = pixels.permute(0, 5, 1, 3, 2, 4).reshape(count, 4, 2 * TILE, 2 * TILE)
+    alpha = canvas[:, 3:4]
+    premultiplied = torch.cat((canvas[:, :3] * alpha, alpha), dim=1)
+    pooled = F.avg_pool2d(premultiplied, 2)
+    return _unpremultiply_uint8(pooled).cpu().numpy()
+
+
+def render_overviews(tile_dir, written, top: int, min_zoom: int, creation_options, *,
+                     resume: bool = False, threads: int | None = None,
+                     device: str | None = None, say=print, quiet: bool = False) -> None:
+    """Build zooms ``top - 1`` down to ``min_zoom`` from the level above each.
+
+    Levels run in order, each finishing before the next starts, because a level
+    is read back from the tiles the one above it wrote.
+    """
+    from cesiumtiles.mosaic import write_tile
+
+    device = device or gpuwarp.best_device()
+    gpuwarp.limit_memory(device, MEMORY_SHARE)
+    threads = threads or max(1, (os.cpu_count() or 2) - 2)
+    tile_dir = Path(tile_dir)
+    readers = ThreadPoolExecutor(threads, thread_name_prefix="decode")
+    prefetcher = ThreadPoolExecutor(1, thread_name_prefix="prefetch")
+    try:
+        for z in range(top - 1, min_zoom - 1, -1):
+            started = time.monotonic()
+
+            def tile_path(x, y, z=z):
+                return tile_dir / str(z) / str(x) / f"{y}.webp"
+
+            parents = sorted({(x >> 1, y >> 1) for x, y in written})
+            if resume:
+                done = {p for p in parents if tile_path(*p).exists()}
+                parents = [p for p in parents if p not in done]
+            else:
+                done = set()
+            encoder = _Encoder(threads, write_tile, tile_path, creation_options)
+            encoder.written.update(done)
+            batches = [parents[i:i + PARENT_BATCH] for i in range(0, len(parents), PARENT_BATCH)]
+            pending = (prefetcher.submit(_decode_children, tile_dir, z, batches[0], readers)
+                       if batches else None)
+            for k, batch in enumerate(batches):
+                children = pending.result()
+                pending = (prefetcher.submit(_decode_children, tile_dir, z, batches[k + 1], readers)
+                           if k + 1 < len(batches) else None)
+                averaged = _average_parents(children, device)
+                del children
+                for j, (x, y) in enumerate(batch):
+                    tile = averaged[j]
+                    if tile[3].max() == 0:
+                        continue
+                    encoder.submit(x, y, tile[:3], tile[3])
+            encoder.close()
+            written = encoder.written
+            if not quiet:
+                elapsed = time.monotonic() - started
+                say(f"  z{z} (gpu): {len(written):,} tiles in {elapsed:.1f}s "
+                    f"({len(parents) / max(elapsed, 1e-9):,.0f} tiles/s)")
+    finally:
+        prefetcher.shutdown(wait=True)
+        readers.shutdown(wait=True)

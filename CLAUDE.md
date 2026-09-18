@@ -97,7 +97,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 177 tests, ~47s
+.venv/Scripts/python -m pytest                        # 201 tests, ~60s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -483,6 +483,65 @@ Detection lessons, each learnt from a wrong outline:
 - **The Phoenix GeoTIFF has a blank white row through its map** near 35.6 N.
   That is the FAA's file, not the mask; it shows because Phoenix sorts after Las
   Vegas. A better overlap rule is the fix, not a mask.
+
+## GPU backend (`--warp gpu`)
+
+`build_chart_tileset.py --warp gpu|cpu`, default **gpu**; both are kept and
+tested (the user's call). Built after a comparison showed the *first* GPU design
+lost to the CPU, and the user laid out the architecture that works:
+
+- **Max zoom (`gpumosaic.render_top`), one source sheet at a time**, in paint
+  order, bottom first, in the main process. Every tile the sheet touches is
+  mapped to a source footprint in one batched pass; tiles are grouped into
+  overlapping **chunks** (a sheet is up to 3.07 Gpx -- 9.2 GB uint8, ~49 GB
+  float32 -- against 12 GB of VRAM), each decoded once on threads, uploaded
+  premultiplied, prefiltered once, and sampled in batches of 128. Single-sheet
+  tiles finish on the GPU; seam tiles wait as partials until their last sheet,
+  then composite and encode **once**.
+- **Pyramid (`gpumosaic.render_overviews`)**: children decoded on threads with
+  **GDAL** (it releases the GIL; Pillow's WebP decode does not -- ~4,600 vs
+  ~2,300 tiles/s), the premultiplied 2x2 average batched on the GPU. That
+  average, not the codecs, was 60% of a parent's cost in numpy.
+- **Encoding is on 22 threads in-process** (`mosaic.write_tile`), no pickling.
+- **Lossless WebP uses `METHOD=2`** (`core.LOSSLESS_WEBP`): in lossless mode
+  METHOD only sets effort, round trips are bit-exact (tested), and it encodes
+  2x as fast as GDAL's default at no size cost. It helps both backends.
+- **Measured, L-27 + L-28 (60k tiles, z0-z13):** CPU 2.0 min, GPU 1.3 min. z13
+  alone: CPU 557 tiles/s, GPU ~1,200-1,290. Output matches: 98% of z13 pixels
+  identical, p99 difference 2, tile counts equal at every level.
+- **The filter is isotropic, and that is correct**, not a shortcut: LCC and Web
+  Mercator are both conformal, so an output pixel's footprint is a circle (axis
+  ratio 1.004 measured, including a sheet rotated 90 degrees). EWA/anisotropic
+  filtering was planned and dropped on that measurement. For the same reason
+  **the GPU does not produce visibly better tiles**; its case is speed.
+- `render_top` prints a per-stage timing line (decode wait, prefilter, sample,
+  hand-off, blocked-on-encoders). Use it before optimising anything. The first
+  profile showed the stages running in turn, not together.
+
+Things that have already bitten here:
+
+- **The first GPU test build crashed the machine.** It read full-resolution
+  source windows regardless of minification -- ~8 GB per worker at z11 -- and
+  the Windows driver **spills CUDA allocations into system RAM** instead of
+  failing. Now: mip-level reads, `MAX_WINDOW_PIXELS`/`MAX_CHUNK_PIXELS` raise
+  before allocating, and `gpuwarp.limit_memory` caps the process so an overrun
+  raises `OutOfMemoryError`. Probe one block's peak memory in one process
+  before any parallel GPU run.
+- **Colour scale:** the GPU works in 0..1, the CPU composite in 0..255. Mixing
+  them rendered every GPU tile near-black. The antimeridian test caught it --
+  the only LCC synthetic sheet, so the only one that ran the GPU path. Mosaic
+  tests now include LCC scenes run on **both** backends; keep it that way.
+- **Grid convention:** geotransform pixel space is edge-based (pixel j's centre
+  at j + 0.5), so `grid_sample` normalisation is `2u/W - 1`, not
+  `(2u + 1)/W - 1`. The identity-warp test guards it.
+- **Checking a WebP round trip**: an early check read tiles back in a way that
+  made every tile "differ". GDAL and Pillow in fact decode our tiles
+  identically (3,000 checked). Test the checker against a known-good control.
+
+What bounds it now: at z13 the dispatcher is blocked on encoders; in the
+pyramid, per-tile Python overhead under the GIL (one process). Going further
+means worker processes exchanging tiles through shared memory, or a
+free-threaded Python.
 
 ## Repo hygiene
 

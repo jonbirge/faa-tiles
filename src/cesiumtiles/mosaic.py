@@ -704,6 +704,20 @@ def _render_parent(task):
 
 # -- driver -----------------------------------------------------------------
 
+def _build_cpu(prepared, plan, top, min_zoom, workers, initargs, quiet):
+    """The CPU backend: max zoom and the overview cascade on worker processes."""
+    with mp.get_context("spawn").Pool(workers, _init_worker, initargs) as pool:
+        written = _render_top_cpu(pool, plan, top, quiet)
+        for z in range(top - 1, min_zoom - 1, -1):
+            parents = sorted({(x >> 1, y >> 1) for x, y in written})
+            progress = _Progress(f"z{z}", len(parents), quiet)
+            written = set()
+            for x, y, ok in pool.imap_unordered(_render_parent, [(z, x, y) for x, y in parents], chunksize=16):
+                if ok:
+                    written.add((x, y))
+                progress.step()
+
+
 def _render_top_cpu(pool, plan, top, quiet):
     """The CPU backend's max-zoom pass: blocks of tiles on the worker pool."""
     # Group the planned tiles into square blocks, which is the unit the warp
@@ -816,26 +830,20 @@ def build_mosaic(
 
     try:
         if backend == "gpu":
-            # The max zoom is rendered in this process, a sheet at a time (see
-            # gpumosaic); only the overview cascade below uses worker processes,
-            # and it gets all the cores rather than a GPU-sized pool.
+            # Rendered in this process, a sheet at a time (see gpumosaic), with
+            # threads for decoding and encoding; no worker processes at all.
             from cesiumtiles import gpumosaic
 
             written = gpumosaic.render_top(
                 prepared, plan, top, tile_dir, options, resume=resume,
                 resampling=resampling, say=say, quiet=quiet)
-        with mp.get_context("spawn").Pool(workers, _init_worker, initargs) as pool:
-            if backend == "cpu":
-                written = _render_top_cpu(pool, plan, top, quiet)
-
-            for z in range(top - 1, min_zoom - 1, -1):
-                parents = sorted({(x >> 1, y >> 1) for x, y in written})
-                progress = _Progress(f"z{z}", len(parents), quiet)
-                written = set()
-                for x, y, ok in pool.imap_unordered(_render_parent, [(z, x, y) for x, y in parents], chunksize=16):
-                    if ok:
-                        written.add((x, y))
-                    progress.step()
+            # The pyramid too: children decoded and parents encoded on threads,
+            # the premultiplied 2x2 average batched on the GPU -- that average,
+            # not the codecs, was 60% of a parent's cost in numpy.
+            gpumosaic.render_overviews(tile_dir, written, top, min_zoom, options,
+                                       resume=resume, say=say, quiet=quiet)
+        else:
+            _build_cpu(prepared, plan, top, min_zoom, workers, initargs, quiet)
     finally:
         shutil.rmtree(mask_dir, ignore_errors=True)
 
