@@ -107,7 +107,14 @@ def main(argv=None) -> int:
     ap.add_argument("--quality", type=int, default=QUALITY, help="lossy WebP quality (default: %(default)s)")
     ap.add_argument("--lossless", action=argparse.BooleanOptionalAction, default=None,
                     help="lossless WebP tiles (default: the series' setting)")
-    ap.add_argument("--workers", type=int, default=None, help="render processes (default: all cores)")
+    ap.add_argument("--workers", type=int, default=None,
+                    help="render processes (default: all cores on the CPU backend, 4 on the GPU)")
+    ap.add_argument("--warp", choices=("gpu", "cpu"), default="gpu",
+                    help="how max-zoom tiles are resampled (default: %(default)s). "
+                         "gpu evaluates the projection per pixel in torch and "
+                         "prefilters isotropically; cpu uses gdal.Warp. Sources "
+                         "whose projection the gpu path does not implement fall "
+                         "back to gdal automatically.")
     ap.add_argument("--only", nargs="+", metavar="NAME",
                     help="build from just these charts (file name prefixes)")
     ap.add_argument("--reverse-order", action=argparse.BooleanOptionalAction, default=None,
@@ -136,11 +143,12 @@ def main(argv=None) -> int:
 
     lossless = chart_series.lossless if args.lossless is None else args.lossless
     print(f"tiles: WebP {'lossless' if lossless else f'q{args.quality}'}", flush=True)
+    print(f"warp: {args.warp}", flush=True)
 
     result = build_mosaic(
         chosen, out,
         min_zoom=args.min_zoom, max_zoom=args.max_zoom if args.max_zoom is not None else chart_series.max_zoom,
-        quality=args.quality, lossless=lossless,
+        quality=args.quality, lossless=lossless, backend=args.warp,
         workers=args.workers, resume=args.resume, overwrite=args.overwrite,
         title=chart_series.title,
     )

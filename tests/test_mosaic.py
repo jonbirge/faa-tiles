@@ -184,7 +184,11 @@ def test_covering_arc():
     assert covering_arc([(-180, 0), (0, 180)]) == (-180, 180)
 
 
-def test_sheet_across_the_antimeridian(tmp_path):
+@pytest.mark.parametrize("backend", ["gpu", "cpu"])
+def test_sheet_across_the_antimeridian(tmp_path, backend):
+    """Run on both warp backends. The sheet is LCC, which the GPU path
+    implements, so this is the test that makes the GPU branch actually run --
+    the other synthetic sheets are not LCC and fall back to GDAL either way."""
     lcc = "+proj=lcc +lat_1=50 +lat_2=55 +lat_0=52 +lon_0=180 +datum=WGS84 +units=m +no_defs"
     sheet = _solid(tmp_path / "aleutians.tif", (-300_000, -150_000, 300_000, 150_000), BLUE, crs=lcc)
 
@@ -200,8 +204,51 @@ def test_sheet_across_the_antimeridian(tmp_path):
     assert len(wraps) == 2 and 0 in wraps
 
     out = tmp_path / "out"
-    build_mosaic([MosaicSource(sheet)], out, min_zoom=z, max_zoom=z, lossless=True, workers=2, quiet=True)
+    build_mosaic([MosaicSource(sheet)], out, min_zoom=z, max_zoom=z, lossless=True, workers=2,
+                 quiet=True, backend=backend)
     assert _close(_pixel(out, 179.5, 52.0, z=z), BLUE)
     assert _close(_pixel(out, -179.5, 52.0, z=z), BLUE)
     west, _, east, _ = json.loads((out / "metadata.json").read_text())["data_bounds"]
     assert west > 0 > east   # crosses 180, as Cesium rectangles express it
+
+
+# -- both warp backends on LCC sheets ------------------------------------
+
+LCC_US = ("+proj=lcc +lat_1=45 +lat_2=33 +lat_0=39 +lon_0=-95 "
+          "+datum=WGS84 +units=m +no_defs")
+
+
+@pytest.fixture(scope="module", params=["gpu", "cpu"])
+def lcc_scene(request, tmp_path_factory):
+    """The overlap scene again, but on LCC sheets, so the GPU backend actually
+    runs rather than falling back to GDAL. Red is a palette sheet beneath; blue
+    sits on top with a square hole cut out of it in lon/lat."""
+    root = tmp_path_factory.mktemp(f"lcc-{request.param}")
+    red = _solid(root / "a_red.tif", (-200_000, -100_000, 0, 100_000), RED,
+                 crs=LCC_US, palette=True)
+    blue = _solid(root / "b_blue.tif", (-100_000, -100_000, 100_000, 100_000), BLUE,
+                  crs=LCC_US)
+    sources = [
+        MosaicSource(red),
+        MosaicSource(blue, MapArea.from_dict({"exclude": [
+            {"lonlat": [[-95.9, 38.7], [-95.3, 38.7], [-95.3, 39.3], [-95.9, 39.3]]},
+        ]})),
+    ]
+    out = root / "out"
+    build_mosaic(sources, out, min_zoom=MAX_ZOOM, max_zoom=MAX_ZOOM, lossless=True,
+                 workers=2, quiet=True, backend=request.param)
+    return out
+
+
+def test_lcc_overlap_on_both_backends(lcc_scene):
+    assert _close(_pixel(lcc_scene, -97.0, 39.0), RED)       # red only
+    assert _close(_pixel(lcc_scene, -94.3, 39.0), BLUE)      # blue only
+    assert _close(_pixel(lcc_scene, -95.1, 38.4), BLUE)      # overlap: blue on top
+    assert _close(_pixel(lcc_scene, -95.6, 39.0), RED)       # through the hole
+
+
+def test_lcc_palette_is_exact_on_both_backends(lcc_scene):
+    """Deep inside a flat sheet the prefilter and bicubic must change nothing --
+    a colour shift here would tint every flat area of a chart."""
+    assert _close(_pixel(lcc_scene, -96.8, 39.3), RED, tol=1)
+    assert _close(_pixel(lcc_scene, -94.0, 39.3), BLUE, tol=1)

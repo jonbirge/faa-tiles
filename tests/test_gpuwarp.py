@@ -15,7 +15,13 @@ import pytest
 import torch
 from osgeo import osr
 
-from cesiumtiles.gpuwarp import LambertConformalConic, mercator_to_lonlat
+from cesiumtiles.gpuwarp import (
+    LambertConformalConic,
+    footprint_scale,
+    mercator_to_lonlat,
+    prefilter,
+    warp_block,
+)
 
 osr.UseExceptions()
 
@@ -106,6 +112,87 @@ def test_from_wkt_refuses_a_projection_it_does_not_implement():
         LambertConformalConic.from_wkt(mercator.ExportToWkt())
 
 
+def _identity_coords(size: int) -> torch.Tensor:
+    """Coordinates that map each destination pixel to the same source pixel.
+
+    Geotransform pixel space is edge-based, so pixel j's centre is at j + 0.5.
+    """
+    axis = torch.arange(size, dtype=torch.float64) + 0.5
+    rows, columns = torch.meshgrid(axis, axis, indexing="ij")
+    return torch.stack((columns, rows), dim=-1)
+
+
+def test_identity_warp_returns_the_source_untouched():
+    """Guards the grid convention. Normalising as if the coordinates were
+    integer indices shifts everything half a pixel, which looks like a
+    georeferencing fault rather than an off-by-one."""
+    source = torch.rand(4, 32, 32)
+    out = warp_block(source, (0, 0), _identity_coords(32), scale=1.0)
+    assert torch.equal(out, source)
+
+
+def test_a_half_pixel_shift_is_not_the_identity():
+    """The converse, so the test above cannot pass by accident."""
+    source = torch.rand(4, 32, 32)
+    out = warp_block(source, (0, 0), _identity_coords(32) + 0.5, scale=1.0)
+    assert (out - source).abs().max() > 0.1
+
+
+def test_window_origin_cancels():
+    """Coordinates are in full-raster space; the window's origin is subtracted."""
+    source = torch.rand(4, 32, 32)
+    coords = _identity_coords(32)[6:26, 6:26]
+    out = warp_block(source[:, 4:28, 4:28], (4, 4), coords, scale=1.0)
+    assert torch.allclose(out, source[:, 6:26, 6:26], atol=1e-5)
+
+
+def test_prefilter_preserves_a_flat_field():
+    """The kernel is normalised, so minifying a constant changes nothing. If it
+    did, every large flat area of a chart would shift in tone."""
+    flat = torch.full((4, 64, 64), 0.7)
+    for scale in (1.0, 1.5, 2.0, 4.0):
+        assert (prefilter(flat, scale) - 0.7).abs().max() < 1e-6
+
+
+def test_prefilter_is_a_no_op_when_not_minifying():
+    source = torch.rand(4, 16, 16)
+    assert prefilter(source, 1.0) is source
+    assert prefilter(source, 0.5) is source
+
+
+def test_prefilter_actually_blurs_when_minifying():
+    """An impulse must spread, or there is no band-limiting and z13 would alias."""
+    impulse = torch.zeros(1, 33, 33)
+    impulse[0, 16, 16] = 1.0
+    out = prefilter(impulse, 2.0)
+    assert out[0, 16, 16] < 0.9          # energy left the centre
+    assert out[0, 16, 17] > 0.01         # and landed next door
+    assert abs(float(out.sum()) - 1.0) < 1e-5   # none of it was lost
+
+
+def test_footprint_scale_reads_a_known_minification():
+    assert footprint_scale(_identity_coords(16) * 2.0) == pytest.approx(2.0, abs=1e-6)
+    assert footprint_scale(_identity_coords(16)) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_the_warp_is_isotropic_here():
+    """The reason there is no anisotropic filtering: LCC and Web Mercator are
+    both conformal, so an output pixel's footprint is a circle. Measured over
+    the real sheets the axis ratio is 1.004, including one rotated 90 degrees.
+    If this ever fails, the filter needs revisiting."""
+    # A z13-sized destination step near the middle of the IFR coverage.
+    west, north = -10_000_000.0, 4_800_000.0
+    step = 2 * 20037508.342789244 / (1 << 13) / 256
+    x = torch.tensor([west, west + step, west], dtype=torch.float64)
+    y = torch.tensor([north, north, north - step], dtype=torch.float64)
+    lon, lat = mercator_to_lonlat(x, y)
+    east_m, north_m = US_IFR.forward(lon, lat)
+    jacobian = np.array([[float(east_m[1] - east_m[0]), float(east_m[2] - east_m[0])],
+                         [float(north_m[1] - north_m[0]), float(north_m[2] - north_m[0])]])
+    singular = np.linalg.svd(jacobian, compute_uv=False)
+    assert singular.max() / singular.min() < 1.02
+
+
 def test_eccentricity_matches_the_ellipsoid():
     """GRS80 by default, which is what the charts are on. WGS84's flattening
     differs in the 9th digit (298.257223563), so do not swap the constants."""
@@ -117,3 +204,36 @@ def test_eccentricity_matches_the_ellipsoid():
     # millimetre on the ground -- far below a z13 pixel, so either is fine.
     wgs84 = math.sqrt(2 / 298.257223563 - (1 / 298.257223563) ** 2)
     assert abs(US_IFR.eccentricity - wgs84) < 1e-9
+
+
+def test_mip_factor_leaves_the_prefilter_a_residual_under_two():
+    """Power-of-two read, with the prefilter doing only the last factor of <2."""
+    from cesiumtiles.gpuwarp import mip_factor
+    assert mip_factor(0.8) == 1
+    assert mip_factor(1.0) == 1
+    assert mip_factor(1.9) == 1
+    assert mip_factor(2.0) == 2
+    assert mip_factor(5.1) == 4
+    assert mip_factor(8.0) == 8
+    for scale in (1.0, 1.3, 2.5, 3.9, 5.1, 17.0):
+        assert 1.0 <= scale / mip_factor(scale) < 2.0 or scale < 1.0
+
+
+def test_an_oversized_window_raises_instead_of_allocating(monkeypatch, tmp_path):
+    """The first GPU build read a full-resolution 10k px window per block at
+    z11, ~8 GB per worker, and took the machine down. The ceiling must raise."""
+    from osgeo import gdal
+    from cesiumtiles import gpuwarp
+
+    path = str(tmp_path / "sheet.tif")
+    ds = gdal.GetDriverByName("GTiff").Create(path, 512, 512, 4, gdal.GDT_Byte)
+    ds.SetGeoTransform((0.0, 100.0, 0.0, 400000.0, 0.0, -100.0))
+    ds.SetProjection(_lcc_srs(US_IFR).ExportToWkt())
+    ds.FlushCache()
+    # A block centred on the sheet, found through PROJ rather than guessed.
+    to_mercator = osr.CoordinateTransformation(_lcc_srs(US_IFR), _srs(3857))
+    mx, my, _ = to_mercator.TransformPoint(25_600.0, 374_400.0)
+    monkeypatch.setattr(gpuwarp, "MAX_WINDOW_PIXELS", 16)
+    with pytest.raises(gpuwarp.WindowTooLarge):
+        gpuwarp.warp_dataset_block(ds, US_IFR, mx - 10_000.0, my + 10_000.0,
+                                   20_000.0, 64, "cpu")

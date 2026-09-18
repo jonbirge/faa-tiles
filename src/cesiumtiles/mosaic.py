@@ -65,6 +65,12 @@ TILE_SIZE = 256
 MASK_WORKERS = 4
 MASK_CACHE_MB = 64
 
+# Workers when warping on the GPU (see build_mosaic), and the share of the
+# card they may use between them; the rest is left for the display and CUDA's
+# own contexts. Past its slice a worker raises rather than spilling into RAM.
+GPU_WORKERS = 2
+GPU_MEMORY_SHARE = 0.7
+
 # Max-zoom tiles are warped a square block at a time, not one at a time. Almost
 # all of a per-tile warp is per-call overhead -- building a PROJ transformer,
 # resolving the source window -- not per-pixel work: measured 13.31 ms/tile
@@ -474,7 +480,8 @@ def plan_tiles(prepared: Sequence[PreparedSource], z: int) -> dict[tuple[int, in
 _worker: dict = {}
 
 
-def _init_worker(sources, tile_dir, suffix, creation_options, resampling, resume, cache_mb):
+def _init_worker(sources, tile_dir, suffix, creation_options, resampling, resume,
+                 cache_mb, backend="cpu", gpu_workers=1):
     gdal.UseExceptions()
     gdal.SetCacheMax(cache_mb * 1024 * 1024)
     srs = osr.SpatialReference()
@@ -486,6 +493,10 @@ def _init_worker(sources, tile_dir, suffix, creation_options, resampling, resume
         creation_options=creation_options,
         resampling=resampling,
         resume=resume,
+        backend=backend,
+        gpu_workers=gpu_workers,
+        device=None,      # set on first use, so a worker that never warps on
+        projections={},   # the GPU never builds a CUDA context
         datasets={},
         webp=gdal.GetDriverByName("WEBP"),
         mem=gdal.GetDriverByName("MEM"),
@@ -580,6 +591,71 @@ def _finish(accum_color: np.ndarray, accum_alpha: np.ndarray):
     return color8, alpha8
 
 
+def _warp_layer(index, west, north, span, size):
+    """One source warped onto a block, as ``(premultiplied rgb, alpha)`` in 0..1.
+
+    Premultiplied because that is what the GPU branch filters in -- averaging
+    straight colour against transparent pixels drags their colour in across a
+    sheet's edge -- and because the compositing below is simpler for it.
+
+    Dispatches to the GPU backend where the source's projection is one it
+    implements, and to GDAL otherwise, so a series can mix the two and a machine
+    with no GPU simply never takes the first branch.
+    """
+    if _worker["backend"] == "gpu" and _gpu_handles(index):
+        premultiplied = _warp_layer_gpu(index, west, north, span, size)
+        if premultiplied is None:
+            return None                      # the block misses this source
+        moved = premultiplied.cpu().numpy()
+        # The GPU works in 0..1; the composite and _finish work in 0..255 for
+        # colour (alpha stays 0..1). Missing this rendered every GPU tile
+        # near-black -- blue 220 came out as 0.86, which rounds to 1.
+        return moved[:3] * 255.0, moved[3]
+
+    warped = gdal.Warp(
+        "", _dataset(index), format="MEM",
+        outputBounds=(west, north - span, west + span, north),
+        width=size, height=size, dstSRS=_worker["mercator_wkt"],
+        dstAlpha=True, resampleAlg=_worker["resampling"],
+        errorThreshold=ERROR_THRESHOLD,
+    )
+    values = warped.ReadAsArray().astype(np.float32)
+    alpha = values[-1] / 255.0
+    straight = values[:3] if values.shape[0] >= 4 else np.repeat(values[:1], 3, axis=0)
+    return straight * alpha, alpha        # premultiplied, as the GPU branch is
+
+
+def _gpu_handles(index) -> bool:
+    """Whether the GPU backend implements this source's projection.
+
+    Cached per source: parsing WKT for every block of every tile would cost more
+    than the warp. A source it cannot handle silently uses GDAL instead.
+    """
+    from cesiumtiles import gpuwarp
+
+    known = _worker["projections"].get(index, False)
+    if known is False:
+        wkt = _dataset(index).GetProjection()
+        known = (gpuwarp.LambertConformalConic.from_wkt(wkt)
+                 if gpuwarp.supports(wkt) else None)
+        _worker["projections"][index] = known
+    return known is not None
+
+
+def _warp_layer_gpu(index, west, north, span, size):
+    """The GPU branch. ``None`` when the block does not reach this source."""
+    from cesiumtiles import gpuwarp
+
+    if _worker["device"] is None:
+        # Deferred so a worker that never warps on the GPU -- because every one
+        # of its sources fell back -- never builds a CUDA context. Each worker
+        # gets an equal slice of the card, leaving headroom for the display.
+        _worker["device"] = gpuwarp.best_device()
+        gpuwarp.limit_memory(_worker["device"], GPU_MEMORY_SHARE / _worker["gpu_workers"])
+    return gpuwarp.warp_dataset_block(_dataset(index), _worker["projections"][index],
+                                      west, north, span, size, _worker["device"])
+
+
 def _render_top(task):
     """Warp and composite one block of max-zoom tiles.
 
@@ -612,21 +688,16 @@ def _render_top(task):
     # there and stop once the block is opaque; sources beneath are hidden.
     for index, wrap in reversed(layers):
         block_west = west + wrap * 2 * MERCATOR_HALF_WORLD
-        warped = gdal.Warp(
-            "", _dataset(index), format="MEM",
-            outputBounds=(block_west, north - side * span,
-                          block_west + side * span, north),
-            width=pixels_across, height=pixels_across, dstSRS=_worker["mercator_wkt"],
-            dstAlpha=True, resampleAlg=_worker["resampling"],
-            errorThreshold=ERROR_THRESHOLD,
-        )
-        values = warped.ReadAsArray().astype(np.float32)
-        layer_alpha = values[-1] / 255.0
-        rgb = values[:3] if values.shape[0] >= 4 else np.repeat(values[:1], 3, axis=0)
+        layer = _warp_layer(index, block_west, north, side * span, pixels_across)
+        if layer is None:
+            continue
+        premultiplied_rgb, layer_alpha = layer
 
-        weight = (1.0 - alpha) * layer_alpha
-        color += weight * rgb
-        alpha += weight
+        # "under" in premultiplied space: both terms share the same (1 - alpha),
+        # so no unpremultiplying is needed and pixels with alpha 0 stay neutral.
+        remaining = 1.0 - alpha
+        color += remaining * premultiplied_rgb
+        alpha += remaining * layer_alpha
         if alpha.min() >= 1.0 - 1e-6:
             break
 
@@ -702,6 +773,7 @@ def build_mosaic(
     quality: int = 90,
     lossless: bool = False,
     resampling: str = "cubic",
+    backend: str = "gpu",
     workers: int | None = None,
     cache_mb: int = 256,
     resume: bool = False,
@@ -745,8 +817,14 @@ def build_mosaic(
             source.mask_path = str(mask_dir / f"{index}.tif")
 
     options = ["LOSSLESS=TRUE"] if lossless else [f"QUALITY={quality}"]
-    workers = workers or os.cpu_count() or 1
-    initargs = (prepared, str(tile_dir), suffix, options, resampling, resume, cache_mb)
+    if backend not in ("gpu", "cpu"):
+        raise ValueError(f"backend must be 'gpu' or 'cpu', not {backend!r}")
+    # Each worker that warps on the GPU holds a CUDA context of a few hundred
+    # MB, so a 24-wide pool would spend more VRAM on contexts than on pixels.
+    # The GPU path wants few, busy workers; the CPU path wants all the cores.
+    workers = workers or (GPU_WORKERS if backend == "gpu" else (os.cpu_count() or 1))
+    initargs = (prepared, str(tile_dir), suffix, options, resampling, resume,
+                cache_mb, backend, workers)
 
     # Masks are burnt first, in a small pool of their own, and deliberately not
     # on the render pool. GDALRasterizeLayers allocates a chunk buffer sized
