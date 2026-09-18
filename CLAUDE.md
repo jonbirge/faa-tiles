@@ -518,6 +518,7 @@ Detection lessons, each learnt from a wrong outline:
 - **Do not leave extra tilesets lying around.** The user asked for this: build a
   scratch tileset if a test needs one, then delete it in the same turn. Only
   `tileset-planning/` should persist. (An earlier `tileset-colorado/` demo outlived its
-  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~2.1 GB, 129k tiles at z11) and `tileset-ifr-low/`
-  (~1.4 GB, 240k tiles at z12, lossless, rendered from the PDFs) are
+  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~2.1 GB, 129k tiles at z11, and stale: the series now
+  says z13 and upsampled) and `tileset-ifr-low/` (**3.05 GB, 953,205 tiles at
+  z13**, lossless, from 4x PDF renders, 31.2 min at 608 tiles/s) are
   the other real products and are expected to persist too.

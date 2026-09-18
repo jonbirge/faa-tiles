@@ -26,7 +26,7 @@ tilesets you want and open the tester:
 
 ```bash
 .venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   z13, 2x upsampled
-.venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute  z13, lossless
+.venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute ~31 min, 3.0 GB (z13, lossless)
 .venv/Scripts/python scripts/build_wall_planning.py   # VFR wall planning  ~3 min, 441 MB (z11)
 .venv/Scripts/cesiumtiles-serve .                     # http://127.0.0.1:8000/
 ```
@@ -36,11 +36,11 @@ tilesets you want and open the tester:
 **Budget disk and time before the sectionals.** That build upsamples all 55
 sheets 2x first, which is ~48 GB of intermediates and ~35 minutes on an NVIDIA
 GPU (hours without one — see `requirements.txt` on the CUDA index), and z13
-tiles are roughly 34 GB on top. The IFR build downloads only ~155 MB of PDFs
-but renders 5.2 GB of intermediates at 4x, plus healed copies, before tiling.
-Measured figures for builds actually run: ~2.1 GB for the sectionals at z11
-(not upsampled) and 1.45 GB for the IFR set at z12 from 2x renders. The z13
-figures above are estimates until someone runs them.
+tiles are roughly 34 GB on top, and that build has not been run. The IFR build
+downloads only ~155 MB of PDFs but renders 5.2 GB of intermediates at 4x, plus
+healed copies, before tiling; it is measured, at 953,205 tiles / 3.05 GB in
+31 minutes. The sectionals' last actual build was ~2.1 GB at z11, before
+upsampling was part of the pipeline.
 
 Each wrapper runs its stages as separate scripts, in order: download, then any
 preparation the series needs (the IFR charts are rendered from vector PDFs and
