@@ -55,7 +55,7 @@ const HERE = new URL(".", location.href);
 // A browser page cannot list a directory, so the scan asks the server:
 //   1. tilesets.json beside this page, if there is one: a list of
 //      {"path", "name"} objects, the format cesiumtiles-serve and
-//      update_tilesets.py both write;
+//      update_tilesets.sh both write;
 //   2. otherwise the server's own directory listing of this folder, where it
 //      gives one (nginx autoindex, Apache, Caddy browse, python -m http.server).
 //      Most servers show index.html instead of a listing once it exists, which

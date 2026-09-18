@@ -1,9 +1,12 @@
 """The public site in www/: the tileset picker page and its manifest writer."""
 
-import importlib.util
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from cesiumtiles.viewer import CESIUM_VERSION
 
@@ -11,27 +14,30 @@ WWW = Path(__file__).resolve().parents[1] / "www"
 PAGE = (WWW / "index.html").read_text(encoding="utf-8")
 
 
-def _update_tilesets():
-    spec = importlib.util.spec_from_file_location("update_tilesets", WWW / "update_tilesets.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_scan_lists_subdirectories_with_metadata(tmp_path: Path):
-    (tmp_path / "b-ifr").mkdir()
-    (tmp_path / "b-ifr" / "metadata.json").write_text(json.dumps({"name": "IFR Low"}))
-    (tmp_path / "a-vfr").mkdir()
-    (tmp_path / "a-vfr" / "metadata.json").write_text(json.dumps({}))
-    (tmp_path / "broken").mkdir()
-    (tmp_path / "broken" / "metadata.json").write_text("{not json")
+def test_update_script_lists_subdirectories_with_metadata(tmp_path: Path):
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("no bash")
+    for name in ("b-ifr", "a-vfr", "with space"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "metadata.json").write_text("not parsed, only found")
     (tmp_path / "empty").mkdir()
-    (tmp_path / "metadata.json").write_text(json.dumps({"name": "root is not listed"}))
+    (tmp_path / "metadata.json").write_text("{}")        # the root is not a tileset
 
-    assert _update_tilesets().scan(tmp_path) == [
-        {"path": "./a-vfr", "name": "a-vfr"},        # no name: the directory's
-        {"path": "./b-ifr", "name": "IFR Low"},
-    ]
+    script = (WWW / "update_tilesets.sh").as_posix()
+    subprocess.run([bash, script, tmp_path.as_posix()], check=True, capture_output=True)
+
+    listing = json.loads((tmp_path / "tilesets.json").read_text(encoding="utf-8"))
+    assert listing == [{"path": f"./{n}", "name": n} for n in ("a-vfr", "b-ifr", "with space")]
+
+
+def test_update_script_writes_an_empty_list_when_there_are_no_tilesets(tmp_path: Path):
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("no bash")
+    script = (WWW / "update_tilesets.sh").as_posix()
+    subprocess.run([bash, script, tmp_path.as_posix()], check=True, capture_output=True)
+    assert json.loads((tmp_path / "tilesets.json").read_text(encoding="utf-8")) == []
 
 
 def test_page_uses_the_same_cesium_as_the_tester():

@@ -31,5 +31,5 @@ source/
 # (and under its Defender exclusion), but never committed.
 /.bench/
 
-# Written on the server by www/update_tilesets.py
+# Written on the server by www/update_tilesets.sh
 /www/tilesets.json
