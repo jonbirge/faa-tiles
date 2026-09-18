@@ -50,12 +50,26 @@ def test_page_renders_at_the_displays_full_resolution():
     assert "viewer.resolutionScale = 1.0" in PAGE
 
 
-def test_page_has_no_controls_but_tileset_buttons():
+def test_page_has_no_controls_but_tileset_buttons_and_scene_mode():
     for widget in ("animation", "baseLayerPicker", "fullscreenButton", "geocoder",
-                   "homeButton", "infoBox", "navigationHelpButton", "sceneModePicker",
+                   "homeButton", "infoBox", "navigationHelpButton",
                    "selectionIndicator", "timeline"):
         assert f"{widget}: false" in PAGE, widget
+    assert "sceneModePicker: true" in PAGE
     assert "<select" not in PAGE and "<input" not in PAGE
+
+
+def test_switching_tilesets_never_moves_the_camera():
+    # The user's call: compare charts in place, never zoom to a tileset.
+    for move in ("setView", "flyTo", "zoomTo", "flyHome"):
+        assert move not in PAGE, move
+
+
+def test_page_has_a_background_map_under_the_charts():
+    assert "World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}" in PAGE
+    # Switching removes only the chart layer, never the base map.
+    assert "viewer.imageryLayers.remove(layer, true)" in PAGE
+    assert "removeAll" not in PAGE
 
 
 def test_page_uses_the_unsnapped_extent_and_handles_the_antimeridian():

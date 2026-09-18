@@ -126,8 +126,7 @@ async function findTilesets() {
 // The imagery rectangle must be the unsnapped data extent: an edge landing
 // exactly on a tile boundary makes Cesium throw from its render loop. An extent
 // across the antimeridian (west > east) is given to the imagery as the full
-// longitude band, because UrlTemplateImageryProvider keeps only west..180 of it;
-// the camera takes the true extent.
+// longitude band, because UrlTemplateImageryProvider keeps only west..180 of it.
 
 function extentOf(meta) {
   return meta.data_bounds || meta.bounds || [-180, -85, 180, 85];
@@ -143,7 +142,7 @@ const toRectangle = (e) => Cesium.Rectangle.fromDegrees(e[0], e[1], e[2], e[3]);
 // ---- the globe -------------------------------------------------------------
 
 const viewer = new Cesium.Viewer("globe", {
-  // No controls beyond the tileset buttons.
+  // No controls beyond the tileset buttons and the 3D / 2D / Columbus picker.
   animation: false,
   baseLayerPicker: false,
   fullscreenButton: false,
@@ -151,11 +150,16 @@ const viewer = new Cesium.Viewer("globe", {
   homeButton: false,
   infoBox: false,
   navigationHelpButton: false,
-  sceneModePicker: false,
+  sceneModePicker: true,
   selectionIndicator: false,
   timeline: false,
-  // No Ion token: the chart tiles are the only imagery, over plain ellipsoid.
-  baseLayer: false,
+  // No Ion token. The rest of the earth is Esri's Light Gray Canvas, fetched
+  // straight from its public tile service, under the chart layer.
+  baseLayer: new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({
+    url: "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    maximumLevel: 16,
+    credit: new Cesium.Credit("Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community", false),
+  })),
 });
 viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#10131a");
 // Cesium otherwise renders at CSS pixels, ignoring devicePixelRatio, so a 2x
@@ -166,7 +170,8 @@ window.viewer = viewer;
 
 let layer = null;
 
-function show(tileset, { moveCamera }) {
+// Switching charts never moves the camera, so two can be compared in place.
+function show(tileset) {
   const meta = tileset.meta;
   const provider = new Cesium.UrlTemplateImageryProvider({
     url: tileset.template,
@@ -184,7 +189,6 @@ function show(tileset, { moveCamera }) {
   if (layer) viewer.imageryLayers.remove(layer, true);
   layer = new Cesium.ImageryLayer(provider);
   viewer.imageryLayers.add(layer);
-  if (moveCamera) viewer.camera.setView({ destination: toRectangle(extentOf(meta)) });
 
   for (const button of document.querySelectorAll("#tilesets button")) {
     button.setAttribute("aria-pressed", String(button.dataset.key === tileset.key));
@@ -209,11 +213,11 @@ function show(tileset, { moveCamera }) {
     button.textContent = tileset.label;
     button.dataset.key = tileset.key;
     button.setAttribute("aria-pressed", "false");
-    button.addEventListener("click", () => show(tileset, { moveCamera: true }));
+    button.addEventListener("click", () => show(tileset));
     nav.append(button);
   }
   const wanted = decodeURIComponent(location.hash.slice(1));
-  show(tilesets.find((t) => t.key === wanted) || tilesets[0], { moveCamera: true });
+  show(tilesets.find((t) => t.key === wanted) || tilesets[0]);
 })();
 </script>
 </body>
