@@ -32,6 +32,7 @@ Only the max zoom is rendered here. Lower zooms are built from it afterwards.
 
 from __future__ import annotations
 
+import functools
 import math
 import os
 import queue
@@ -70,6 +71,9 @@ BATCH = 128
 ENCODE_QUEUE = 2048
 # GPU batches allowed to wait for the dispatcher (~33 MB each).
 HANDOFF_QUEUE = 8
+# Pinned buffers finished tiles are copied into (~33 MB each). Enough to cover
+# batches waiting for the dispatcher plus tiles queued for the encoders.
+OUT_BUFFERS = HANDOFF_QUEUE + ENCODE_QUEUE // BATCH + 4
 
 # Full-resolution rows per decode task, and how many decode at once.
 READ_ROWS = 1024
@@ -149,7 +153,7 @@ class _Encoder:
         self.errors: list[BaseException] = []
         self.waited = 0.0   # seconds the main thread spent blocked on a full queue
 
-    def _run(self, x, y, pixels):
+    def _run(self, x, y, pixels, done):
         try:
             self.write_pixels(self.tile_path(x, y), pixels, self.options)
             with self.lock:
@@ -158,20 +162,74 @@ class _Encoder:
             self.errors.append(exc)
         finally:
             self.slots.release()
+            if done is not None:
+                done()
 
-    def submit(self, x, y, pixels: np.ndarray) -> None:
-        """Queue one ``(H, W, 4)`` straight uint8 tile for encoding."""
+    def submit(self, x, y, pixels: np.ndarray, done=None) -> None:
+        """Queue one ``(H, W, 4)`` straight uint8 tile for encoding; ``done`` is
+        called once it has been written (or has failed)."""
         if self.errors:
             raise self.errors[0]
         started = time.perf_counter()
         self.slots.acquire()
         self.waited += time.perf_counter() - started
-        self.pool.submit(self._run, x, y, pixels)
+        self.pool.submit(self._run, x, y, pixels, done)
 
     def close(self) -> None:
         self.pool.shutdown(wait=True)
         if self.errors:
             raise self.errors[0]
+
+
+class _PinnedPool:
+    """Page-locked host buffers that finished tiles are copied into.
+
+    A copy from the GPU into ordinary (pageable) memory is not really
+    asynchronous: the driver stages it through a hidden pinned buffer with a CPU
+    memcpy, blocking the thread that asked. Profiling one sheet's z13 pass put
+    52% of the main thread's time in exactly that. Copies into these buffers are
+    DMA the main thread does not wait for; the dispatcher waits on the copy's
+    CUDA event instead, and a buffer returns to the pool once every tile read
+    from it has been encoded. ``acquire`` blocking is the backpressure.
+    """
+
+    def __init__(self, count: int, shape, pinned: bool):
+        self.buffers = [torch.empty(shape, dtype=torch.uint8, pin_memory=pinned)
+                        for _ in range(count)]
+        self.flags = [torch.empty((shape[0],), dtype=torch.bool, pin_memory=pinned)
+                      for _ in range(count)]
+        self.free: queue.Queue = queue.Queue()
+        for slot in range(count):
+            self.free.put(slot)
+        self.refs = [0] * count
+        self.lock = threading.Lock()
+
+    def acquire(self, failed=lambda: None) -> int:
+        """A free buffer, waiting for one if need be. ``failed`` is polled while
+        waiting and should return an exception if the consumer has died -- its
+        buffers would then never come back, and this would wait forever."""
+        while True:
+            try:
+                return self.free.get(timeout=1.0)
+            except queue.Empty:
+                error = failed()
+                if error is not None:
+                    raise error
+
+    def hold(self, slot: int, count: int) -> None:
+        """Mark ``count`` tiles as reading from ``slot``; free it if none do."""
+        if count == 0:
+            self.free.put(slot)
+            return
+        with self.lock:
+            self.refs[slot] = count
+
+    def release(self, slot: int) -> None:
+        with self.lock:
+            self.refs[slot] -= 1
+            finished = self.refs[slot] == 0
+        if finished:
+            self.free.put(slot)
 
 
 def _unpremultiply_uint8(premultiplied: torch.Tensor) -> torch.Tensor:
@@ -296,6 +354,7 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
     # One thread that runs a whole chunk's decode (itself fanned out over the
     # readers) ahead of the main thread.
     prefetcher = ThreadPoolExecutor(1, thread_name_prefix="prefetch")
+    tile_dir.mkdir(parents=True, exist_ok=True)
     spill = Path(tempfile.mkdtemp(prefix=".partials-", dir=tile_dir))
     partials = _Partials(spill)
     mercator = osr.SpatialReference()
@@ -336,6 +395,8 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
     # feeding the encoders -- alongside it. Done on the main thread, that
     # bookkeeping cost ~15 s of a 50 s pass on two sheets.
     sheets_per_tile = {key: count for key, count in remaining.items()}
+    cuda = device.startswith("cuda")
+    out_pool = _PinnedPool(OUT_BUFFERS, (BATCH, TILE, TILE, 4), pinned=cuda)
     handoff: queue.Queue = queue.Queue(maxsize=HANDOFF_QUEUE)
     dispatch_errors: list[BaseException] = []
 
@@ -345,14 +406,23 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                 item = handoff.get()
                 if item is None:
                     return
+                single_keys, slot, copied, multi_keys, layers = item
+                if copied is not None:
+                    copied.synchronize()          # the DMA into the pinned buffer
                 busy_from = time.perf_counter()
-                single_keys, finished, alive, multi_keys, layers = item
-                for j, key in enumerate(single_keys):
-                    remaining[key] = 0
-                    state["done"] += 1
-                    if not alive[j]:
-                        continue                  # nothing of this sheet here
-                    encoder.submit(key[0], key[1], finished[j])
+                if single_keys:
+                    count = len(single_keys)
+                    finished = out_pool.buffers[slot][:count].numpy()
+                    alive = out_pool.flags[slot][:count].numpy()
+                    live = [j for j in range(count) if alive[j]]
+                    out_pool.hold(slot, len(live))
+                    release = functools.partial(out_pool.release, slot)
+                    for key in single_keys:
+                        remaining[key] = 0
+                    state["done"] += count
+                    for j in live:                # the rest have nothing of this sheet
+                        key = single_keys[j]
+                        encoder.submit(key[0], key[1], finished[j], release)
                 for j, key in enumerate(multi_keys):
                     layer = layers[j].astype(np.float32)
                     if key in partials:
@@ -388,15 +458,24 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
             raise dispatch_errors[0]
         single = [i for i, k in enumerate(keys) if sheets_per_tile[k] == 1]
         multi = [i for i, k in enumerate(keys) if sheets_per_tile[k] > 1]
-        finished = alive = None
+        slot = copied = None
         if single:
             straight = _unpremultiply_uint8(contributions[single])        # B,4,H,W
+            slot = out_pool.acquire(lambda: dispatch_errors[0] if dispatch_errors else None)
+            count = len(single)
+            # Into pinned memory by DMA; the main thread moves on at once.
+            out_pool.buffers[slot][:count].copy_(straight.permute(0, 2, 3, 1),
+                                                 non_blocking=True)
             # Decided on the GPU, so the dispatcher does not scan every tile.
-            alive = (straight[:, 3].amax(dim=(1, 2)) > 0).cpu().numpy()
-            finished = straight.permute(0, 2, 3, 1).contiguous().cpu().numpy()
+            out_pool.flags[slot][:count].copy_(straight[:, 3].amax(dim=(1, 2)) > 0,
+                                               non_blocking=True)
+            if cuda:
+                copied = torch.cuda.Event()
+                copied.record()
+        # Seam tiles are few; they take the simple, blocking path.
         layers = (contributions[multi].to(torch.float16).cpu().numpy()
                   if multi else None)
-        handoff.put(([keys[i] for i in single], finished, alive,
+        handoff.put(([keys[i] for i in single], slot, copied,
                      [keys[i] for i in multi], layers))
 
     try:
