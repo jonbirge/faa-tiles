@@ -14,6 +14,10 @@ pillow>=12
 # Rasterising the FAA's vector PDFs (scripts/render_pdfs.py,
 # scripts/detect_pdf_windows.py), which is how the IFR sheets are drawn.
 pypdfium2>=5.13
+# Decoding tiles back for the GPU pyramid (cesiumtiles/gpumosaic.py). Opening
+# each 256 px tile as a GDAL dataset cost more than decoding it and serialised
+# threads; imagecodecs decodes straight from bytes, ~20x faster on 22 threads.
+imagecodecs>=2026.8
 
 # Super-resolution upsampling (scripts/upsample.py and upsample_charts.py).
 #

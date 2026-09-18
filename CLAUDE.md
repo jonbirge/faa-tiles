@@ -43,7 +43,9 @@ venv; it has been run against an existing venv, not from a truly fresh clone.
 
 ## Environment
 
-- Windows 11, **Python 3.14.7**, venv at `.venv/`. 24 cores and an
+- Windows 11, **Python 3.14.7**, venv at `.venv/`. An **i7-14700KF: 20 physical
+  cores, 28 logical** -- 8 hyperthreaded P-cores plus 12 E-cores, so thread
+  scaling is uneven and "24 cores" (the old note) was wrong -- and an
   **RTX 4070 SUPER, 12 GB** — `nvidia-smi` settles the earlier confusion
   between a "5070 Ti Laptop" and a "4070 Ti". It is Ada (sm_89), so **cu126**,
   not cu128: cu128 is for Blackwell and trails a torch release besides.
@@ -499,14 +501,13 @@ lost to the CPU, and the user laid out the architecture that works:
   tiles finish on the GPU; seam tiles wait as partials until their last sheet,
   then composite and encode **once**.
 - **Pyramid (`gpumosaic.render_overviews`)**: children decoded on threads with
-  **GDAL** (it releases the GIL; Pillow's WebP decode does not -- ~4,600 vs
-  ~2,300 tiles/s), the premultiplied 2x2 average batched on the GPU. That
+  **imagecodecs** (see below), the premultiplied 2x2 average batched on the GPU. That
   average, not the codecs, was 60% of a parent's cost in numpy.
 - **Encoding is on 22 threads in-process** (`mosaic.write_tile`), no pickling.
 - **Lossless WebP uses `METHOD=2`** (`core.LOSSLESS_WEBP`): in lossless mode
   METHOD only sets effort, round trips are bit-exact (tested), and it encodes
   2x as fast as GDAL's default at no size cost. It helps both backends.
-- **Measured, L-27 + L-28 (60k tiles, z0-z13):** CPU 2.0 min, GPU 1.3 min. z13
+- **Measured, L-27 + L-28 (60k tiles, z0-z13):** CPU 2.0 min, GPU 1.0 min. z13
   alone: CPU 557 tiles/s, GPU ~1,200-1,290. Output matches: 98% of z13 pixels
   identical, p99 difference 2, tile counts equal at every level.
 - **The filter is isotropic, and that is correct**, not a shortcut: LCC and Web
@@ -538,10 +539,18 @@ Things that have already bitten here:
   made every tile "differ". GDAL and Pillow in fact decode our tiles
   identically (3,000 checked). Test the checker against a known-good control.
 
-What bounds it now: at z13 the dispatcher is blocked on encoders; in the
-pyramid, per-tile Python overhead under the GIL (one process). Going further
-means worker processes exchanging tiles through shared memory, or a
-free-threaded Python.
+- **Decoding tiles uses imagecodecs, not GDAL.** Opening a 256 px WebP as a
+  GDAL dataset costs far more than decoding it and serialises threads (GIL or
+  GDAL's own open-path locks): GDAL decoded 720/s on 1 thread and *fell* to
+  940/s on 22; processes reached ~4,400/s. `imagecodecs.webp_decode` on the
+  file's bytes does 6,300/s on 1 thread and ~18,700/s on 22, pixel-identical.
+  That took the pyramid from 536 to 865 tiles/s. **Encoding was measured the
+  same way and is *not* lock-bound** -- threads beat processes -- so it stays
+  on GDAL; imagecodecs encodes ~28% faster, a possible later step.
+- Measure threads against processes before blaming the GIL. It was wrongly
+  blamed for encoding here, and the real lock was specific to opening files.
+
+Two IFR sheets, z0-z13: **CPU 2.0 min, GPU 1.0 min**.
 
 ## Repo hygiene
 

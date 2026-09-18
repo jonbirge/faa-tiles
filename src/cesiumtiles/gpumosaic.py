@@ -569,20 +569,26 @@ def _decode_children(tile_dir: Path, z: int, parents, readers: ThreadPoolExecuto
     """``(P, 2, 2, 256, 256, 4)`` straight uint8 children; zeros where one is
     missing, which is what the CPU cascade treats it as too.
 
-    Decoded with GDAL, not Pillow: GDAL releases the GIL, Pillow's WebP decode
-    does not. Measured on z13 IFR tiles: Pillow peaked at ~2,300 tiles/s however
-    many threads, GDAL reached ~4,600 on 8. The two decode identically (checked
-    on 3,000 tiles). An opaque tile is stored as RGB, so alpha is filled in.
+    Decoded with imagecodecs straight from the file's bytes. Opening each tile
+    as a GDAL dataset cost far more than decoding it and serialised the threads:
+    measured on z13 IFR tiles, GDAL managed 720/s on one thread and *fell* to
+    940/s on 22, while imagecodecs does 6,300/s on one and ~18,700/s on 22 --
+    with identical pixels (500 of 500 checked). Pillow holds the GIL outright.
+    An opaque tile is stored as RGB, so its alpha is filled in.
     """
+    import imagecodecs
+
     out = np.zeros((len(parents), 2, 2, TILE, TILE, 4), np.uint8)
 
     def load(job):
         i, dy, dx, path = job
-        if not path.exists():
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError:
             return
-        bands = gdal.Open(str(path)).ReadAsArray()
-        out[i, dy, dx, :, :, :bands.shape[0]] = bands.transpose(1, 2, 0)
-        if bands.shape[0] == 3:
+        pixels = imagecodecs.webp_decode(data)
+        out[i, dy, dx, :, :, :pixels.shape[2]] = pixels
+        if pixels.shape[2] == 3:
             out[i, dy, dx, :, :, 3] = 255
 
     jobs = [(i, dy, dx, tile_dir / str(z + 1) / str(2 * x + dx) / f"{2 * y + dy}.webp")
