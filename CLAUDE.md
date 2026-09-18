@@ -341,8 +341,9 @@ holding detail: IFR renders from vector at 4x reach z14; the sectionals are
 the upsampled sheets for ~4x the tiles; the planning chart is native ~z9.9
 upsampled, z11 being one level past by choice. **Match max_zoom to the
 prepared source's resolution** -- the IFR sheets went a build at z13 from 2x
-renders, magnifying, before that was noticed. The z12 sectionals have not been
-built: ~8.5 GB of tiles (estimate) on top of ~48 GB of upsampled sheets.
+renders, magnifying, before that was noticed. The z12 sectionals were built on
+2026-09-18: **508,529 tiles / 5.30 GB** (the estimate was ~8.5 GB), 52.0 min
+upsampling on the GPU plus 26.3 min tiling on the CPU warp.
 **WebP q90**,
 **overlaps by file name, later on top** (an acknowledged placeholder), map areas
 **detected once, reviewed, committed** as `scripts/sectionals_areas.json`, and
@@ -677,7 +678,7 @@ were checked against the real tilesets.
 - **Do not leave extra tilesets lying around.** The user asked for this: build a
   scratch tileset if a test needs one, then delete it in the same turn. Only
   `tileset-planning/` should persist. (An earlier `tileset-colorado/` demo outlived its
-  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (~2.1 GB, 129k tiles at z11, and stale: the series now
-  says z13 and upsampled) and `tileset-ifr-low/` (**3.05 GB, 953,205 tiles at
+  usefulness and had to be cleaned up by hand.) `tileset-sectionals/` (**5.30 GB, 508,529 tiles at
+  z12**, upsampled 2x, WebP q90) and `tileset-ifr-low/` (**3.05 GB, 953,205 tiles at
   z13**, lossless, from 4x PDF renders, 31.2 min at 608 tiles/s) are
   the other real products and are expected to persist too.
