@@ -525,3 +525,29 @@ def test_tileset_contains_no_viewer(tmp_path, source):
     result = build_tileset(source, tmp_path / "out", quiet=True)
     assert not (result.output_dir / "index.html").exists()
     assert sorted(p.name for p in result.output_dir.iterdir()) == ["metadata.json", "tiles"]
+
+
+def test_lossless_webp_settings_round_trip_exactly(tmp_path):
+    """METHOD=2 was chosen because it encodes twice as fast as GDAL's default
+    at no size cost. That is only acceptable because lossless stays lossless:
+    decode must give back every pixel exactly."""
+    from PIL import Image
+    from osgeo import gdal
+    from cesiumtiles.core import LOSSLESS_WEBP
+
+    rng = np.random.default_rng(9)
+    # Chart-like: flat regions, hard edges, and a stretch of noise.
+    rgba = np.full((256, 256, 4), 255, np.uint8)
+    rgba[40:90, :, :3] = (30, 60, 220)
+    rgba[:, 120:124, :3] = 0
+    rgba[180:230, 20:120, :3] = rng.integers(0, 256, (50, 100, 3), dtype=np.uint8)
+    rgba[:, 240:, 3] = 0
+    mem = gdal.GetDriverByName("MEM").Create("", 256, 256, 4, gdal.GDT_Byte)
+    for band in range(4):
+        mem.GetRasterBand(band + 1).WriteArray(rgba[:, :, band])
+    path = tmp_path / "t.webp"
+    gdal.GetDriverByName("WEBP").CreateCopy(str(path), mem, options=LOSSLESS_WEBP)
+    back = np.asarray(Image.open(path).convert("RGBA"))
+    visible = rgba[:, :, 3] > 0
+    assert np.array_equal(back[visible], rgba[visible])
+    assert np.array_equal(back[:, :, 3], rgba[:, :, 3])

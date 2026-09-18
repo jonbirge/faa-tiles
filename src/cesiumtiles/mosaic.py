@@ -42,7 +42,7 @@ from xml.sax.saxutils import escape
 import numpy as np
 from osgeo import gdal, ogr, osr
 
-from cesiumtiles.core import TileBuildError, TilesetResult, _scan_tiles
+from cesiumtiles.core import TileBuildError, TilesetResult, _scan_tiles, webp_options
 from cesiumtiles.scheme import MERCATOR_HALF_WORLD, WEB_MERCATOR
 
 gdal.UseExceptions()
@@ -64,12 +64,6 @@ TILE_SIZE = 256
 # sheets, so they get their own narrow pool and a small cache.
 MASK_WORKERS = 4
 MASK_CACHE_MB = 64
-
-# Workers when warping on the GPU (see build_mosaic), and the share of the
-# card they may use between them; the rest is left for the display and CUDA's
-# own contexts. Past its slice a worker raises rather than spilling into RAM.
-GPU_WORKERS = 2
-GPU_MEMORY_SHARE = 0.7
 
 # Max-zoom tiles are warped a square block at a time, not one at a time. Almost
 # all of a per-tile warp is per-call overhead -- building a PROJ transformer,
@@ -480,8 +474,7 @@ def plan_tiles(prepared: Sequence[PreparedSource], z: int) -> dict[tuple[int, in
 _worker: dict = {}
 
 
-def _init_worker(sources, tile_dir, suffix, creation_options, resampling, resume,
-                 cache_mb, backend="cpu", gpu_workers=1):
+def _init_worker(sources, tile_dir, suffix, creation_options, resampling, resume, cache_mb):
     gdal.UseExceptions()
     gdal.SetCacheMax(cache_mb * 1024 * 1024)
     srs = osr.SpatialReference()
@@ -493,10 +486,6 @@ def _init_worker(sources, tile_dir, suffix, creation_options, resampling, resume
         creation_options=creation_options,
         resampling=resampling,
         resume=resume,
-        backend=backend,
-        gpu_workers=gpu_workers,
-        device=None,      # set on first use, so a worker that never warps on
-        projections={},   # the GPU never builds a CUDA context
         datasets={},
         webp=gdal.GetDriverByName("WEBP"),
         mem=gdal.GetDriverByName("MEM"),
@@ -538,17 +527,27 @@ def _tile_path(z: int, x: int, y: int) -> Path:
 
 
 def _dataset(index: int):
-    """The source as a VRT: palette expanded to RGB, so resampling blends colours
-    rather than indices; CRS re-based on WGS84 (see ``_wgs84_based``); and, if it
-    has a map area, the mask attached as an alpha band, which the warp honours."""
+    """The worker's cached view of source ``index`` (see :func:`source_view`)."""
     cached = _worker["datasets"].get(index)
     if cached is not None:
         return cached
-    source = _worker["sources"][index]
+    vrt_path = f"/vsimem/mosaic/{os.getpid()}/{index}.vrt"
+    view = gdal.Open(source_view(_worker["sources"][index], vrt_path))
+    _worker["datasets"][index] = view
+    return view
+
+
+def source_view(source: PreparedSource, vrt_path: str) -> str:
+    """Write the VRT a source is read through, and return its path.
+
+    Palette expanded to RGB, so resampling blends colours rather than indices;
+    CRS re-based on WGS84 (see ``_wgs84_based``); and, if it has a map area, the
+    mask attached as an alpha band, which the warp honours. Both warp backends
+    read through this, so they see identical pixels.
+    """
     base = gdal.Open(source.path)
     band = base.GetRasterBand(1)
     expand = "rgb" if base.RasterCount == 1 and band.GetColorTable() is not None else None
-    vrt_path = f"/vsimem/mosaic/{os.getpid()}/{index}.vrt"
     gdal.Translate(vrt_path, base, format="VRT", rgbExpand=expand,
                    outputSRS=_wgs84_based(base.GetProjection()))
     if source.mask_path:
@@ -564,22 +563,30 @@ def _dataset(index: int):
         )
         vrt.FlushCache()
         del vrt
-    view = gdal.Open(vrt_path)
-    _worker["datasets"][index] = view
-    return view
+    return vrt_path
 
 
 def _write_tile(path: Path, color: np.ndarray, alpha: np.ndarray) -> None:
+    write_tile(path, color, alpha, _worker["creation_options"])
+
+
+def write_tile(path: Path, color: np.ndarray, alpha: np.ndarray, creation_options) -> None:
+    """Encode one tile, RGB if it is fully opaque and RGBA otherwise.
+
+    Safe to call from many threads at once: nothing is shared, and GDAL releases
+    the GIL while encoding, which is how the GPU pipeline gets ~1,300 tiles/s
+    out of 22 threads in one process without pickling tiles between processes.
+    """
     opaque = bool(alpha.min() == 255)
     bands = 3 if opaque else 4
-    mem = _worker["mem"].Create("", TILE_SIZE, TILE_SIZE, bands, gdal.GDT_Byte)
+    mem = gdal.GetDriverByName("MEM").Create("", TILE_SIZE, TILE_SIZE, bands, gdal.GDT_Byte)
     for b in range(3):
         mem.GetRasterBand(b + 1).WriteArray(color[b])
     if not opaque:
         mem.GetRasterBand(4).WriteArray(alpha)
     path.parent.mkdir(parents=True, exist_ok=True)
     part = path.with_name(path.name + ".part")
-    _worker["webp"].CreateCopy(str(part), mem, options=_worker["creation_options"])
+    gdal.GetDriverByName("WEBP").CreateCopy(str(part), mem, options=creation_options)
     os.replace(part, path)
 
 
@@ -592,26 +599,9 @@ def _finish(accum_color: np.ndarray, accum_alpha: np.ndarray):
 
 
 def _warp_layer(index, west, north, span, size):
-    """One source warped onto a block, as ``(premultiplied rgb, alpha)`` in 0..1.
-
-    Premultiplied because that is what the GPU branch filters in -- averaging
-    straight colour against transparent pixels drags their colour in across a
-    sheet's edge -- and because the compositing below is simpler for it.
-
-    Dispatches to the GPU backend where the source's projection is one it
-    implements, and to GDAL otherwise, so a series can mix the two and a machine
-    with no GPU simply never takes the first branch.
-    """
-    if _worker["backend"] == "gpu" and _gpu_handles(index):
-        premultiplied = _warp_layer_gpu(index, west, north, span, size)
-        if premultiplied is None:
-            return None                      # the block misses this source
-        moved = premultiplied.cpu().numpy()
-        # The GPU works in 0..1; the composite and _finish work in 0..255 for
-        # colour (alpha stays 0..1). Missing this rendered every GPU tile
-        # near-black -- blue 220 came out as 0.86, which rounds to 1.
-        return moved[:3] * 255.0, moved[3]
-
+    """One source warped onto a block with GDAL, as ``(premultiplied rgb, alpha)``,
+    colour in 0..255 and alpha in 0..1. The CPU backend's warp; the GPU backend
+    is :mod:`cesiumtiles.gpumosaic`, which replaces the whole max-zoom pass."""
     warped = gdal.Warp(
         "", _dataset(index), format="MEM",
         outputBounds=(west, north - span, west + span, north),
@@ -622,38 +612,7 @@ def _warp_layer(index, west, north, span, size):
     values = warped.ReadAsArray().astype(np.float32)
     alpha = values[-1] / 255.0
     straight = values[:3] if values.shape[0] >= 4 else np.repeat(values[:1], 3, axis=0)
-    return straight * alpha, alpha        # premultiplied, as the GPU branch is
-
-
-def _gpu_handles(index) -> bool:
-    """Whether the GPU backend implements this source's projection.
-
-    Cached per source: parsing WKT for every block of every tile would cost more
-    than the warp. A source it cannot handle silently uses GDAL instead.
-    """
-    from cesiumtiles import gpuwarp
-
-    known = _worker["projections"].get(index, False)
-    if known is False:
-        wkt = _dataset(index).GetProjection()
-        known = (gpuwarp.LambertConformalConic.from_wkt(wkt)
-                 if gpuwarp.supports(wkt) else None)
-        _worker["projections"][index] = known
-    return known is not None
-
-
-def _warp_layer_gpu(index, west, north, span, size):
-    """The GPU branch. ``None`` when the block does not reach this source."""
-    from cesiumtiles import gpuwarp
-
-    if _worker["device"] is None:
-        # Deferred so a worker that never warps on the GPU -- because every one
-        # of its sources fell back -- never builds a CUDA context. Each worker
-        # gets an equal slice of the card, leaving headroom for the display.
-        _worker["device"] = gpuwarp.best_device()
-        gpuwarp.limit_memory(_worker["device"], GPU_MEMORY_SHARE / _worker["gpu_workers"])
-    return gpuwarp.warp_dataset_block(_dataset(index), _worker["projections"][index],
-                                      west, north, span, size, _worker["device"])
+    return straight * alpha, alpha
 
 
 def _render_top(task):
@@ -745,6 +704,24 @@ def _render_parent(task):
 
 # -- driver -----------------------------------------------------------------
 
+def _render_top_cpu(pool, plan, top, quiet):
+    """The CPU backend's max-zoom pass: blocks of tiles on the worker pool."""
+    # Group the planned tiles into square blocks, which is the unit the warp
+    # works in. A block holds only the tiles actually planned, so a ragged edge
+    # of coverage costs nothing extra.
+    grouped: dict[tuple[int, int], dict] = {}
+    for x, y in sorted(plan):
+        key = (x - x % BLOCK_TILES, y - y % BLOCK_TILES)
+        grouped.setdefault(key, {})[(x, y)] = plan[(x, y)]
+    tasks = [(top, bx, by, cells) for (bx, by), cells in sorted(grouped.items())]
+    progress = _Progress(f"z{top}", len(plan), quiet)
+    written = set()
+    for planned, done in pool.imap_unordered(_render_top, tasks, chunksize=1):
+        written.update(done)
+        progress.step(planned)   # count tiles, not blocks
+    return written
+
+
 class _Progress:
     def __init__(self, label: str, total: int, quiet: bool, every: float = 10.0):
         self.label, self.total, self.quiet, self.every = label, total, quiet, every
@@ -816,15 +793,11 @@ def build_mosaic(
         if source.pixel_area_wkt is not None:
             source.mask_path = str(mask_dir / f"{index}.tif")
 
-    options = ["LOSSLESS=TRUE"] if lossless else [f"QUALITY={quality}"]
+    options = webp_options(lossless, quality)
     if backend not in ("gpu", "cpu"):
         raise ValueError(f"backend must be 'gpu' or 'cpu', not {backend!r}")
-    # Each worker that warps on the GPU holds a CUDA context of a few hundred
-    # MB, so a 24-wide pool would spend more VRAM on contexts than on pixels.
-    # The GPU path wants few, busy workers; the CPU path wants all the cores.
-    workers = workers or (GPU_WORKERS if backend == "gpu" else (os.cpu_count() or 1))
-    initargs = (prepared, str(tile_dir), suffix, options, resampling, resume,
-                cache_mb, backend, workers)
+    workers = workers or os.cpu_count() or 1
+    initargs = (prepared, str(tile_dir), suffix, options, resampling, resume, cache_mb)
 
     # Masks are burnt first, in a small pool of their own, and deliberately not
     # on the render pool. GDALRasterizeLayers allocates a chunk buffer sized
@@ -842,20 +815,18 @@ def build_mosaic(
                 progress.step()
 
     try:
+        if backend == "gpu":
+            # The max zoom is rendered in this process, a sheet at a time (see
+            # gpumosaic); only the overview cascade below uses worker processes,
+            # and it gets all the cores rather than a GPU-sized pool.
+            from cesiumtiles import gpumosaic
+
+            written = gpumosaic.render_top(
+                prepared, plan, top, tile_dir, options, resume=resume,
+                resampling=resampling, say=say, quiet=quiet)
         with mp.get_context("spawn").Pool(workers, _init_worker, initargs) as pool:
-            # Group the planned tiles into square blocks, which is the unit the
-            # warp works in. A block holds only the tiles actually planned, so
-            # a ragged edge of coverage costs nothing extra.
-            grouped: dict[tuple[int, int], dict] = {}
-            for x, y in sorted(plan):
-                key = (x - x % BLOCK_TILES, y - y % BLOCK_TILES)
-                grouped.setdefault(key, {})[(x, y)] = plan[(x, y)]
-            tasks = [(top, bx, by, cells) for (bx, by), cells in sorted(grouped.items())]
-            progress = _Progress(f"z{top}", len(plan), quiet)
-            written = set()
-            for planned, done in pool.imap_unordered(_render_top, tasks, chunksize=1):
-                written.update(done)
-                progress.step(planned)   # count tiles, not blocks
+            if backend == "cpu":
+                written = _render_top_cpu(pool, plan, top, quiet)
 
             for z in range(top - 1, min_zoom - 1, -1):
                 parents = sorted({(x >> 1, y >> 1) for x, y in written})

@@ -167,9 +167,22 @@ def _scan_tiles(tile_dir: Path, suffix: str):
     return per_zoom, total_bytes, extent_by_zoom
 
 
+# Lossless WebP settings. In lossless mode libwebp's QUALITY and METHOD set
+# compression *effort*; the pixels come back bit-exact either way. GDAL defaults
+# to METHOD=4. Measured on 256 random z13 IFR tiles with 22 encoder threads:
+# METHOD=4 1,356 tiles/s at 2.29 KB, METHOD=2 2,715 tiles/s at 2.24 KB -- twice
+# as fast and no larger, which matters because encoding is what bounds a build.
+LOSSLESS_WEBP = ["LOSSLESS=TRUE", "METHOD=2"]
+
+
+def webp_options(lossless: bool, quality: int) -> list[str]:
+    """WebP creation options, shared by every tile writer in the package."""
+    return list(LOSSLESS_WEBP) if lossless else [f"QUALITY={quality}"]
+
+
 def _creation_options(driver: str, lossless: bool, quality: int) -> list[str]:
     if driver == "WEBP":
-        return ["LOSSLESS=TRUE"] if lossless else [f"QUALITY={quality}"]
+        return webp_options(lossless, quality)
     if driver == "PNG":
         return ["ZLEVEL=9"]
     if driver == "JPEG":

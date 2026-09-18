@@ -40,7 +40,7 @@ import torch.nn.functional as F
 __all__ = [
     "LambertConformalConic", "WindowTooLarge", "best_device", "footprint_scale",
     "limit_memory", "mercator_to_lonlat", "mip_factor", "prefilter",
-    "source_pixels", "supports", "warp_block", "warp_dataset_block",
+    "source_pixels", "source_pixels_batch", "supports", "warp_block", "warp_dataset_block",
 ]
 
 
@@ -197,6 +197,27 @@ def source_pixels(lcc: "LambertConformalConic", inverse_geotransform, west: floa
     column = a + b * east_m + c * north_m
     row = d + e * east_m + f * north_m
     return torch.stack((column, row), dim=-1)
+
+
+def source_pixels_batch(lcc: "LambertConformalConic", inverse_geotransform,
+                        wests: torch.Tensor, norths: torch.Tensor, span: float,
+                        size: int, dtype: torch.dtype = torch.float64) -> torch.Tensor:
+    """:func:`source_pixels` for many same-sized blocks at once.
+
+    ``wests`` and ``norths`` are ``(B,)`` on the target device. Returns
+    ``(B, size, size, 2)``. One call per batch rather than per tile is what lets
+    the GPU be busy: a single 256 px tile is far too little work to launch.
+    """
+    device = wests.device
+    step = span / size
+    centres = (torch.arange(size, device=device, dtype=dtype) + 0.5) * step
+    x = wests.to(dtype)[:, None, None] + centres[None, None, :]
+    y = norths.to(dtype)[:, None, None] - centres[None, :, None]
+    x, y = torch.broadcast_tensors(x, y)
+    lon, lat = mercator_to_lonlat(x, y)
+    east_m, north_m = lcc.forward(lon, lat)
+    a, b, c, d, e, f = (float(v) for v in inverse_geotransform)
+    return torch.stack((a + b * east_m + c * north_m, d + e * east_m + f * north_m), dim=-1)
 
 
 def footprint_scale(coords: torch.Tensor) -> float:
