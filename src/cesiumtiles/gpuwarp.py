@@ -220,6 +220,48 @@ def source_pixels_batch(lcc: "LambertConformalConic", inverse_geotransform,
     return torch.stack((a + b * east_m + c * north_m, d + e * east_m + f * north_m), dim=-1)
 
 
+# Spacing, in destination pixels, of the lattice where the projection is
+# evaluated exactly; everything between is interpolated. See sampling_grid.
+LATTICE_STEP = 16
+
+
+def sampling_grid(lcc: "LambertConformalConic", inverse_geotransform,
+                  wests: torch.Tensor, norths: torch.Tensor, span: float, size: int,
+                  origin: tuple[float, float], factor: int, extent: tuple[int, int],
+                  step: int = LATTICE_STEP) -> torch.Tensor:
+    """``grid_sample`` grids for ``(B,)`` blocks of ``size`` px, as float32
+    ``(B, size, size, 2)`` in normalised units over a window of ``extent``
+    mip-level pixels whose top-left is ``origin`` in full-resolution pixels.
+
+    The projection is evaluated exactly, in float64, only every ``step`` px, and
+    bilinearly interpolated in float32 between. This GPU runs float64 at ~1/64
+    of its float32 rate and the projection is all transcendentals: evaluating
+    it at every pixel took 21.8 ms per 128 tiles, against 2.2 ms this way.
+    Measured on ENR_L24 (rotated 90 degrees) against the per-pixel result, the
+    worst error is 1.2e-4 source px -- ~1,000x inside GDAL's default 0.125 px
+    tolerance, and below the ~5e-4 px float32 already rounds these coordinates
+    to on their way into grid_sample, so in practice it adds nothing.
+    """
+    device = wests.device
+    lattice = size // step + 1
+    # Lattice points sit on pixel centres 0.5, step + 0.5, ... size + 0.5.
+    at = torch.arange(lattice, device=device, dtype=torch.float64) * step + 0.5
+    x = wests.to(torch.float64)[:, None, None] + at[None, None, :] * (span / size)
+    y = norths.to(torch.float64)[:, None, None] - at[None, :, None] * (span / size)
+    x, y = torch.broadcast_tensors(x, y)
+    lon, lat = mercator_to_lonlat(x, y)
+    east_m, north_m = lcc.forward(lon, lat)
+    a, b, c, d, e, f = (float(v) for v in inverse_geotransform)
+    column = (a + b * east_m + c * north_m - origin[0]) / factor
+    row = (d + e * east_m + f * north_m - origin[1]) / factor
+    # Normalised while still float64, so float32 only has to hold [-1, 1].
+    lattice_grid = torch.stack((2.0 * column / extent[0] - 1.0,
+                                2.0 * row / extent[1] - 1.0), dim=1).to(torch.float32)
+    full = F.interpolate(lattice_grid, size=((lattice - 1) * step + 1,) * 2,
+                         mode="bilinear", align_corners=True)[:, :, :size, :size]
+    return full.permute(0, 2, 3, 1).contiguous()
+
+
 def footprint_scale(coords: torch.Tensor) -> float:
     """Source pixels per destination pixel, from the coordinate field itself.
 

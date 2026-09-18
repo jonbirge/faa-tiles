@@ -481,17 +481,14 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                 del strips
                 chunk = gpuwarp.prefilter(chunk, float(scale[members].max()) / factor)
                 timed("prefilter", clock)
-                size = torch.tensor([w_px, h_px], device=device, dtype=torch.float64)
-                origin = torch.tensor([x0, y0], device=device, dtype=torch.float64)
 
                 for start in range(0, len(members), BATCH):
                     batch = members[start:start + BATCH]
                     clock = time.perf_counter()
                     picked = torch.as_tensor(batch, device=device)
-                    coords = gpuwarp.source_pixels_batch(
-                        lcc, inverse, wests[picked], norths[picked], span, TILE)
-                    grid = (2.0 * (coords - origin) / factor / size - 1.0).to(torch.float32)
-                    del coords
+                    grid = gpuwarp.sampling_grid(
+                        lcc, inverse, wests[picked], norths[picked], span, TILE,
+                        origin=(x0, y0), factor=factor, extent=(w_px, h_px))
                     sampled = F.grid_sample(
                         chunk.unsqueeze(0), grid.reshape(1, len(batch) * TILE, TILE, 2),
                         mode="bicubic", padding_mode="zeros", align_corners=False)

@@ -289,3 +289,20 @@ def test_encode_webp_is_lossless_and_drops_alpha_when_opaque():
     back = imagecodecs.webp_decode(encode_webp(rgba, True, 90))
     assert back.shape == (256, 256, 3)               # opaque tiles are stored RGB
     assert np.array_equal(back, rgba[..., :3])
+
+
+def test_lattice_sampling_grid_matches_per_pixel_projection():
+    """The lattice grid must agree with the exact per-pixel projection to far
+    below a pixel -- well inside the float32 rounding the grid gets anyway."""
+    from cesiumtiles.gpuwarp import sampling_grid, source_pixels_batch
+
+    inverse = (400.0, 0.08, 0.0, 6000.0, 0.0, -0.08)       # ~12.5 m px, like 4x IFR
+    step = 2 * 20037508.342789244 / (1 << 13)
+    wests = torch.tensor([-10.3e6, -10.3e6 + step], dtype=torch.float64)
+    norths = torch.tensor([4.40e6, 4.40e6 - step], dtype=torch.float64)
+    exact = source_pixels_batch(US_IFR, inverse, wests, norths, step, 256)
+    origin, extent = (float(exact[..., 0].min()) - 20, float(exact[..., 1].min()) - 20), (6000, 6000)
+    grid = sampling_grid(US_IFR, inverse, wests, norths, step, 256, origin, 1, extent)
+    back = torch.stack(((grid[..., 0].double() + 1) / 2 * extent[0] + origin[0],
+                        (grid[..., 1].double() + 1) / 2 * extent[1] + origin[1]), dim=-1)
+    assert (back - exact).abs().max() < 2e-3             # source pixels
