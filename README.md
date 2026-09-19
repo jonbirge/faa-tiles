@@ -554,6 +554,20 @@ Lambert Conformal Conic, each inside a printed collar. Four scripts build it:
   crossing 180 degrees are handled.
 - **Choices:** max zoom z12 (only the 1:250k Honolulu inset would use z13, at 4x
   the tiles), WebP q90, and overlaps resolved by file name — later on top.
+- **Two warp backends.** `--warp cpu` (the default) warps each block with
+  `gdal.Warp`; `--warp gpu` evaluates the projection in torch, prefilters
+  isotropically and samples on the card, one source sheet at a time. Both are
+  kept and tested, and they agree to within a level or two per pixel.
+- **Speed knobs, for trials rather than for a chart being kept.** The warp is
+  exact by default (the projection evaluated per pixel, not fitted), because a
+  fraction of a pixel decides whether a chart hairline covers a cell.
+  `--warp-tolerance PIXELS` lets it approximate, in source pixels, like
+  `gdalwarp -et`: measured on a synthetic hairline sheet, `0.125` builds the max
+  zoom **1.7x faster** on the CPU backend and moves 8% of pixels, by up to the
+  full range; looser than that costs more accuracy for no more speed. On the GPU
+  backend the geometry is already approximated to ~1,000x inside that tolerance
+  for ~1% of a batch, so the knob there is `--resampling bilinear` instead of
+  cubic: **~1.8x** the sampler's throughput, and noticeably smaller tiles.
 
 Still open:
 

@@ -306,3 +306,58 @@ def test_lattice_sampling_grid_matches_per_pixel_projection():
     back = torch.stack(((grid[..., 0].double() + 1) / 2 * extent[0] + origin[0],
                         (grid[..., 1].double() + 1) / 2 * extent[1] + origin[1]), dim=-1)
     assert (back - exact).abs().max() < 2e-3             # source pixels
+
+
+def test_grid_mode_maps_resampling_names_and_refuses_the_rest():
+    from cesiumtiles.gpuwarp import grid_mode
+
+    assert grid_mode("cubic") == "bicubic"
+    assert grid_mode("bilinear") == "bilinear"
+    assert grid_mode("near") == "nearest"
+    with pytest.raises(ValueError, match="lanczos"):
+        grid_mode("lanczos")
+
+
+def test_lattice_step_widens_with_the_tolerance_and_still_divides_a_tile():
+    """A step that does not divide the tile would leave sampling_grid
+    interpolating to the wrong size, so every step must be a power of two."""
+    from cesiumtiles.gpuwarp import LATTICE_STEP, lattice_step
+
+    assert lattice_step(0.0) == LATTICE_STEP           # exact is the tightest it goes
+    # LATTICE_STEP is also the default *ceiling*: the lattice is already ~1,000x
+    # inside GDAL's own tolerance and costs ~1% of a batch, so widening it
+    # further buys nothing and only loses accuracy. A caller that wants to
+    # measure that for itself passes its own cap.
+    assert lattice_step(1.0) == LATTICE_STEP
+    steps = [lattice_step(t, cap=256) for t in (0.0, 1e-3, 0.01, 0.125, 1.0)]
+    assert steps == sorted(steps)
+    assert steps[-1] > LATTICE_STEP
+    for step in steps:
+        assert 256 % step == 0 and step & (step - 1) == 0
+    assert lattice_step(1e9, cap=256) == 256           # never past the tile itself
+
+
+def test_a_loosened_lattice_stays_inside_the_tolerance_it_was_given():
+    """The step comes from a measured error at LATTICE_STEP and the square law
+    for bilinear interpolation. Check the promise it makes, not just the
+    arithmetic: at each tolerance the grid must land within it."""
+    from cesiumtiles.gpuwarp import lattice_step, sampling_grid, source_pixels_batch
+
+    inverse = (400.0, 0.08, 0.0, 6000.0, 0.0, -0.08)
+    span = 2 * 20037508.342789244 / (1 << 13)
+    wests = torch.tensor([-10.3e6, -10.3e6 + span], dtype=torch.float64)
+    norths = torch.tensor([4.40e6, 4.40e6 - span], dtype=torch.float64)
+    exact = source_pixels_batch(US_IFR, inverse, wests, norths, span, 256)
+    origin = (float(exact[..., 0].min()) - 20, float(exact[..., 1].min()) - 20)
+    extent = (6000, 6000)
+
+    for tolerance in (0.0, 0.01, 0.125, 1.0):
+        step = lattice_step(tolerance, cap=256)
+        grid = sampling_grid(US_IFR, inverse, wests, norths, span, 256, origin, 1,
+                             extent, step=step)
+        back = torch.stack(((grid[..., 0].double() + 1) / 2 * extent[0] + origin[0],
+                            (grid[..., 1].double() + 1) / 2 * extent[1] + origin[1]), dim=-1)
+        worst = float((back - exact).abs().max())
+        # float32 rounds these coordinates to ~5e-4 source px on the way in, so
+        # that is the floor however exact the lattice is.
+        assert worst <= max(tolerance, 2e-3)

@@ -99,7 +99,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 215 tests, ~60s
+.venv/Scripts/python -m pytest                        # 223 tests, ~60s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -507,6 +507,18 @@ lost to the CPU, and the user laid out the architecture that works:
   premultiplied, prefiltered once, and sampled in batches of 128. Single-sheet
   tiles finish on the GPU; seam tiles wait as partials until their last sheet,
   then composite and encode **once**.
+- **Seam tiles composite on the device** (`gpumosaic._SeamPool`), after the full
+  IFR trial found the single dispatcher thread doing it in numpy -- busy 1,014 s
+  of a 1,464 s z13 pass, up to 19,796 partials live. One premultiplied float16
+  accumulator per tile ("under" is associative, so a running composite is
+  enough), in **preallocated slots** so a gather or a store is one
+  `index_select` rather than a launch per tile, and the card's share is fixed
+  rather than growing with the live set. `SEAM_DEVICE_BYTES` (2 GiB, ~4,000
+  tiles) bounds it; past that tiles spill to `_Partials` (host RAM, then disk)
+  as before -- at 19,796 live they will, so the spill is a normal path, but it
+  is now a *transfer*, not a composite. A test builds the same overlapping LCC
+  scene with the pool ample, one slot and none, and the tiles must come out
+  byte-identical.
 - **Pyramid (`gpumosaic.render_overviews`)**: children decoded on threads with
   **imagecodecs** (see below), the premultiplied 2x2 average batched on the GPU. That
   average, not the codecs, was 60% of a parent's cost in numpy.
@@ -624,6 +636,43 @@ almost no seams, which is why the two-sheet benchmark showed 2x. Output:
 of mask/sheet edges, and the GPU writes 9 more z13 edge tiles. GPU tiles
 compress **8.6% worse** under the same encoder (the pixels, not the encoder).
 The user set cpu as default; next steps are in a GitHub issue.
+
+**Trading accuracy for speed (`--warp-tolerance`, `--resampling`).** Both
+backends take both knobs; the defaults (exact, cubic) are unchanged and are what
+a chart being kept should be built with.
+
+- **`--warp-tolerance` is in source pixels on both backends**, the unit
+  gdalwarp's `-et` uses. On the CPU it is gdal.Warp's `errorThreshold`
+  (`mosaic.ERROR_THRESHOLD`, default 0); on the GPU it widens the lattice the
+  projection is evaluated on exactly (`gpuwarp.lattice_step`).
+- **On the GPU it is already free, so the knob does nothing there by default.**
+  `LATTICE_STEP = 16` costs 1.2e-4 source px -- ~1,000x inside GDAL's own 0.125
+  default, and below the ~5e-4 px float32 rounds the grid to anyway -- for ~1%
+  of a batch. So `lattice_step` **caps at LATTICE_STEP** unless a caller passes
+  its own `cap`, and loosening the tolerance past that buys nothing while
+  losing accuracy. The GPU's lever is the reconstruction filter, not the
+  geometry: `--resampling bilinear` instead of cubic. Do not re-derive this by
+  widening the lattice and finding no gain.
+- **On the CPU the tolerance is where the time is**, because the exact
+  transformer is what costs ~4x in the kernel. Measured on a 4096 px synthetic
+  LCC sheet of dense hairlines, tiled at its native z11 (441 tiles, 4 cores, so
+  relative figures only): exact 4.7 s, **tolerance 0.125 2.8 s (1.7x)**, 0.5
+  2.8 s, 2.0 2.8 s. **The win saturates at 0.125** -- once it is fitting a
+  polynomial at all the tolerance barely matters -- while the damage keeps
+  growing: 8.4% of pixels differ at 0.125, 11.4% at 0.5, 16.5% at 2.0, worst
+  255/255 throughout. So 0.125 is the only loosening worth having, and nothing
+  above it ever is.
+- **`--resampling bilinear` is the GPU's lever, and it also shrinks tiles.**
+  On the same sheet through the torch sampler (on this box's CPU, so indicative
+  of the filter's relative cost only): bilinear **1.8x** cubic's time, nearest
+  3.0x. Lossless tiles came out 2.01 MB against cubic's 3.38, and nearest's
+  0.31 MB -- because interpolation *invents* intermediate values, and the more
+  distinct values a tile holds the worse it compresses. That is very likely the
+  same mechanism behind the GPU's 8.6% compression gap (issue step 5), and it
+  points at the prefilter/reconstruction pair rather than at the encoder.
+- Run-to-run variance on that box was ~25% on identical work, so treat anything
+  under ~1.3x there as noise. The tolerance knob on the GPU backend produced
+  **0.00% differing pixels** -- exactly as the cap intends.
 
 ## Public site (`www/`)
 

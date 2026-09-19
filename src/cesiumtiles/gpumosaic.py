@@ -17,9 +17,9 @@ This inverts the loop, as the user laid it out:
 5. Sample its tiles in **batches**, all on the GPU.
 6. Hand the results to encoder threads. A tile with one contributing sheet --
    the vast majority -- is finished on the GPU and encoded immediately. A seam
-   tile is held as a partial until its last sheet has been drawn, then
-   composited and encoded **once**; the plan says up front how many sheets each
-   tile has.
+   tile is held as a partial **on the device** until its last sheet has been
+   drawn, then composited there and encoded **once**; the plan says up front how
+   many sheets each tile has.
 
 Encoding runs on threads in this process rather than in worker processes:
 GDAL releases the GIL while encoding, 22 threads reach ~1,300 tiles/s, and
@@ -128,12 +128,117 @@ class _Partials:
         if key in self.ram:
             value = self.ram.pop(key)
             self.bytes -= value.nbytes
-            return value.astype(np.float32)
+            return value
         self.spilled.discard(key)
         path = self._file(key)
-        value = np.load(path).astype(np.float32)
+        value = np.load(path)
         path.unlink()
         return value
+
+
+# Device memory the seam pool may hold. A partial is 512 KB, so 2 GiB is ~4,000
+# tiles held on the card at once; the rest fall back to _Partials, which is host
+# RAM and then disk. On the full IFR series the live set peaked at 19,796, so
+# the fallback is not a corner case -- but it is now a *transfer*, not a
+# composite: every tile still combines its sheets on the GPU.
+SEAM_DEVICE_BYTES = 2 * 2**30
+
+
+class _SeamPool:
+    """Running "under" composites for seam tiles, held on the device.
+
+    A tile covered by more than one sheet cannot be finished until its last
+    sheet is drawn, and there is one accumulator per tile -- "under" is
+    associative, so a running composite is all that has to be kept, never one
+    layer per sheet.
+
+    What changed here is *where the arithmetic happens*. Each sheet's
+    contribution used to be downloaded as float16 and combined in numpy on the
+    single dispatcher thread; on the full IFR series that thread was busy 1,014
+    s of a 1,464 s z13 pass, with up to 19,796 partials live, and it is what
+    made the GPU backend lose to the CPU. Now a batch's partials are gathered,
+    composited and (where they are finished) unpremultiplied in a handful of
+    kernels, and only finished tiles cross to the host -- once each.
+
+    Slots are preallocated: ``count`` premultiplied float16 ``(4, 256, 256)``
+    accumulators in one tensor, so a gather or a store is one ``index_select``
+    rather than a launch per tile, and the card's share of this is fixed and
+    known rather than growing with the live set. Tiles past the last free slot
+    spill to ``host`` (RAM, then disk), exactly as they always did.
+    """
+
+    def __init__(self, device: str, count: int, host: _Partials):
+        self.device = device
+        self.host = host
+        self.count = max(0, count)
+        self.buffer = (torch.empty((self.count, 4, TILE, TILE), device=device,
+                                   dtype=torch.float16) if self.count else None)
+        self.free = list(range(self.count))
+        self.slot_of: dict[tuple[int, int], int] = {}
+        self.peak = 0
+
+    def rows(self, indices) -> torch.Tensor:
+        return torch.tensor(indices, device=self.device, dtype=torch.long)
+
+    @property
+    def live(self) -> int:
+        return len(self.slot_of) + len(self.host.ram) + len(self.host.spilled)
+
+    def gather(self, keys) -> torch.Tensor:
+        """What is already drawn under ``keys``, ``(K, 4, 256, 256)`` float16 on
+        the device and zero for a tile no sheet has reached yet.
+
+        The partials are taken *out* of the pool; the caller composites this
+        sheet over them and stores back whatever is still unfinished.
+        """
+        out = torch.zeros((len(keys), 4, TILE, TILE), device=self.device, dtype=torch.float16)
+        rows, slots, host_rows, host_values = [], [], [], []
+        for i, key in enumerate(keys):
+            slot = self.slot_of.pop(key, None)
+            if slot is not None:
+                rows.append(i)
+                slots.append(slot)
+                self.free.append(slot)
+            elif key in self.host:
+                host_rows.append(i)
+                host_values.append(self.host.pop(key))
+        if rows:
+            out[self.rows(rows)] = self.buffer.index_select(0, self.rows(slots))
+        if host_rows:
+            # One transfer for the batch's spilled tiles, not one per tile.
+            out[self.rows(host_rows)] = torch.from_numpy(np.stack(host_values)).to(self.device)
+        return out
+
+    def store(self, keys, values: torch.Tensor) -> None:
+        """Keep ``values`` (``(K, 4, 256, 256)`` float16 on the device) for
+        ``keys`` until their remaining sheets arrive."""
+        rows, slots, overflow = [], [], []
+        for i, key in enumerate(keys):
+            if self.free:
+                slot = self.free.pop()
+                self.slot_of[key] = slot
+                rows.append(i)
+                slots.append(slot)
+            else:
+                overflow.append(i)
+        if rows:
+            self.buffer[self.rows(slots)] = values.index_select(0, self.rows(rows))
+        if overflow:
+            block = values.index_select(0, self.rows(overflow)).cpu().numpy()
+            for j, i in enumerate(overflow):
+                self.host.put(keys[i], block[j])
+        self.peak = max(self.peak, self.live)
+
+
+def seam_slots(seam_tiles: int, budget: int | None = None) -> int:
+    """How many seam accumulators to preallocate on the device: enough for the
+    plan's seam tiles, but never more than ``budget`` bytes of them.
+
+    Read from SEAM_DEVICE_BYTES at call time, not bound at import, so a test can
+    squeeze the pool to nothing and take the spill path.
+    """
+    budget = SEAM_DEVICE_BYTES if budget is None else budget
+    return max(0, min(seam_tiles, budget // (4 * TILE * TILE * 2)))
 
 
 class _Encoder:
@@ -342,7 +447,7 @@ def _footprints(lcc, inverse, wests, norths, span):
 def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                resume: bool = False, threads: int | None = None,
                device: str | None = None, resampling: str = "cubic",
-               say=print, quiet: bool = False) -> set[tuple[int, int]]:
+               tolerance: float = 0.0, say=print, quiet: bool = False) -> set[tuple[int, int]]:
     """Render every planned max-zoom tile. Returns the ``(x, y)`` written.
 
     ``prepared`` and ``plan`` are exactly what the CPU backend receives, and
@@ -350,10 +455,19 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
     backends see identical pixels. A source whose projection the GPU sampler
     does not implement is warped with GDAL on threads instead, and fed through
     the same compositing, so a series can mix the two.
+
+    ``tolerance`` is how far the projection may be cut short, in source pixels
+    -- the same knob, in the same units, that the CPU backend gives gdal.Warp.
+    Here it widens the lattice the projection is evaluated on exactly
+    (:func:`gpuwarp.lattice_step`), and it is passed to the GDAL fallback as its
+    errorThreshold. ``resampling`` chooses the reconstruction filter: cubic is
+    the default, bilinear is the cheaper end of the trade.
     """
-    from cesiumtiles.mosaic import ERROR_THRESHOLD, TileBuildError, source_view, write_pixels
+    from cesiumtiles.mosaic import TileBuildError, source_view, write_pixels
 
     device = device or gpuwarp.best_device()
+    step = gpuwarp.lattice_step(tolerance, TILE)
+    mode = gpuwarp.grid_mode(resampling)
     gpuwarp.limit_memory(device, MEMORY_SHARE)
     threads = threads or max(1, (os.cpu_count() or 2) - 2)
     tile_dir = Path(tile_dir)
@@ -385,6 +499,8 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
     tile_dir.mkdir(parents=True, exist_ok=True)
     spill = Path(tempfile.mkdtemp(prefix=".partials-", dir=tile_dir))
     partials = _Partials(spill)
+    seams = _SeamPool(device, seam_slots(sum(1 for c in remaining.values() if c > 1)),
+                      partials)
     mercator = osr.SpatialReference()
     mercator.ImportFromEPSG(3857)
     mercator_wkt = mercator.ExportToWkt()
@@ -441,6 +557,7 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                 if item is None:
                     return
                 single_keys, slot, copied, multi_keys, layers = item
+                del item                  # seam layers are device memory now
                 if copied is not None:
                     copied.synchronize()          # the DMA into the pinned buffer
                 busy_from = time.perf_counter()
@@ -457,20 +574,37 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                     for j in live:                # the rest have nothing of this sheet
                         key = single_keys[j]
                         encoder.submit(key[0], key[1], finished[j], release)
-                for j, key in enumerate(multi_keys):
-                    layer = layers[j].astype(np.float32)
-                    if key in partials:
-                        # Sheets arrive bottom first, so this one lands *over*.
-                        beneath = partials.pop(key)
-                        layer = layer + beneath * (1.0 - layer[3:4])
-                    remaining[key] -= 1
-                    if remaining[key] > 0:
-                        partials.put(key, layer)
-                        continue
-                    state["done"] += 1
-                    done = _unpremultiply_uint8(torch.from_numpy(layer[None]))[0]
-                    if int(done[3].max()) > 0:
-                        encoder.submit(key[0], key[1], done.permute(1, 2, 0).contiguous().numpy())
+                if multi_keys:
+                    # Sheets arrive bottom first, so this one lands *over* what
+                    # is already there. Both sides are premultiplied, so the
+                    # whole "under" composite is this one expression -- and it
+                    # runs on the device, for the batch at once.
+                    beneath = seams.gather(multi_keys)
+                    composited = layers + beneath * (1.0 - layers[:, 3:4])
+                    del beneath, layers
+                    keep, final = [], []
+                    for j, key in enumerate(multi_keys):
+                        remaining[key] -= 1
+                        (keep if remaining[key] > 0 else final).append(j)
+                    if keep:
+                        seams.store([multi_keys[j] for j in keep], composited[seams.rows(keep)])
+                    if final:
+                        # float32 for the divide: float16 would round the
+                        # unpremultiply, and these are finished pixels.
+                        done = _unpremultiply_uint8(
+                            composited[seams.rows(final)].to(torch.float32))
+                        # Which tiles have anything to write is decided on the
+                        # device too, and queued before the big copy, so the
+                        # thread waits once rather than scanning every tile.
+                        empty = done[:, 3].amax(dim=(1, 2)) == 0
+                        pixels = done.permute(0, 2, 3, 1).contiguous().cpu().numpy()
+                        alive = ~empty.cpu().numpy()
+                        state["done"] += len(final)
+                        for j, at in enumerate(final):
+                            if alive[j]:
+                                key = multi_keys[at]
+                                encoder.submit(key[0], key[1], pixels[j])
+                    del composited
                 report()
                 timing["dispatcher"] += time.perf_counter() - busy_from
         except BaseException as exc:
@@ -518,9 +652,11 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
             if cuda:
                 copied = torch.cuda.Event()
                 copied.record()
-        # Seam tiles are few; they take the simple, blocking path.
-        layers = (contributions[split:].to(torch.float16).cpu().numpy()
-                  if multi else None)
+        # Seam tiles stay on the device, as premultiplied float16: the
+        # dispatcher composites them there. Downloading every sheet's
+        # contribution and combining it in numpy is what the full-series trial
+        # measured as the whole build's bottleneck.
+        layers = contributions[split:].to(torch.float16) if multi else None
         handoff.put(([keys[i] for i in single], slot, copied,
                      [keys[i] for i in multi], layers))
 
@@ -541,7 +677,7 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
 
             if not gpuwarp.supports(wkt):
                 _render_with_gdal(view_path, keys_all, wests_np, norths_np, span,
-                                  mercator_wkt, resampling, ERROR_THRESHOLD,
+                                  mercator_wkt, resampling, tolerance,
                                   readers, device, deliver,
                                   seams_last(range(len(keys_all)), keys_all))
                 gdal.Unlink(view_path)
@@ -657,10 +793,10 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
                     grid = gpuwarp.sampling_grid(
                         lcc, inverse, wests_ordered[at:at + len(batch)],
                         norths_ordered[at:at + len(batch)], span, TILE,
-                        origin=(x0, y0), factor=factor, extent=(w_px, h_px))
+                        origin=(x0, y0), factor=factor, extent=(w_px, h_px), step=step)
                     sampled = F.grid_sample(
                         chunk.unsqueeze(0), grid.reshape(1, len(batch) * TILE, TILE, 2),
-                        mode="bicubic", padding_mode="zeros", align_corners=False)
+                        mode=mode, padding_mode="zeros", align_corners=False)
                     del grid
                     contributions = (sampled.reshape(4, len(batch), TILE, TILE)
                                      .permute(1, 0, 2, 3).clamp_(min=0.0))
@@ -688,12 +824,14 @@ def render_top(prepared, plan, top: int, tile_dir, creation_options, *,
 
     if not quiet:
         say(f"  z{top} (gpu): {len(encoder.written) - len(already):,} tiles written; "
-            f"at most {partials.peak:,} seam tiles held at once, "
-            f"{len(partials.spilled)} spilled")
+            f"at most {seams.peak:,} seam tiles held at once, "
+            f"{seams.count:,} slots on the device, {partials.peak:,} off it")
         wall = time.monotonic() - started
         dispatcher = timing.pop("dispatcher")
         parts = ", ".join(f"{k} {v:.1f}s" for k, v in timing.items())
         exact = "" if PROFILE else " (approximate; CESIUMTILES_PROFILE=1 for exact)"
+        say(f"  z{top} (gpu): {mode} sampling on a {step} px lattice "
+            f"(tolerance {tolerance:g} source px)")
         say(f"  z{top} (gpu): {wall:.1f}s wall; main thread: {parts}{exact}; "
             f"dispatcher busy {dispatcher:.1f}s, of which blocked on encoders "
             f"{encoder.waited:.1f}s")

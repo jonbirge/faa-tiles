@@ -252,3 +252,93 @@ def test_lcc_palette_is_exact_on_both_backends(lcc_scene):
     a colour shift here would tint every flat area of a chart."""
     assert _close(_pixel(lcc_scene, -96.8, 39.3), RED, tol=1)
     assert _close(_pixel(lcc_scene, -94.0, 39.3), BLUE, tol=1)
+
+
+# -- seam tiles, and the knobs that trade accuracy for speed ----------------
+
+def _lcc_overlap_sources(root):
+    """Two overlapping LCC sheets, as the module fixture builds them: enough of
+    the overlap is shared that a good share of the tiles are seam tiles."""
+    root.mkdir(parents=True, exist_ok=True)
+    red = _solid(root / "a_red.tif", (-200_000, -100_000, 0, 100_000), RED, crs=LCC_US)
+    blue = _solid(root / "b_blue.tif", (-100_000, -100_000, 100_000, 100_000), BLUE,
+                  crs=LCC_US)
+    return [MosaicSource(red), MosaicSource(blue)]
+
+
+def _tiles(out):
+    return {p.relative_to(out).as_posix(): p.read_bytes()
+            for p in sorted((out / "tiles").rglob("*.webp"))}
+
+
+def test_seam_tiles_are_the_same_whether_they_fit_on_the_device(tmp_path, monkeypatch):
+    """The GPU backend composites a seam tile's sheets on the device, in a pool
+    of preallocated slots, and falls back to host RAM once the slots run out.
+    Both routes must produce the same tiles: on the full IFR series the live set
+    peaked at 19,796 partials, far past any sane device budget, so the spill is
+    a normal path and not an emergency."""
+    from cesiumtiles import gpumosaic
+
+    sources = _lcc_overlap_sources(tmp_path / "src")
+    plan = plan_tiles(prepare_sources(sources), MAX_ZOOM)
+    assert sum(1 for c in plan.values() if len(c) > 1), "no seam tiles to composite"
+
+    built = {}
+    # Ample, one slot (so a batch gathers from the device and the spill at once),
+    # and none at all.
+    for name, budget in (("device", gpumosaic.SEAM_DEVICE_BYTES), ("mixed", 512 * 1024),
+                         ("spilled", 0)):
+        monkeypatch.setattr(gpumosaic, "SEAM_DEVICE_BYTES", budget)
+        out = tmp_path / name
+        build_mosaic(sources, out, min_zoom=MAX_ZOOM, max_zoom=MAX_ZOOM, lossless=True,
+                     quiet=True, backend="gpu")
+        built[name] = _tiles(out)
+
+    assert built["device"], "the scene produced no tiles"
+    assert built["device"] == built["mixed"] == built["spilled"]
+
+
+def test_seam_pool_holds_one_accumulator_per_tile_within_its_budget():
+    from cesiumtiles.gpumosaic import seam_slots
+
+    assert seam_slots(10, budget=1 << 30) == 10          # the plan, not the budget
+    assert seam_slots(1_000_000, budget=2 * 2**30) == 4096   # 512 KB each
+    assert seam_slots(1_000_000, budget=0) == 0          # everything spills
+
+
+def test_warp_tolerance_reaches_gdal_warp(tmp_path, monkeypatch):
+    """The CPU backend's tolerance is gdal.Warp's errorThreshold, and 0 (exact)
+    is the default -- any non-zero threshold moves chart hairlines."""
+    from cesiumtiles import mosaic
+
+    seen = {}
+
+    def fake_warp(_dest, _source, **kwargs):
+        seen.update(kwargs)
+        raise AssertionError("stop here; the call itself is what is under test")
+
+    prepared = prepare_sources([MosaicSource(
+        _solid(tmp_path / "red.tif", (-100_000, -100_000, 0, 0), RED, crs=LCC_US))])
+    monkeypatch.setattr(mosaic.gdal, "Warp", fake_warp)
+    mosaic._init_worker(prepared, tmp_path, ".webp", [], "cubic", False, 16, 0.25)
+    with pytest.raises(AssertionError):
+        mosaic._warp_layer(0, 0.0, 0.0, 1000.0, 256)
+    assert seen["errorThreshold"] == 0.25
+    assert seen["resampleAlg"] == "cubic"
+
+    mosaic._init_worker(prepared, tmp_path, ".webp", [], "cubic", False, 16)
+    with pytest.raises(AssertionError):
+        mosaic._warp_layer(0, 0.0, 0.0, 1000.0, 256)
+    assert seen["errorThreshold"] == mosaic.ERROR_THRESHOLD == 0.0
+
+
+def test_gpu_backend_accepts_a_cheaper_reconstruction_filter(tmp_path):
+    """--resampling bilinear on the GPU is a sampler choice, not a broken one:
+    the source is already prefiltered to the output's Nyquist limit, so flat
+    colour must still come through flat."""
+    out = tmp_path / "bilinear"
+    build_mosaic(_lcc_overlap_sources(tmp_path / "src"), out,
+                 min_zoom=MAX_ZOOM, max_zoom=MAX_ZOOM, lossless=True, quiet=True,
+                 backend="gpu", resampling="bilinear", tolerance=0.125)
+    assert _close(_pixel(out, -97.0, 39.0), RED, tol=1)
+    assert _close(_pixel(out, -94.3, 39.0), BLUE, tol=1)
