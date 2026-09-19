@@ -3,17 +3,18 @@
 
     .venv/Scripts/python scripts/build_chart_tileset.py SERIES [--out DIR] [options]
 
-SERIES is a name from chart_series.py (``sectionals``, ``ifr-low``). Stages,
-each its own script so it can be rerun alone:
+SERIES is a name from chart_series.py (``sectionals``, ``tac``, ``ifr-low``,
+``sectionals-tac``). Stages, each its own script so it can be rerun alone:
 
   1. fetch_charts.py SERIES      download the current edition into source/SERIES
                                  -- GeoTIFFs, or just the vector PDFs for a
                                  series that renders its own rasters
   2. detect_*_areas.py           find each sheet's map area into
                                  scripts/SERIES_areas.json; rerun and review
-                                 for every new edition.
-                                   sectionals: detect_sectional_areas.py
-                                   ifr-low:    detect_ifr_areas.py
+                                 for every new edition. Which script is the
+                                 series' ``detector``:
+                                   sectionals, tac: detect_sectional_areas.py
+                                   ifr-low:        detect_ifr_areas.py
   3. render_pdfs.py SERIES       (ifr-low) draw the sheets from their PDFs at 4x
   4. heal_frames.py SERIES       (ifr-low) paint over the frame rule
   5. this script                 mosaic the sheets into z/x/y tiles
@@ -23,6 +24,15 @@ so where two overlap, the one later in the alphabet is on top. ``--reverse-order
 paints in reverse, putting the earliest name on top; each series sets its own
 default (on for ``ifr-low``), and ``--no-reverse-order`` overrides it. Either way
 it is a placeholder for a smarter rule, not a considered choice.
+
+A **composite** series (``sectionals-tac``) paints several series into one
+tileset. Its members keep their own downloads, stages and reviewed manifests,
+so nothing is fetched or prepared twice; the composite only says which order
+they paint in -- every sheet of one layer is below every sheet of the next --
+and which of them earn the detail level. That level is one zoom past
+``--max-zoom``, holding only the tiles the finer sheets reach: it gives the
+terminal area charts their own resolution without quadrupling the mosaic that
+surrounds them. ``--no-detail`` builds a plain uniform pyramid instead.
 
 Tiles are lossy WebP q90 unless the series sets ``lossless`` (``ifr-low`` does);
 ``--[no-]lossless`` overrides it.
@@ -82,7 +92,7 @@ def check_stages(chart_series) -> None:
         previous = {n: after / n for n in names}
 
 
-def sources(chart_series, directory: Path, manifest: dict) -> list[MosaicSource]:
+def sources(chart_series, directory: Path, manifest: dict, detail: bool = False) -> list[MosaicSource]:
     # The series' patterns and exclusions apply here too: they are not normally
     # downloaded, but an older download may have left unwanted sheets behind.
     charts = sorted(p for p in directory.glob("*.tif") if chart_series.wants_tif(p.name))
@@ -93,12 +103,49 @@ def sources(chart_series, directory: Path, manifest: dict) -> list[MosaicSource]
     if missing:
         raise SystemExit(
             "no map area recorded for: " + ", ".join(missing)
-            + "\ndetect and review map areas first (see this script's docstring)"
+            + f"\nrun scripts/{chart_series.detector} {chart_series.name} and review its output"
         )
     # Map areas are recorded against the downloaded GeoTIFFs, so their pixel
     # polygons scale with a series that tiles renders drawn at a multiple of it.
-    return [MosaicSource(p, MapArea.from_dict(manifest[p.name], chart_series.pixel_scale))
+    return [MosaicSource(p, MapArea.from_dict(manifest[p.name], chart_series.pixel_scale),
+                         detail=detail)
             for p in charts]
+
+
+def layers(chart_series, args) -> list[MosaicSource]:
+    """Every sheet to paint, in paint order, across a series' layers.
+
+    A plain series is one layer of its own sheets; a composite is its members in
+    order, each read from its own directory against its own reviewed manifest,
+    so a layer that is already downloaded and prepared is simply reused. Paint
+    order runs within a layer first: all of one series' sheets sit below all of
+    the next's, whatever their names.
+    """
+    chosen: list[MosaicSource] = []
+    for member in chart_series.members:
+        manifest = json.loads(member.manifest.read_text(encoding="utf-8"))
+        if args.charts:
+            directory = args.charts
+        else:
+            directory = member.build_directory
+            check_stages(member)
+        sheets = sources(member, directory, manifest,
+                         detail=member.name in chart_series.detail_layers)
+        if args.only:
+            sheets = [s for s in sheets if any(Path(s.path).name.startswith(n) for n in args.only)]
+        reverse = member.reverse_order if args.reverse_order is None else args.reverse_order
+        if reverse:
+            sheets.reverse()
+        if sheets:
+            print(f"layer {member.name}: {len(sheets)} sheet{'s' if len(sheets) != 1 else ''} in "
+                  f"{'reverse ' if reverse else ''}file-name order, "
+                  f"{Path(sheets[-1].path).name} on top", flush=True)
+        chosen.extend(sheets)
+    if not chosen:
+        # sources() has already refused an empty directory, so the only way to
+        # get here is a filter that matched nothing.
+        raise SystemExit(f"--only matched no charts: {args.only}")
+    return chosen
 
 
 def main(argv=None) -> int:
@@ -110,6 +157,13 @@ def main(argv=None) -> int:
                          "subdirectory for a series that heals frames)")
     ap.add_argument("--max-zoom", type=int, default=None, help="default: the series' setting")
     ap.add_argument("--min-zoom", type=int, default=0)
+    ap.add_argument("--detail-zoom", type=int, default=None,
+                    help="one sparse level past --max-zoom, holding only the tiles the "
+                         "series' finer layers reach (default: the series' setting). A "
+                         "client falls back to the stretched parent everywhere it is "
+                         "absent, as it already does over ocean.")
+    ap.add_argument("--detail", action=argparse.BooleanOptionalAction, default=True,
+                    help="build the detail level where the series has one (default: yes)")
     ap.add_argument("--quality", type=int, default=QUALITY, help="lossy WebP quality (default: %(default)s)")
     ap.add_argument("--lossless", action=argparse.BooleanOptionalAction, default=None,
                     help="lossless WebP tiles (default: the series' setting)")
@@ -145,20 +199,23 @@ def main(argv=None) -> int:
     chart_series = series(args.series)
     out = args.out or chart_series.tileset
 
-    manifest = json.loads(chart_series.manifest.read_text(encoding="utf-8"))
-    directory = args.charts or chart_series.build_directory
-    if not args.charts:
-        check_stages(chart_series)
-    chosen = sources(chart_series, directory, manifest)
-    if args.only:
-        chosen = [s for s in chosen if any(Path(s.path).name.startswith(n) for n in args.only)]
-        if not chosen:
-            raise SystemExit(f"--only matched no charts: {args.only}")
-    reverse = chart_series.reverse_order if args.reverse_order is None else args.reverse_order
-    if reverse:
-        chosen.reverse()
-    print(f"paint order: {'reverse ' if reverse else ''}file name, "
-          f"{Path(chosen[-1].path).name} on top", flush=True)
+    if args.charts and chart_series.is_composite:
+        raise SystemExit(f"--charts cannot stand in for {chart_series.name}'s layers "
+                         f"({', '.join(chart_series.layers)}), which read separate directories")
+    chosen = layers(chart_series, args)
+
+    max_zoom = args.max_zoom if args.max_zoom is not None else chart_series.max_zoom
+    detail_zoom = args.detail_zoom if args.detail_zoom is not None else chart_series.detail_zoom
+    if not args.detail or not any(s.detail for s in chosen):
+        detail_zoom = 0
+    elif detail_zoom and detail_zoom <= max_zoom:
+        # A shallow --max-zoom is how a trial build is asked for, and a detail
+        # level at or under it is not a level at all.
+        print(f"detail level z{detail_zoom} is not past z{max_zoom}; skipping it", flush=True)
+        detail_zoom = 0
+    if detail_zoom:
+        print(f"detail level: z{detail_zoom} over "
+              f"{', '.join(chart_series.detail_layers)}", flush=True)
 
     lossless = chart_series.lossless if args.lossless is None else args.lossless
     print(f"tiles: WebP {'lossless' if lossless else f'q{args.quality}'}", flush=True)
@@ -167,7 +224,7 @@ def main(argv=None) -> int:
 
     result = build_mosaic(
         chosen, out,
-        min_zoom=args.min_zoom, max_zoom=args.max_zoom if args.max_zoom is not None else chart_series.max_zoom,
+        min_zoom=args.min_zoom, max_zoom=max_zoom, detail_zoom=detail_zoom or None,
         quality=args.quality, lossless=lossless, backend=args.warp,
         resampling=args.resampling, tolerance=args.warp_tolerance,
         workers=args.workers, resume=args.resume, overwrite=args.overwrite,

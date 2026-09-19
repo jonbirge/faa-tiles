@@ -25,7 +25,8 @@ their own package indexes) and checks the imports. Then build whichever
 tilesets you want and open the tester:
 
 ```bash
-.venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   z12, 2x upsampled
+.venv/Scripts/python scripts/build_sectionals.py       # VFR sectionals   z12, 2x upsampled
+.venv/Scripts/python scripts/build_sectionals_tac.py  # the same, with the TACs over it (z12 + a z13 detail level)
 .venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute ~31 min, 3.0 GB (z13, lossless)
 .venv/Scripts/python scripts/build_wall_planning.py   # VFR wall planning  ~3 min, 441 MB (z11)
 .venv/Scripts/cesiumtiles-serve .                     # http://127.0.0.1:8000/
@@ -519,7 +520,7 @@ Lambert Conformal Conic, each inside a printed collar. Four scripts build it:
 
 ```bash
 .venv/Scripts/python scripts/fetch_charts.py sectionals          # current edition -> source/sectionals
-.venv/Scripts/python scripts/detect_sectional_areas.py --sheet review/
+.venv/Scripts/python scripts/detect_sectional_areas.py sectionals --sheet review/
 .venv/Scripts/python scripts/upsample_charts.py sectionals       # -> source/sectionals/upscaled
 .venv/Scripts/python scripts/build_chart_tileset.py sectionals   # -> ./tileset-sectionals
 ```
@@ -638,6 +639,64 @@ The CONUS low enroute charts, L-01 to L-36, build the same way:
   painted in *reverse* file-name order, so the lower-numbered chart is on top;
   `build_chart_tileset.py --[no-]reverse-order` overrides a series' default.
 
+### Lay the terminal area charts over the sectionals — *built, not yet run*
+
+`tileset-sectionals-tac` is the sectional mosaic with each **VFR Terminal Area
+Chart** painted over it where one is published — 34 sheets from 30 zips, because
+Anchorage/Fairbanks, Denver/Colorado Springs, Seattle/Portland and
+Tampa/Orlando each ship two. It is the first **composite** series: it owns no
+sheets of its own, it paints two other series in order.
+
+```bash
+.venv/Scripts/python scripts/build_sectionals_tac.py    # -> ./tileset-sectionals-tac
+```
+
+- **A composite is layers, not a copy.** `scripts/chart_series.py` gives
+  `sectionals-tac` a `layers` list and nothing else; each layer keeps its own
+  download directory, its own preparation stages and its own reviewed manifest.
+  So if `tileset-sectionals` has already been built, the 55 sectionals are not
+  downloaded or upsampled again — only the terminal area charts are new work
+  (678 MB of GeoTIFFs, then the same Real-CUGAN 2x pass). Paint order runs
+  within a layer first: every sectional is below every TAC, whatever their
+  names, which is what "inserted where available" means.
+- **Only the chart itself is extracted.** A TAC zip also carries that city's
+  Flyway Planning chart (`Denver FLY.tif`), sometimes an airspace graphic or a
+  VFR planning chart. The series keeps `* TAC.tif` and nothing else — per
+  GeoTIFF, not per zip, because a zip can hold two charts.
+- **Map areas** are the same problem as a sectional's: a map inside a paper
+  collar, drawn the same way at twice the scale. `detect_sectional_areas.py`
+  now takes a series name and writes `scripts/tac_areas.json`; each series
+  names its own `detector`, so nothing has to know which script goes with
+  which charts. That manifest is detected and reviewed for the 2026-09-03
+  edition and committed, so a first build needs no `--detect`. The paper check
+  flags none of the 34 sheets; **Los Angeles is hand-traced**, because its west
+  band fit spanned 4676–6326 px where every other sheet's worst side spans
+  under 90, and the resulting slant dropped a wedge of the Pacific — the same
+  failure, on the same city, as the LA sectional. The paper check cannot see
+  that: it only catches collar left in.
+- **z12, plus a sparse z13 detail level.** A TAC is 1:250,000 at 300 dpi —
+  21.17 m/px, exactly half the sectionals' pitch — so it holds one zoom level
+  more than the sheets around it. Tiling the whole mosaic at z13 would
+  quadruple it (~2 M tiles) to magnify the 96% that is sectional, which is the
+  trade that put `tileset-sectionals` at z12 in the first place. Instead the
+  pyramid stops at z12 and one extra level holds **only the tiles a TAC
+  reaches** — a few tens of thousands, against half a million below it. Cesium
+  falls back to the stretched z12 parent everywhere that level is absent,
+  exactly as it already does over ocean.
+  Every source paints into the tiles that survive, not just the TACs, so a
+  TAC's edge sits on the magnified sectional beneath it instead of on a hard
+  transparent boundary a tile wide. The detail level feeds nothing below it:
+  the overview cascade still starts at z12, the deepest level that covers the
+  whole mosaic — and `metadata.json` carries `fullzoom` beside `maxzoom` to say
+  where that is, with `bounds` read off the full level rather than the sparse
+  one.
+  `--no-detail` builds a plain uniform pyramid instead, and `--detail-zoom N`
+  moves the level.
+
+Not yet run end to end: the sheets download, the map areas are detected and
+reviewed, and the composite plans and builds on synthetic scenes, but the real
+build wants the GPU box for the upsampling pass.
+
 ### Automate fetching and building every current FAA chart
 
 The FAA republishes on a **56-day cycle**, so this should be a scheduled job
@@ -733,6 +792,7 @@ requirements-dev.txt      runtime + test deps
 scripts/
     setup_repo.py         fresh clone -> working venv
     build_sectionals.py   wrappers: download + build one product each
+    build_sectionals_tac.py
     build_ifr_low.py
     build_wall_planning.py
     pipeline.py           what the wrappers share: run stages in order
