@@ -27,6 +27,12 @@ it is a placeholder for a smarter rule, not a considered choice.
 Tiles are lossy WebP q90 unless the series sets ``lossless`` (``ifr-low`` does);
 ``--[no-]lossless`` overrides it.
 
+The warp is exact by default and resamples with cubic. ``--warp-tolerance`` lets
+it approximate the projection (in source pixels, like gdalwarp's -et) and
+``--resampling bilinear`` takes the cheaper reconstruction filter; both trade
+fidelity for speed on either backend, and both are meant for trials rather than
+for a chart being kept.
+
 Max zoom comes from the series (``max_zoom``), currently z11 for both, and
 ``--max-zoom`` overrides it. The sheets' native resolution is about z12 -- the
 lower 48 sectionals ~z11.6, the finest IFR sheets ~z12.0 -- so z11 trades some
@@ -115,6 +121,19 @@ def main(argv=None) -> int:
                          "prefilters isotropically; cpu uses gdal.Warp. Sources "
                          "whose projection the gpu path does not implement fall "
                          "back to gdal automatically.")
+    ap.add_argument("--resampling", default="cubic",
+                    help="resampling kernel for the max-zoom warp (default: %(default)s). "
+                         "All the pipelines use cubic, on the measurement that lanczos "
+                         "rang most and cubic halved it at nearly the same sharpness; "
+                         "bilinear is cheaper again, and on the gpu backend markedly so.")
+    ap.add_argument("--warp-tolerance", type=float, default=0.0, metavar="PIXELS",
+                    help="how far the warp may cut the projection's corner, in source "
+                         "pixels (default: %(default)s, exact). On the cpu backend this is "
+                         "gdal.Warp's errorThreshold, whose own default is 0.125; on the gpu "
+                         "backend it widens the lattice the projection is evaluated on. "
+                         "Exactness is deliberate for a chart being kept -- any non-zero "
+                         "threshold moved ~1%% of pixels by up to the full range on chart "
+                         "hairlines -- so this is for trials, previews and benchmarks.")
     ap.add_argument("--only", nargs="+", metavar="NAME",
                     help="build from just these charts (file name prefixes)")
     ap.add_argument("--reverse-order", action=argparse.BooleanOptionalAction, default=None,
@@ -143,12 +162,14 @@ def main(argv=None) -> int:
 
     lossless = chart_series.lossless if args.lossless is None else args.lossless
     print(f"tiles: WebP {'lossless' if lossless else f'q{args.quality}'}", flush=True)
-    print(f"warp: {args.warp}", flush=True)
+    print(f"warp: {args.warp}, {args.resampling}, tolerance {args.warp_tolerance:g} source px",
+          flush=True)
 
     result = build_mosaic(
         chosen, out,
         min_zoom=args.min_zoom, max_zoom=args.max_zoom if args.max_zoom is not None else chart_series.max_zoom,
         quality=args.quality, lossless=lossless, backend=args.warp,
+        resampling=args.resampling, tolerance=args.warp_tolerance,
         workers=args.workers, resume=args.resume, overwrite=args.overwrite,
         title=chart_series.title,
     )

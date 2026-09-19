@@ -75,14 +75,20 @@ MASK_CACHE_MB = 64
 BLOCK_TILES = 8
 
 # gdal.Warp approximates the transformer with a polynomial fitted over the
-# destination region, to a default tolerance of 0.125 destination pixels. On
-# chart hairlines that is not a subtle difference: measured against an exact
-# warp, *any* non-zero threshold left ~1% of pixels wrong by up to the full
-# 0..255 range, because a fraction of a pixel decides whether a 1 px black line
-# covers a given cell. It also makes the result depend on how the destination is
+# destination region, to a default tolerance of 0.125 *source* pixels. On chart
+# hairlines that is not a subtle difference: measured against an exact warp,
+# *any* non-zero threshold left ~1% of pixels wrong by up to the full 0..255
+# range, because a fraction of a pixel decides whether a 1 px black line covers
+# a given cell. It also makes the result depend on how the destination is
 # divided, so a block would not agree with the tiles inside it. Exactness costs
 # about 4x in the kernel, which blocking more than pays for: 10.25 ms/tile
 # blocked and exact against 13.31 ms/tile singly and approximate.
+#
+# That is why the default is 0 and should stay there for a chart being kept.
+# ``build_mosaic(tolerance=)`` (``--warp-tolerance``) loosens it for a build
+# where speed is worth more than the hairlines -- a trial, a preview, a
+# benchmark. The same number, in the same units, sets the GPU backend's lattice
+# spacing (gpuwarp.lattice_step), so one knob describes both.
 ERROR_THRESHOLD = 0.0
 # Lon/lat edges are densified at this spacing before projecting, so a
 # neatline that follows a parallel stays on it in pixel space.
@@ -476,7 +482,8 @@ def plan_tiles(prepared: Sequence[PreparedSource], z: int) -> dict[tuple[int, in
 _worker: dict = {}
 
 
-def _init_worker(sources, tile_dir, suffix, creation_options, resampling, resume, cache_mb):
+def _init_worker(sources, tile_dir, suffix, creation_options, resampling, resume, cache_mb,
+                 tolerance=ERROR_THRESHOLD):
     gdal.UseExceptions()
     gdal.SetCacheMax(cache_mb * 1024 * 1024)
     srs = osr.SpatialReference()
@@ -487,6 +494,7 @@ def _init_worker(sources, tile_dir, suffix, creation_options, resampling, resume
         suffix=suffix,
         creation_options=creation_options,
         resampling=resampling,
+        tolerance=tolerance,
         resume=resume,
         datasets={},
         webp=gdal.GetDriverByName("WEBP"),
@@ -611,7 +619,7 @@ def _warp_layer(index, west, north, span, size):
         outputBounds=(west, north - span, west + span, north),
         width=size, height=size, dstSRS=_worker["mercator_wkt"],
         dstAlpha=True, resampleAlg=_worker["resampling"],
-        errorThreshold=ERROR_THRESHOLD,
+        errorThreshold=_worker["tolerance"],
     )
     values = warped.ReadAsArray().astype(np.float32)
     alpha = values[-1] / 255.0
@@ -768,6 +776,7 @@ def build_mosaic(
     quality: int = 90,
     lossless: bool = False,
     resampling: str = "cubic",
+    tolerance: float = ERROR_THRESHOLD,
     backend: str = "cpu",
     workers: int | None = None,
     cache_mb: int = 256,
@@ -781,6 +790,9 @@ def build_mosaic(
     Sources are painted in the order given, later ones on top where they
     overlap. ``max_zoom`` defaults to the finest native zoom over all sources.
     Tiles are written only where some source has map area.
+
+    ``tolerance`` is how far the warp may cut the projection's corner, in source
+    pixels, on either backend: 0 evaluates it exactly (see ERROR_THRESHOLD).
     """
     output_dir = Path(output_dir)
     tile_dir = output_dir / "tiles"
@@ -815,7 +827,8 @@ def build_mosaic(
     if backend not in ("gpu", "cpu"):
         raise ValueError(f"backend must be 'gpu' or 'cpu', not {backend!r}")
     workers = workers or os.cpu_count() or 1
-    initargs = (prepared, str(tile_dir), suffix, options, resampling, resume, cache_mb)
+    initargs = (prepared, str(tile_dir), suffix, options, resampling, resume, cache_mb,
+                tolerance)
 
     # Masks are burnt first, in a small pool of their own, and deliberately not
     # on the render pool. GDALRasterizeLayers allocates a chunk buffer sized
@@ -840,7 +853,7 @@ def build_mosaic(
 
             written = gpumosaic.render_top(
                 prepared, plan, top, tile_dir, options, resume=resume,
-                resampling=resampling, say=say, quiet=quiet)
+                resampling=resampling, tolerance=tolerance, say=say, quiet=quiet)
             # The pyramid too: children decoded and parents encoded on threads,
             # the premultiplied 2x2 average batched on the GPU -- that average,
             # not the codecs, was 60% of a parent's cost in numpy.

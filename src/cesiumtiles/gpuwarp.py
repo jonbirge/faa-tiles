@@ -4,13 +4,17 @@ An alternative to ``gdal.Warp`` for the max-zoom tiles, selected with
 ``build_chart_tileset.py --warp gpu`` (``--warp cpu``, the default, keeps GDAL).
 What it does differently:
 
-* **The projection is exact.** It is evaluated per output pixel in closed form,
-  where gdal.Warp fits a polynomial over the destination and pays about 4x in
-  the kernel to be exact instead (see ``mosaic.ERROR_THRESHOLD``).
+* **The projection is exact**, for what that costs here: evaluated in closed
+  form on a 16 px lattice and interpolated between, which is 1.2e-4 source
+  pixels -- ~1,000x inside the 0.125 gdal.Warp fits a polynomial to, and below
+  what float32 rounds the grid to anyway (see ``sampling_grid`` and
+  ``lattice_step``). GDAL pays about 4x in the kernel to be exact instead (see
+  ``mosaic.ERROR_THRESHOLD``).
 * **Resampling is prefilter-then-reconstruct**: a power-of-two mip read, a
   Gaussian that band-limits the remainder to the output's Nyquist limit, then
-  bicubic. GDAL widens a separable cubic along the source axes, which
-  approximates both steps at once.
+  bicubic -- or bilinear, which is the cheap end of that trade (``grid_mode``).
+  GDAL widens a separable cubic along the source axes, which approximates both
+  steps at once.
 
 The filter is isotropic, and that is correct rather than a shortcut: see the
 note above ``source_pixels``. It was first planned as EWA/anisotropic, until the
@@ -39,8 +43,9 @@ import torch.nn.functional as F
 
 __all__ = [
     "LambertConformalConic", "WindowTooLarge", "best_device", "footprint_scale",
-    "limit_memory", "mercator_to_lonlat", "mip_factor", "prefilter",
-    "source_pixels", "source_pixels_batch", "supports", "warp_block", "warp_dataset_block",
+    "grid_mode", "lattice_step", "limit_memory", "mercator_to_lonlat", "mip_factor",
+    "prefilter", "source_pixels", "source_pixels_batch", "supports", "warp_block",
+    "warp_dataset_block",
 ]
 
 
@@ -224,6 +229,52 @@ def source_pixels_batch(lcc: "LambertConformalConic", inverse_geotransform,
 # evaluated exactly; everything between is interpolated. See sampling_grid.
 LATTICE_STEP = 16
 
+# The worst interpolation error LATTICE_STEP costs, in *source* pixels, measured
+# on ENR_L24 (rotated 90 degrees) against the per-pixel result. Bilinear
+# interpolation of a smooth field, so the error falls with the square of the
+# spacing; lattice_step inverts that. Source pixels is also the unit GDAL's
+# errorThreshold uses, so one tolerance describes both backends.
+LATTICE_ERROR = 1.2e-4
+
+# How the resampling names the CLI accepts map onto grid_sample's modes. The
+# source is prefiltered to the output's Nyquist limit before this runs, so the
+# mode chooses a *reconstruction* filter, not a minification one: bilinear is
+# the cheap end of that trade, not a broken one.
+GRID_MODES = {
+    "cubic": "bicubic", "bicubic": "bicubic", "cubicspline": "bicubic",
+    "bilinear": "bilinear", "linear": "bilinear",
+    "near": "nearest", "nearest": "nearest",
+}
+
+
+def grid_mode(resampling: str) -> str:
+    """``grid_sample`` mode for a GDAL resampling name."""
+    try:
+        return GRID_MODES[resampling]
+    except KeyError:
+        raise ValueError(
+            f"the gpu backend has no sampler for resampling {resampling!r}; "
+            f"choose one of {', '.join(sorted(GRID_MODES))}") from None
+
+
+def lattice_step(tolerance: float, size: int = 256, cap: int = LATTICE_STEP) -> int:
+    """The lattice spacing whose interpolation error stays inside ``tolerance``
+    source pixels, as a power of two dividing ``size``.
+
+    ``tolerance`` is what a caller is willing to trade for speed -- the same
+    number, in the same units, that the CPU backend hands gdal.Warp as its
+    errorThreshold. ``cap`` bounds it from above: LATTICE_STEP is already ~1,000x
+    inside GDAL's own default, and below the ~5e-4 px that float32 rounds these
+    coordinates to anyway, so a tolerance loose enough to widen it further buys
+    nothing. 0 (exact) is the tightest the lattice goes, not per-pixel
+    evaluation; source_pixels_batch is that.
+    """
+    if tolerance <= LATTICE_ERROR:
+        return min(LATTICE_STEP, cap, size)
+    step = LATTICE_STEP * math.sqrt(tolerance / LATTICE_ERROR)
+    step = 1 << int(math.floor(math.log2(min(step, size, cap))))
+    return max(1, step)
+
 
 def sampling_grid(lcc: "LambertConformalConic", inverse_geotransform,
                   wests: torch.Tensor, norths: torch.Tensor, span: float, size: int,
@@ -233,8 +284,10 @@ def sampling_grid(lcc: "LambertConformalConic", inverse_geotransform,
     ``(B, size, size, 2)`` in normalised units over a window of ``extent``
     mip-level pixels whose top-left is ``origin`` in full-resolution pixels.
 
-    The projection is evaluated exactly, in float64, only every ``step`` px, and
-    bilinearly interpolated in float32 between. This GPU runs float64 at ~1/64
+    The projection is evaluated exactly, in float64, only every ``step`` px
+    (LATTICE_STEP, or what :func:`lattice_step` makes of a looser tolerance), and
+    bilinearly interpolated in float32 between. ``step`` must be a power of two
+    dividing ``size``, or the interpolated grid comes back the wrong shape. This GPU runs float64 at ~1/64
     of its float32 rate and the projection is all transcendentals: evaluating
     it at every pixel took 21.8 ms per 128 tiles, against 2.2 ms this way.
     Measured on ENR_L24 (rotated 90 degrees) against the per-pixel result, the
