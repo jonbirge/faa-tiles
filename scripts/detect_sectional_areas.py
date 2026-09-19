@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 """Find each sectional's map area and write it to the area manifest.
 
-    .venv/Scripts/python scripts/detect_sectional_areas.py [--sheet DIR] [CHART ...]
+    .venv/Scripts/python scripts/detect_sectional_areas.py [SERIES] [--sheet DIR] [CHART ...]
+
+SERIES defaults to ``sectionals``; ``tac`` is the same problem, because a
+terminal area chart is drawn the same way at twice the scale.
 
 Each sheet is a map inside a printed collar: a legend panel down the left, notes
 along the bottom, sometimes a strip across the top, often a thin paper margin on
@@ -26,7 +29,7 @@ instead:
    margin. Erring inward costs a kilometre of map that a neighbouring sheet
    overlaps anyway; erring outward pastes a strip of collar onto the globe.
 
-The four curves bound a pixel polygon, written to ``scripts/sectionals_areas.json``
+The four curves bound a pixel polygon, written to ``scripts/<series>_areas.json``
 as that chart's ``include``. Hand-authored keys are never touched: ``exclude``
 polygons (enlarged insets drawn over the map), ``open_sides`` (sides to leave
 unfitted because an inset near them fools the fit), and ``"manual": true``, which
@@ -56,10 +59,6 @@ ogr.UseExceptions()
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from chart_series import series  # noqa: E402
-
-SECTIONAL_SERIES = series("sectionals")
-SECTIONALS = SECTIONAL_SERIES.directory
-MANIFEST = SECTIONAL_SERIES.manifest
 
 DECIMATE = 4          # measure on a 1/4-scale image
 WINDOWS = 48          # bands per side
@@ -253,7 +252,8 @@ def detect(path: Path, open_sides=()) -> tuple[list[list[float]] | None, list[st
     return points, notes
 
 
-def contact_sheets(manifest: dict, out_dir: Path, width: int = 420, per_sheet: int = 16) -> None:
+def contact_sheets(charts: Path, manifest: dict, out_dir: Path,
+                   width: int = 420, per_sheet: int = 16) -> None:
     from PIL import Image, ImageDraw
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -261,7 +261,7 @@ def contact_sheets(manifest: dict, out_dir: Path, width: int = 420, per_sheet: i
     for sheet in range(0, len(names), per_sheet):
         thumbs = []
         for name in names[sheet:sheet + per_sheet]:
-            path = SECTIONALS / name
+            path = charts / name
             ds = gdal.Open(str(path))
             scale = width / ds.RasterXSize
             small = gdal.Translate("", ds, format="MEM", width=width, rgbExpand="rgb", resampleAlg="average")
@@ -278,7 +278,7 @@ def contact_sheets(manifest: dict, out_dir: Path, width: int = 420, per_sheet: i
                         ring = poly.GetGeometryRef(r)
                         draw.line([ring.GetPoint_2D(i) for i in range(ring.GetPointCount())],
                                   fill=(255, 0, 255), width=2)
-            draw.text((4, 4), name.removesuffix(" SEC.tif"), fill=(255, 0, 0))
+            draw.text((4, 4), name.removesuffix(".tif").removesuffix(" SEC"), fill=(255, 0, 0))
             thumbs.append(im)
         cols = 4
         cell = max(t.height for t in thumbs)
@@ -292,14 +292,21 @@ def contact_sheets(manifest: dict, out_dir: Path, width: int = 420, per_sheet: i
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("series", nargs="?", default="sectionals")
     ap.add_argument("charts", nargs="*", help="chart file names to detect (default: all)")
     ap.add_argument("--sheet", type=Path, help="write review contact sheets into this directory")
     ap.add_argument("--no-detect", action="store_true", help="only draw contact sheets")
     args = ap.parse_args(argv)
+    chart_series = series(args.series)
 
-    manifest = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.exists() else {}
-    names = args.charts or sorted(p.name for p in SECTIONALS.glob("*.tif")
-                                  if SECTIONAL_SERIES.wants_tif(p.name))
+    sheets = chart_series.directory
+    path = chart_series.manifest
+    manifest = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    names = args.charts or sorted(p.name for p in sheets.glob("*.tif")
+                                  if chart_series.wants_tif(p.name))
+    if not names:
+        raise SystemExit(f"no GeoTIFFs in {sheets}; "
+                         f"run scripts/fetch_charts.py {chart_series.name} first")
 
     if not args.no_detect:
         for name in names:
@@ -307,7 +314,7 @@ def main(argv=None) -> int:
             if entry.get("manual"):
                 print(f"{name}: manual, skipped")
                 continue
-            points, notes = detect(SECTIONALS / name, entry.get("open_sides", ()))
+            points, notes = detect(sheets / name, entry.get("open_sides", ()))
             entry.pop("limits", None)
             if points is None:
                 entry.pop("include", None)
@@ -315,13 +322,13 @@ def main(argv=None) -> int:
                 entry["include"] = [{"pixel": points}]
             print(f"{name}: " + ("; ".join(notes) or "no collar found"), flush=True)
         ordered = {k: manifest[k] for k in sorted(manifest)}
-        MANIFEST.write_text(json.dumps(ordered, indent=1) + "\n", encoding="utf-8", newline="\n")
-        print(f"wrote {MANIFEST}")
+        path.write_text(json.dumps(ordered, indent=1) + "\n", encoding="utf-8", newline="\n")
+        print(f"wrote {path}")
 
     print(f"\npaper just inside each edge (flagged above {PAPER_WARNING:.0%}):")
     flagged = 0
     for name in names:
-        fractions = paper_inside_edges(SECTIONALS / name, MapArea.from_dict(manifest.get(name, {})))
+        fractions = paper_inside_edges(sheets / name, MapArea.from_dict(manifest.get(name, {})))
         high = {k: v for k, v in fractions.items() if v > PAPER_WARNING}
         flagged += bool(high)
         shown = "  ".join(f"{k} {v:.0%}" for k, v in fractions.items())
@@ -329,7 +336,7 @@ def main(argv=None) -> int:
     print(f"{flagged} chart(s) flagged")
 
     if args.sheet:
-        contact_sheets(manifest, args.sheet)
+        contact_sheets(sheets, manifest, args.sheet)
     return 0
 
 

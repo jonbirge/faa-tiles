@@ -2,7 +2,10 @@
 
     python scripts/fetch_charts.py SERIES [--workers N] [--out DIR] [--list]
 
-SERIES is a name from chart_series.py: ``sectionals`` or ``ifr-low``.
+SERIES is a name from chart_series.py (``sectionals``, ``tac``, ``ifr-low``).
+A composite series (``sectionals-tac``) downloads nothing of its own: it fetches
+each of its members in turn, into their own directories, so the sheets a member
+already has on disk are shared rather than downloaded twice.
 
 Finds the current edition by listing the series' index and taking the latest
 ``MM-DD-YYYY`` directory that is not in the future -- the FAA posts the next
@@ -75,6 +78,18 @@ def main(argv: list[str] | None = None) -> int:
                          "which needs them only for re-detection)")
     args = ap.parse_args(argv)
     chart_series = series(args.series)
+    if chart_series.is_composite:
+        if args.out:
+            raise SystemExit(f"--out means nothing for {chart_series.name}: each member "
+                             "is fetched into its own directory")
+        rest = ([] if args.tifs is None else ["--tifs" if args.tifs else "--no-tifs"])
+        for member in chart_series.members:
+            print(f"\n=== {member.name}", flush=True)
+            code = main([member.name, "--workers", str(args.workers),
+                         *(["--list"] if args.list else []), *rest])
+            if code:
+                return code
+        return 0
     out = args.out or chart_series.directory
     want_tifs = chart_series.fetches_tifs if args.tifs is None else args.tifs
 
