@@ -53,7 +53,7 @@ osr.UseExceptions()
 
 __all__ = [
     "Limits", "MapArea", "MosaicSource", "Polygon", "PreparedSource",
-    "build_mosaic", "covering_arc", "plan_tiles", "prepare_sources",
+    "build_mosaic", "covering_arc", "plan_detail_tiles", "plan_tiles", "prepare_sources",
 ]
 
 EARTH_RADIUS = 6378137.0
@@ -294,6 +294,10 @@ class MapArea:
 class MosaicSource:
     path: Path
     area: MapArea = field(default_factory=MapArea)
+    # Whether this source is fine enough to justify ``build_mosaic``'s detail
+    # level. Only a detail source puts a tile on that level; every source then
+    # paints into the tiles it plans (see ``detail_zoom``).
+    detail: bool = False
 
 
 @dataclass
@@ -308,6 +312,7 @@ class PreparedSource:
     lat_range: tuple[float, float]
     native_zoom: int
     mask_path: str | None = None
+    detail: bool = False
 
 
 def _wgs84_based(wkt: str) -> str:
@@ -428,6 +433,7 @@ def _prepare(source: MosaicSource) -> PreparedSource | None:
         lon_range=(x_to_lon(min_x), x_to_lon(max_x)),
         lat_range=(y_to_lat(min_y), y_to_lat(max_y)),
         native_zoom=native,
+        detail=source.detail,
     )
 
 
@@ -475,6 +481,25 @@ def plan_tiles(prepared: Sequence[PreparedSource], z: int) -> dict[tuple[int, in
                 wrap = tx // n
                 plan.setdefault((tx - wrap * n, ty), []).append((index, wrap))
     return plan
+
+
+def plan_detail_tiles(prepared: Sequence[PreparedSource], z: int) -> dict[tuple[int, int], list[tuple[int, int]]]:
+    """The detail level's plan at zoom ``z``: only tiles a detail source reaches.
+
+    A series can mix scales -- VFR sectionals at 1:500,000 with terminal area
+    charts at 1:250,000 over the busiest airports. Tiling the whole mosaic at
+    the finer sheets' zoom quadruples it to magnify the coarse 96%, so instead
+    the pyramid stops at ``max_zoom`` and one sparse level past it holds the
+    fine sheets. A viewer that asks for a tile this level does not have falls
+    back to the stretched parent, which is what it would have drawn anyway.
+
+    Every source still contributes to the tiles that survive, not just the
+    detail ones: a detail sheet's edge then sits on the magnified sheet beneath
+    it, rather than on a hard transparent boundary a tile wide.
+    """
+    plan = plan_tiles(prepared, z)
+    return {tile: contributors for tile, contributors in plan.items()
+            if any(prepared[index].detail for index, _ in contributors)}
 
 
 # -- workers ----------------------------------------------------------------
@@ -716,9 +741,17 @@ def _render_parent(task):
 
 # -- driver -----------------------------------------------------------------
 
-def _build_cpu(prepared, plan, top, min_zoom, workers, initargs, quiet):
-    """The CPU backend: max zoom and the overview cascade on worker processes."""
+def _build_cpu(prepared, plan, top, min_zoom, workers, initargs, quiet,
+               detail_plan=None, detail_zoom=None):
+    """The CPU backend: max zoom and the overview cascade on worker processes.
+
+    A detail level, where a series has one, is rendered first and feeds nothing
+    below it -- the cascade is built from ``top``, which is the deepest level
+    that covers the whole mosaic.
+    """
     with mp.get_context("spawn").Pool(workers, _init_worker, initargs) as pool:
+        if detail_plan:
+            _render_top_cpu(pool, detail_plan, detail_zoom, quiet)
         written = _render_top_cpu(pool, plan, top, quiet)
         for z in range(top - 1, min_zoom - 1, -1):
             parents = sorted({(x >> 1, y >> 1) for x, y in written})
@@ -773,6 +806,7 @@ def build_mosaic(
     *,
     min_zoom: int = 0,
     max_zoom: int | None = None,
+    detail_zoom: int | None = None,
     quality: int = 90,
     lossless: bool = False,
     resampling: str = "cubic",
@@ -790,6 +824,11 @@ def build_mosaic(
     Sources are painted in the order given, later ones on top where they
     overlap. ``max_zoom`` defaults to the finest native zoom over all sources.
     Tiles are written only where some source has map area.
+
+    ``detail_zoom`` adds one sparse level past ``max_zoom``, covering only the
+    tiles a source marked ``detail`` reaches (:func:`plan_detail_tiles`). It
+    feeds nothing below it: the overview cascade still starts at ``max_zoom``,
+    the level that covers the whole mosaic.
 
     ``tolerance`` is how far the warp may cut the projection's corner, in source
     pixels, on either backend: 0 evaluates it exactly (see ERROR_THRESHOLD).
@@ -815,6 +854,19 @@ def build_mosaic(
     plan = plan_tiles(prepared, top)
     say(f"{len(prepared)} sources, native zoom z{native}, building z{min_zoom}-z{top}; "
         f"{len(plan):,} tiles planned at z{top}")
+
+    detail_plan = None
+    if detail_zoom is not None:
+        if detail_zoom <= top:
+            raise ValueError(f"detail_zoom ({detail_zoom}) must be past max_zoom ({top})")
+        if not any(p.detail for p in prepared):
+            raise ValueError("detail_zoom was asked for but no source is marked detail")
+        detail_plan = plan_detail_tiles(prepared, detail_zoom)
+        if not detail_plan:
+            raise ValueError(f"no detail source reaches any tile at z{detail_zoom}")
+        detail_sources = sum(1 for p in prepared if p.detail)
+        say(f"{len(detail_plan):,} tiles planned at the z{detail_zoom} detail level, from "
+            f"{detail_sources} detail source{'s' if detail_sources != 1 else ''}")
 
     # Masks are build intermediates, kept beside the output (same drive) and
     # removed afterwards, so the tileset itself stays tiles and metadata only.
@@ -851,6 +903,10 @@ def build_mosaic(
             # threads for decoding and encoding; no worker processes at all.
             from cesiumtiles import gpumosaic
 
+            if detail_plan:
+                gpumosaic.render_top(
+                    prepared, detail_plan, detail_zoom, tile_dir, options, resume=resume,
+                    resampling=resampling, tolerance=tolerance, say=say, quiet=quiet)
             written = gpumosaic.render_top(
                 prepared, plan, top, tile_dir, options, resume=resume,
                 resampling=resampling, tolerance=tolerance, say=say, quiet=quiet)
@@ -860,7 +916,8 @@ def build_mosaic(
             gpumosaic.render_overviews(tile_dir, written, top, min_zoom, options,
                                        resume=resume, say=say, quiet=quiet)
         else:
-            _build_cpu(prepared, plan, top, min_zoom, workers, initargs, quiet)
+            _build_cpu(prepared, plan, top, min_zoom, workers, initargs, quiet,
+                       detail_plan, detail_zoom)
     finally:
         shutil.rmtree(mask_dir, ignore_errors=True)
 
@@ -869,9 +926,14 @@ def build_mosaic(
         raise TileBuildError("no tiles were produced")
 
     actual_top = max(per_zoom)
-    n = 1 << actual_top
-    columns = {int(p.name) for p in (tile_dir / str(actual_top)).iterdir() if p.name.isdigit()}
-    _, _, y_min, y_max = extent_by_zoom[actual_top]
+    # Coverage is read off the deepest level that spans the whole mosaic, not
+    # off max(per_zoom). A detail level is sparse by design, so its columns and
+    # rows describe the handful of terminal areas it holds; read as the
+    # tileset's bounds they would put the extent around one city.
+    full_top = max(z for z in per_zoom if detail_zoom is None or z < detail_zoom)
+    n = 1 << full_top
+    columns = {int(p.name) for p in (tile_dir / str(full_top)).iterdir() if p.name.isdigit()}
+    _, _, y_min, y_max = extent_by_zoom[full_top]
     covered_west, covered_east = covering_arc([(c * 360.0 / n - 180.0, (c + 1) * 360.0 / n - 180.0) for c in columns])
     span = 2 * MERCATOR_HALF_WORLD / n
     covered = (
@@ -902,12 +964,12 @@ def build_mosaic(
         bounds_lonlat=covered,
         per_zoom=per_zoom,
     )
-    _write_metadata(result, prepared, data_bounds, title)
+    _write_metadata(result, prepared, data_bounds, title, full_top)
     say(f"done in {(time.monotonic() - started) / 60:.1f} min")
     return result
 
 
-def _write_metadata(result: TilesetResult, prepared, data_bounds, title) -> None:
+def _write_metadata(result: TilesetResult, prepared, data_bounds, title, full_zoom) -> None:
     west, south, east, north = result.bounds_lonlat
     metadata = {
         "name": title or result.output_dir.name,
@@ -920,6 +982,11 @@ def _write_metadata(result: TilesetResult, prepared, data_bounds, title) -> None
         "tilesize": TILE_SIZE,
         "minzoom": result.min_zoom,
         "maxzoom": result.max_zoom,
+        # The deepest level that covers the whole mosaic. It equals maxzoom
+        # unless the build added a detail level, whose tiles exist only over
+        # the finer sheets; a client asking past this gets a 404 and falls
+        # back to the stretched parent, as it does over ocean.
+        "fullzoom": full_zoom,
         "nativezoom": result.native_zoom,
         "url_template": "tiles/{z}/{x}/{y}.webp",
         # west > east means the extent crosses the antimeridian, as in Cesium.

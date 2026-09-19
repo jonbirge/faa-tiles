@@ -19,4 +19,4 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipeline import chart_series_main  # noqa: E402
 
 if __name__ == "__main__":
-    sys.exit(chart_series_main("sectionals", ["detect_sectional_areas.py"], __doc__.splitlines()[0]))
+    sys.exit(chart_series_main("sectionals", __doc__.splitlines()[0]))

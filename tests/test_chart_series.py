@@ -68,6 +68,8 @@ def test_a_stage_a_series_does_not_run_has_no_input():
 
 def test_every_stage_reads_the_previous_stages_output():
     for s in SERIES.values():
+        if s.is_composite:
+            continue
         previous = s.directory
         for script, output in s.stages:
             assert s.input_directory(script) == previous
@@ -75,10 +77,13 @@ def test_every_stage_reads_the_previous_stages_output():
         assert s.build_directory == previous
 
 
-@pytest.mark.parametrize("name, zoom", [("sectionals", 12), ("ifr-low", 13)])
+@pytest.mark.parametrize("name, zoom", [
+    ("sectionals", 12), ("ifr-low", 13), ("tac", 13), ("sectionals-tac", 12),
+])
 def test_max_zoom(name, zoom):
     """The user's call. Each matches where its prepared sheets stop holding
-    detail: IFR renders from vector at 4x reach z14, upsampled sectionals z12.5."""
+    detail: IFR renders from vector at 4x reach z14, upsampled sectionals z12.5,
+    and a TAC is 1:250,000 -- half the sectionals' pitch, so one level finer."""
     assert series(name).max_zoom == zoom
 
 
@@ -113,5 +118,65 @@ def test_l06_ships_as_two_geotiff_panels():
 
 
 def test_every_series_has_its_own_directories():
-    directories = {s.directory for s in SERIES.values()}
-    assert len(directories) == len(SERIES)
+    """Composites excepted -- they own no sheets, and say so rather than
+    quietly pointing a stage at a directory nothing writes."""
+    plain = [s for s in SERIES.values() if not s.is_composite]
+    assert len({s.directory for s in plain}) == len(plain)
+    for s in SERIES.values():
+        if s.is_composite:
+            with pytest.raises(SystemExit):
+                s.directory
+            with pytest.raises(SystemExit):
+                s.manifest
+
+
+def test_every_series_names_a_detector_or_is_a_composite():
+    """A composite detects nothing itself; every layer it paints must."""
+    for s in SERIES.values():
+        assert bool(s.detector) is not s.is_composite
+        if s.is_composite:
+            assert all(m.detector for m in s.members)
+
+
+def test_terminal_area_charts_keep_only_the_chart_itself():
+    s = series("tac")
+    assert s.wants_zip("Boston_TAC.zip") and s.wants_zip("Anchorage-Fairbanks_TAC.zip")
+    assert not s.wants_zip("Seattle_SEC.zip")
+    # One zip can hold two TACs, so the sheets are chosen per GeoTIFF.
+    assert s.wants_tif("Anchorage TAC.tif") and s.wants_tif("Fairbanks TAC.tif")
+    assert s.wants_tif("Colorado Springs TAC.tif") and s.wants_tif("Puerto Rico-VI TAC.tif")
+    # The other products that ship in the same zips are not map.
+    assert not s.wants_tif("Denver FLY.tif")            # flyway planning chart
+    assert not s.wants_tif("Anchorage Graphic.tif")     # airspace graphic
+    assert not s.wants_tif("New York TAC VFR Planning Charts.tif")
+    # Rasters at source like the sectionals, and upsampled the same way.
+    assert s.fetches_tifs and s.upsample_scale == 2 and s.pixel_scale == 2
+    assert s.upsample_model == series("sectionals").upsample_model
+    assert [script for script, _ in s.stages] == ["upsample_charts.py"]
+
+
+def test_sectionals_tac_paints_its_layers_in_order_over_their_own_directories():
+    s = series("sectionals-tac")
+    assert s.is_composite
+    assert [m.name for m in s.members] == ["sectionals", "tac"]
+    # The layers are the series themselves, so nothing is downloaded, upsampled
+    # or reviewed twice: a layer already built as its own tileset is reused.
+    assert [m.directory for m in s.members] == [series("sectionals").directory,
+                                                series("tac").directory]
+    assert [m.manifest for m in s.members] == [series("sectionals").manifest,
+                                               series("tac").manifest]
+    assert s.tileset.name == "tileset-sectionals-tac"
+
+
+def test_only_the_finer_layer_earns_the_detail_level():
+    s = series("sectionals-tac")
+    assert s.detail_layers == ("tac",)
+    # One sparse level past the level that covers the whole mosaic.
+    assert s.detail_zoom == s.max_zoom + 1
+    assert s.detail_zoom == series("tac").max_zoom
+    assert all(name in s.layers for name in s.detail_layers)
+
+
+def test_a_plain_series_has_no_detail_level():
+    for name in ("sectionals", "ifr-low", "tac"):
+        assert series(name).detail_zoom == 0 and not series(name).detail_layers

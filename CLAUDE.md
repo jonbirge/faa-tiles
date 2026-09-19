@@ -17,8 +17,8 @@ Two packages under `src/`, one venv, one test suite.
 
 **Everything downloaded or derived from downloads lives under `source/`** (the
 user asked for this, so the lot can be deleted in one go): `source/sectionals/`
-(55 GeoTIFFs) and `source/ifr-low/pdf/` (36 vector PDFs) from
-`scripts/fetch_charts.py SERIES`, then `source/ifr-low/rendered/` (37 sheets
+(55 GeoTIFFs), `source/tac/` (34 terminal area charts from 30 zips) and
+`source/ifr-low/pdf/` (36 vector PDFs) from `scripts/fetch_charts.py SERIES`, then `source/ifr-low/rendered/` (37 sheets
 drawn from those PDFs) and `source/ifr-low/healed/` (frame-healed copies, both
 below),
 `source/models/` (upsampler weights), `source/vendor/nunif`, and
@@ -35,8 +35,9 @@ automated download**: the FAA product page's "Planning Set" link
 user chose a manual drop-in; `build_wall_planning.py` checks for the files.
 
 **Wrappers, one per product** (the user asked for these over running stages by
-hand): `build_sectionals.py`, `build_ifr_low.py`, `build_wall_planning.py`, all
-thin, running stage scripts through `pipeline.py`. The chart wrappers do **not**
+hand): `build_sectionals.py`, `build_sectionals_tac.py`, `build_ifr_low.py`,
+`build_wall_planning.py`, all thin, running stage scripts through
+`pipeline.py`. The chart wrappers do **not**
 re-detect map areas unless `--detect` is passed, because the manifests are
 reviewed and committed. `scripts/setup_repo.py` takes a fresh clone to a working
 venv; it has been run against an existing venv, not from a truly fresh clone.
@@ -99,7 +100,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 223 tests, ~60s
+.venv/Scripts/python -m pytest                        # 235 tests, ~70s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -322,8 +323,19 @@ for it gone; the document `<title>` stays.
 (`heal_frames.py`) -> `build_chart_tileset.py SERIES`.
 **`scripts/chart_series.py` is the one place a series is described**: its index
 URL, which zips and files it wants (regexes), exclusions, download directory,
-manifests (`scripts/<series>_areas.json`, `<series>_pdf.json`) and tileset
-directory. Add a series there, not by copying scripts.
+**which script detects its map areas** (`detector`), manifests
+(`scripts/<series>_areas.json`, `<series>_pdf.json`) and tileset directory. Add
+a series there, not by copying scripts. `pipeline.py` reads `detector` off the
+series, so the wrappers no longer name a detection script and
+`detect_sectional_areas.py` now takes a series argument like the IFR one.
+
+**A composite series is layers, not sheets.** `sectionals-tac` has a `layers`
+list and nothing else of its own: each layer stays the series it is, with its
+own downloads, stages and reviewed manifest, and the composite only fixes the
+paint order (every sheet of one layer below every sheet of the next) and which
+layers earn the detail level. A composite raises rather than returning a
+`directory` or `manifest`, so a stage cannot quietly write into a directory
+nothing else reads. Building it after `tileset-sectionals` costs only the TACs.
 
 **The manifests are always in downloaded-GeoTIFF pixel space.** A series that
 renders PDFs tiles rasters drawn at `pdf_scale` times that, so pixel polygons
@@ -376,6 +388,48 @@ inset GeoTIFFs, which are not extracted and which the build also skips. Exclusio
   no tiles over ocean by design.
 - **Palette sheets are RGB-expanded before warping**, or resampling blends
   indices. A test guards it.
+
+**Terminal area charts (`tac`) and the `sectionals-tac` composite.** 30 zips
+from `visual/<edition>/tac-files/` yield **34 sheets**, because
+Anchorage/Fairbanks, Denver/Colorado Springs, Seattle/Portland and
+Tampa/Orlando each ship two -- compare sheet counts against zip counts here
+too. The `tif_pattern` keeps `* TAC.tif` and nothing else: a zip also carries
+that city's Flyway Planning chart (`Denver FLY.tif`), sometimes an airspace
+graphic (`Anchorage Graphic.tif`) or `New York TAC VFR Planning Charts.tif`,
+none of which are map. 678 MB downloaded.
+
+- **A TAC is 1:250,000 at 300 dpi: 21.1679 m/px**, read off the world files --
+  exactly half the sectionals' 42.3. Measured through
+  `prepare_sources`, 32 of the 34 downloaded sheets already report native
+  **z13** and the two Alaskan ones z12; upsampled 2x they reach past it. Same
+  Real-CUGAN denoise3x weights as the sectionals, so the two layers meet on
+  equal terms.
+- **z12 with a sparse z13 detail level, not z13 everywhere** (the user's call).
+  A uniform z13 would be ~2 M tiles / ~21 GB to magnify the 96% that is
+  sectional -- the trade already rejected for `tileset-sectionals`. Instead
+  `build_mosaic(detail_zoom=)` plans one level past `max_zoom` from
+  `plan_detail_tiles`, keeping only tiles a source marked `detail` reaches:
+  tens of thousands of tiles, not two million. Cesium falls back to the
+  stretched z12 parent where the level is absent, exactly as it already does
+  over ocean.
+- **Every source paints into a kept detail tile, not just the detail ones**, so
+  a TAC's edge sits on the magnified sectional rather than on a hard
+  transparent boundary a tile wide.
+- **The detail level feeds nothing below it.** The overview cascade still
+  starts at `max_zoom`; so does the coverage read-back, because a sparse top
+  level's columns describe one city, not the chart. `metadata.json` carries
+  `fullzoom` beside `maxzoom` to say where the full coverage stops.
+- **The TACs paint on top at every level** (the user's call), which is what
+  "inserted where available" means -- not only at the finest one.
+- **Los Angeles TAC is hand-traced and `manual`**, like the LA sectional and
+  for the same reason: its west band fit spanned 4676-6326 px (every other
+  sheet's worst side spans under 90) and the fitted slant silently dropped a
+  wedge of the Pacific. Its neatline is a drawn rule, measured at west
+  4669, east 14878, north 103, south 5890, each >99.8% dark across the full
+  span of the opposite pair; the manifest is that rectangle inset 12 px.
+  **The paper check did not catch it** -- it never catches map cut off, only
+  collar left in (it flags 0 of 34 sheets). The per-side band spread the
+  detector prints is what catches it.
 
 Detection lessons, each learnt from a wrong outline:
 
@@ -732,3 +786,6 @@ were checked against the real tilesets.
   z12**, upsampled 2x, WebP q90) and `tileset-ifr-low/` (**3.05 GB, 953,205 tiles at
   z13**, lossless, from 4x PDF renders, 31.2 min at 608 tiles/s) are
   the other real products and are expected to persist too.
+  `tileset-sectionals-tac/` joins them once it is built: **not yet run**, so
+  there are no figures for it. Expect roughly `tileset-sectionals` plus the
+  sparse z13 level over the 34 TAC sheets.

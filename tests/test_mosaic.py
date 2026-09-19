@@ -342,3 +342,93 @@ def test_gpu_backend_accepts_a_cheaper_reconstruction_filter(tmp_path):
                  backend="gpu", resampling="bilinear", tolerance=0.125)
     assert _close(_pixel(out, -97.0, 39.0), RED, tol=1)
     assert _close(_pixel(out, -94.3, 39.0), BLUE, tol=1)
+
+
+# -- the detail level -------------------------------------------------------
+#
+# A series can mix scales: VFR sectionals at 1:500,000 with terminal area charts
+# at 1:250,000 over the busy airports. Tiling everything at the finer sheets'
+# zoom quadruples the mosaic to magnify the coarse 96% of it, so the pyramid
+# stops where the coarse sheets stop and one sparse level past it holds the fine
+# ones. A client falls back to the stretched parent where that level is absent.
+
+DETAIL_TOP = 8
+DETAIL_LEVEL = 9
+WIDE = (-110.0, 35.0, -100.0, 45.0)
+FINE = (-105.0, 39.5, -104.5, 40.0)
+
+
+def _detail_scene(root, *, detail):
+    root.mkdir(parents=True, exist_ok=True)
+    wide = _solid(root / "a_wide.tif", WIDE, RED)
+    fine = _solid(root / "b_fine.tif", FINE, BLUE)
+    sources = [MosaicSource(wide), MosaicSource(fine, detail=True)]
+    out = root / "out"
+    result = build_mosaic(sources, out, min_zoom=6, max_zoom=DETAIL_TOP,
+                          detail_zoom=DETAIL_LEVEL if detail else None,
+                          lossless=True, workers=2, quiet=True)
+    return out, result
+
+
+@pytest.fixture(scope="module")
+def detail_scene(tmp_path_factory):
+    """A wide coarse sheet with one small sheet marked ``detail`` inside it."""
+    return _detail_scene(tmp_path_factory.mktemp("detail"), detail=True)
+
+
+def test_the_detail_level_exists_only_where_a_detail_source_reaches(detail_scene):
+    out, result = detail_scene
+    assert result.max_zoom == DETAIL_LEVEL
+    # Inside the fine sheet the detail level is drawn, and drawn from it.
+    assert _close(_pixel(out, -104.75, 39.75, z=DETAIL_LEVEL), BLUE)
+    # Far from it there is no tile at all, so a client draws the z8 parent.
+    assert _pixel(out, -108.0, 37.0, z=DETAIL_LEVEL) is None
+    assert _close(_pixel(out, -108.0, 37.0, z=DETAIL_TOP), RED)
+    # Sparse means sparse: a full level would be four tiles per z8 tile.
+    assert result.per_zoom[DETAIL_LEVEL] < result.per_zoom[DETAIL_TOP]
+
+
+def test_the_detail_level_paints_the_coarse_sheet_under_the_fine_one(detail_scene):
+    """A kept tile gets every source, not only the detail ones, so the fine
+    sheet's edge sits on the magnified sheet beneath instead of on a hard
+    transparent boundary a tile wide."""
+    out, _ = detail_scene
+    # Same z9 tile as the fine sheet's west edge, just outside the sheet.
+    assert _close(_pixel(out, -105.05, 39.75, z=DETAIL_LEVEL), RED)
+
+
+def test_the_detail_level_feeds_nothing_below_it(tmp_path):
+    """The overview cascade starts at max_zoom, the deepest level that covers
+    the whole mosaic -- so every tile below is byte for byte what a build
+    without a detail level produces."""
+    with_detail, _ = _detail_scene(tmp_path / "with", detail=True)
+    without, plain = _detail_scene(tmp_path / "without", detail=False)
+    assert plain.max_zoom == DETAIL_TOP
+    for z in range(6, DETAIL_TOP + 1):
+        a = sorted((p.relative_to(with_detail), p.read_bytes()) for p in
+                   (with_detail / "tiles" / str(z)).rglob("*.webp"))
+        b = sorted((p.relative_to(without), p.read_bytes()) for p in
+                   (without / "tiles" / str(z)).rglob("*.webp"))
+        assert a == b, f"z{z} differs"
+
+
+def test_metadata_reports_the_detail_level_and_the_full_coverage(detail_scene):
+    """``bounds`` must describe the chart, not the terminal area: read off the
+    sparse top level it would frame a single city."""
+    out, result = detail_scene
+    metadata = json.loads((out / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["maxzoom"] == DETAIL_LEVEL
+    assert metadata["fullzoom"] == DETAIL_TOP
+    west, south, east, north = metadata["bounds"]
+    assert west <= WIDE[0] and south <= WIDE[1] and east >= WIDE[2] and north >= WIDE[3]
+
+
+def test_a_detail_level_must_be_past_max_zoom_and_have_a_source(tmp_path):
+    wide = _solid(tmp_path / "a_wide.tif", WIDE, RED)
+    fine = _solid(tmp_path / "b_fine.tif", FINE, BLUE)
+    with pytest.raises(ValueError, match="past max_zoom"):
+        build_mosaic([MosaicSource(wide), MosaicSource(fine, detail=True)], tmp_path / "a",
+                     max_zoom=DETAIL_TOP, detail_zoom=DETAIL_TOP, workers=1, quiet=True)
+    with pytest.raises(ValueError, match="no source is marked detail"):
+        build_mosaic([MosaicSource(wide), MosaicSource(fine)], tmp_path / "b",
+                     max_zoom=DETAIL_TOP, detail_zoom=DETAIL_LEVEL, workers=1, quiet=True)

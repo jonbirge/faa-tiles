@@ -22,14 +22,18 @@ class Series:
     # Directory listing holding one MM-DD-YYYY folder per edition. The FAA
     # posts the next edition's folder early, so the current one is the latest
     # that is not in the future.
-    index_url: str
+    index_url: str = ""
     # Path inside an edition folder that lists the zips ("" for the folder).
-    files_path: str
+    files_path: str = ""
     # Zips to download, matched against the file name.
-    zip_pattern: str
+    zip_pattern: str = ""
     # GeoTIFFs to keep from those zips, matched against the file name. Anything
     # else in a zip -- insets, notes, other products -- is not extracted.
-    tif_pattern: str
+    tif_pattern: str = ""
+    # The script that writes this series' map-area manifest. Each series' sheets
+    # are a different detection problem: a sectional or a TAC is a map inside a
+    # paper collar, an IFR sheet is a map inside a drawn frame.
+    detector: str = ""
     # GeoTIFFs dropped by name even when the pattern keeps them. The build
     # skips these too, in case an older download left them on disk.
     exclude: frozenset[str] = frozenset()
@@ -61,10 +65,37 @@ class Series:
     # Keep this in step with any stage that changes resolution (pdf_scale,
     # upsample_scale) -- they determine whether the warp magnifies or minifies.
     max_zoom: int = 11
+    # A composite series: other series painted into one tileset, in this order,
+    # later ones on top. It downloads, prepares and detects nothing of its own
+    # -- each member stays a series, fetched and reviewed as one -- so a
+    # composite reuses whatever its members already have on disk.
+    layers: tuple[str, ...] = ()
+    # Members fine enough to earn a level past ``max_zoom``, and which level
+    # that is (0: none). It is sparse -- only the tiles those members reach
+    # (mosaic.plan_detail_tiles) -- so it costs a fraction of a full level.
+    detail_layers: tuple[str, ...] = ()
+    detail_zoom: int = 0
+
+    @property
+    def is_composite(self) -> bool:
+        return bool(self.layers)
+
+    @property
+    def members(self) -> tuple["Series", ...]:
+        """The series this one paints, in paint order; itself if it is not a
+        composite, so a caller can loop either way."""
+        return tuple(SERIES[name] for name in self.layers) if self.layers else (self,)
+
+    def _own(self, what: str) -> None:
+        if self.is_composite:
+            raise SystemExit(
+                f"{self.name} is a composite of {', '.join(self.layers)} and has no {what} "
+                f"of its own; run that stage against a member series instead")
 
     @property
     def directory(self) -> Path:
         """Where the GeoTIFFs are downloaded to."""
+        self._own("download directory")
         return SOURCE / self.name
 
     @property
@@ -143,6 +174,7 @@ class Series:
     @property
     def manifest(self) -> Path:
         """The reviewed map-area manifest for the series."""
+        self._own("map-area manifest")
         return SCRIPTS / f"{self.name.replace('-', '_')}_areas.json"
 
     @property
@@ -155,10 +187,12 @@ class Series:
         return REPO / f"tileset-{self.name}"
 
     def wants_zip(self, name: str) -> bool:
-        return re.fullmatch(self.zip_pattern, name, re.IGNORECASE) is not None
+        return bool(self.zip_pattern) and re.fullmatch(
+            self.zip_pattern, name, re.IGNORECASE) is not None
 
     def wants_tif(self, name: str) -> bool:
-        return (re.fullmatch(self.tif_pattern, name, re.IGNORECASE) is not None
+        return (bool(self.tif_pattern)
+                and re.fullmatch(self.tif_pattern, name, re.IGNORECASE) is not None
                 and name not in self.exclude)
 
     def wants_pdf_zip(self, name: str) -> bool:
@@ -180,6 +214,7 @@ SERIES = {
             files_path="sectional-files/",
             zip_pattern=r".+\.zip",
             tif_pattern=r".+\.tif",
+            detector="detect_sectional_areas.py",
             # The user's call. Both ship inside Hawaiian_Islands.zip alongside
             # Hawaiian Islands and Honolulu, so exclusion is per GeoTIFF.
             exclude=frozenset({
@@ -213,6 +248,7 @@ SERIES = {
             # the user chose to skip. L-06 is published in two halves,
             # ENR_L06N and ENR_L06S, both part of the chart.
             tif_pattern=r"ENR_L\d\d[NS]?\.tif",
+            detector="detect_ifr_areas.py",
             # The same 36 charts as vector PDFs, two per zip (DELUS1 is L-01
             # and L-02, and so on through DELUS35). Rendered above the
             # GeoTIFF's 400 dpi, they antialias properly instead of carrying
@@ -238,6 +274,47 @@ SERIES = {
             # The user's call: IFR charts are thin linework and small type on
             # white, which lossy compression softens.
             lossless=True,
+        ),
+        Series(
+            name="tac",
+            title="FAA VFR Terminal Area Charts",
+            index_url="https://aeronav.faa.gov/visual/",
+            files_path="tac-files/",
+            zip_pattern=r".+_TAC\.zip",
+            # The TAC itself and nothing else. A zip also carries that city's
+            # Flyway Planning chart ("Denver FLY.tif"), sometimes an airspace
+            # graphic ("Anchorage Graphic.tif") or a planning chart ("New York
+            # TAC VFR Planning Charts.tif"), none of which are map. It is per
+            # GeoTIFF rather than per zip because one zip can hold two TACs:
+            # 30 zips yield 34 sheets -- Anchorage/Fairbanks,
+            # Denver/Colorado Springs, Seattle/Portland, Tampa/Orlando.
+            tif_pattern=r".+ TAC\.tif",
+            # A TAC is a map in a paper collar, exactly like a sectional, so it
+            # is the same detection problem and the same script.
+            detector="detect_sectional_areas.py",
+            # Same rasterisation, same staircasing, same absence of a vector
+            # source as the sectionals; the FAA's own note calls these 300 dpi
+            # 8-bit images. Upsampled with the same weights so the two series
+            # meet on equal terms where a TAC is laid over its sectional.
+            upsample_model="realcugan-up2x-denoise3x.pth",
+            upsample_scale=2,
+            # 1:250,000 at 300 dpi is 21.17 m/px, measured off the world files
+            # -- exactly half the sectionals' 42.3, so native z12.5 and z13.5
+            # upsampled. z13 is where these sheets stop holding detail, the same
+            # rule that put the sectionals at z12.
+            max_zoom=13,
+        ),
+        Series(
+            name="sectionals-tac",
+            title="FAA VFR Sectionals with Terminal Area Charts",
+            # The fourth tileset: the sectional mosaic with each terminal area
+            # chart laid over it where one is published. TACs paint last, so
+            # they are on top wherever they reach (the user's call), and they
+            # carry the z13 detail level because they are the finer sheets.
+            layers=("sectionals", "tac"),
+            detail_layers=("tac",),
+            max_zoom=12,
+            detail_zoom=13,
         ),
     )
 }
