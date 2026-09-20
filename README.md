@@ -1,16 +1,27 @@
 # faa-tiles
 
-Two tools for getting FAA chart rasters onto a Cesium globe.
+Turn the FAA's published aeronautical charts into static `z/x/y` tile pyramids
+you can drape on a Cesium globe, plus the tooling to keep them current.
+
+Five tilesets are built here today. Each is a different product, and each is
+built by one command:
+
+| Tileset | Chart | Sheets | Zooms | Tiles | Size |
+| --- | --- | --- | --- | --- | --- |
+| `tileset-sectionals` | VFR sectionals | 55 | z0–z12 | 508,529 | 5.30 GB |
+| `tileset-sectionals-tac` | the same, with terminal area charts over them | 55 + 34 | z0–z12 + sparse z13 | 568,218 | 5.93 GB |
+| `tileset-ifr-low` | IFR enroute low, CONUS | 37 | z0–z13 | 953,205 | 3.05 GB |
+| `tileset-ifr-high` | IFR enroute high, CONUS | 12 | z0–z12 | 313,057 | 1.07 GB |
+| `tileset-planning` | U.S. VFR wall planning chart | 1 | z0–z11 | 98,014 | 441 MB |
+
+Underneath are two installable packages:
 
 | Package | Job |
 | --- | --- |
-| `geotransfer` | Copy georeferencing from a GeoTIFF onto a plain TIFF of identical size |
-| `cesiumtiles` | Cut a GeoTIFF into a static `z/x/y` tile pyramid, with a Cesium viewer |
+| `cesiumtiles` | Cut a GeoTIFF into a tile pyramid; mosaic a whole chart series into one; serve and test the result |
+| `geotransfer` | Copy CRS and transform from one GeoTIFF onto a plain TIFF of identical size |
 
-The motivating case: the FAA publishes the U.S. VFR Wall Planning Chart as a
-georeferenced but palette-indexed GeoTIFF. A full-colour RGB render of the same
-chart at the same resolution has the better pixels but no geo metadata.
-`geotransfer` marries the two; `cesiumtiles` then serves the result.
+---
 
 ## Quick start
 
@@ -20,82 +31,432 @@ From a fresh clone, with Python 3.14 (Windows, Linux or macOS):
 python scripts/setup_repo.py
 ```
 
-That creates `.venv`, installs everything (including GDAL and CPU PyTorch from
-their own package indexes) and checks the imports. Then build whichever
-tilesets you want and open the tester:
+That creates `.venv`, installs everything — including GDAL and PyTorch, which
+come from their own package indexes — checks the imports load, and makes
+`source/`. Then build whichever products you want and open the tester:
 
 ```bash
-.venv/Scripts/python scripts/build_sectionals.py      # VFR sectionals   z12, 2x upsampled
-.venv/Scripts/python scripts/build_ifr_low.py         # IFR low enroute ~31 min, 3.0 GB (z13, lossless)
-.venv/Scripts/python scripts/build_wall_planning.py   # VFR wall planning  ~3 min, 441 MB (z11)
-.venv/Scripts/cesiumtiles-serve .                     # http://127.0.0.1:8000/
+.venv/Scripts/python scripts/build_sectionals.py       # VFR sectionals            z12
+.venv/Scripts/python scripts/build_sectionals_tac.py   # + terminal area charts    z12 + z13 detail
+.venv/Scripts/python scripts/build_ifr_low.py          # IFR enroute low           z13, lossless
+.venv/Scripts/python scripts/build_ifr_high.py         # IFR enroute high          z12, lossless
+.venv/Scripts/python scripts/build_wall_planning.py    # VFR wall planning chart   z11
+.venv/Scripts/cesiumtiles-serve .                      # http://127.0.0.1:8000/
 ```
 
-(On Linux and macOS the venv interpreter is `.venv/bin/python`.)
+On Linux and macOS the venv interpreter is `.venv/bin/python`.
 
-**Budget disk and time before the sectionals.** That build upsamples all 55
-sheets 2x first, which is ~48 GB of intermediates and ~35 minutes on an NVIDIA
-GPU (hours without one — see `requirements.txt` on the CUDA index), and z12
-tiles are roughly 8.5 GB on top, and that build has not been run. The IFR build
-downloads only ~155 MB of PDFs but renders 5.2 GB of intermediates at 4x, plus
-healed copies, before tiling; it is measured, at 953,205 tiles / 3.05 GB in
-31 minutes. The sectionals' last actual build was ~2.1 GB at z11, before
-upsampling was part of the pipeline.
+**Budget disk and time first.** These are big jobs, and most of the cost is in
+preparing the sheets rather than in tiling them. Measured on an i7-14700KF with
+an RTX 4070 SUPER, writing to a local SSD:
 
-Each wrapper runs its stages as separate scripts, in order: download, then any
-preparation the series needs (the IFR charts are rendered from vector PDFs and
-their frame seams healed), then build. The chart wrappers accept `--no-fetch`,
-`--resume`, `--detect` (redo the reviewed manifests, which for the IFR charts
-also downloads the GeoTIFFs they are derived from) and any
-`build_chart_tileset.py` option. The wall planning
-chart has **no automated download** — the FAA's "Planning Set" link was dead —
-so put its files in `source/wall-planning/` by hand first; `--help` lists them.
-Its wrapper then georeferences, crops to the neatline, upsamples 2x with
-Real-CUGAN and tiles.
+| Product | Download | Intermediates | Prepare | Tile |
+| --- | --- | --- | --- | --- |
+| sectionals | 3.2 GB | ~48 GB upsampled | 52 min (GPU) | 26 min |
+| sectionals + TACs | + 678 MB | + ~12 GB upsampled | 12 min (GPU) | 26 min |
+| IFR low | 130 MB of PDFs | 5.2 GB rendered + healed | ~100 min | 31 min |
+| IFR high | 61 MB of PDFs | 1.9 GB rendered | 6 min | 14 min |
+| wall planning | manual drop-in | ~2 GB | 1 min (GPU) | 3 min |
 
-**Everything downloaded lives in `source/`**: chart GeoTIFFs, model weights,
-third-party checkouts and the intermediates made from them, in one subfolder
-each. Delete `source/` to reclaim all of it. Tilesets (`tileset-*`) stay at the
-top level, where the tester finds them.
+Without an NVIDIA GPU the upsampling stages run on the CPU at about 1/35 the
+speed — hours rather than minutes. Neither IFR product upsamples at all, so
+both are GPU-free.
 
-## Setup by hand
-
-```bash
-py -3 -m venv .venv
-.venv/Scripts/python -m pip install -r requirements-dev.txt
-.venv/Scripts/python -m pip install -e .
-```
-
-Runtime-only install: `-r requirements.txt`.
-
-### About the GDAL dependency
-
-`cesiumtiles` needs GDAL's Python bindings (`osgeo`) for the `gdal raster tile`
-algorithm. **PyPI's `GDAL` package is source-only on Windows for every Python
-version**, so `requirements.txt` points at Christoph Gohlke's
-[geospatial-wheels](https://github.com/cgohlke/geospatial-wheels) index, which
-publishes real `cp314` win_amd64 binaries:
-
-```
---extra-index-url https://gisidx.github.io/gwi
-```
-
-This gives GDAL **3.13.3** — newer than the 3.8.4 that Ubuntu 24.04's apt
-provides, so there is no advantage to building this under WSL. `osgeo.gdal` and
-`rasterio` coexist in one venv, each using its own GDAL build.
+Every download and every intermediate lives under `source/`, so deleting that
+one directory reclaims all of it. Tilesets are written at the top level.
 
 ---
 
-## `cesiumtiles` — static tile pyramids
+## How a chart series is built
+
+A "series" is one FAA product: the sectionals, the terminal area charts, the
+IFR enroute charts high and low. `scripts/chart_series.py` describes each one in
+a single place — where it is published, which zips and files to keep, what
+preparation it needs, how deep to tile it — and every stage looks the series up
+there. Adding a product means adding a `Series`, not copying scripts.
+
+```
+fetch_charts.py  ->  detect_*_areas.py  ->  (prepare)  ->  build_chart_tileset.py
+   source/NAME       scripts/NAME_areas.json              tileset-NAME
+```
+
+**1. Fetch.** `fetch_charts.py SERIES` lists the product's index, picks the
+current edition — the newest `MM-DD-YYYY` directory *that is not in the future*,
+because the FAA posts the next edition early — and runs a team of downloaders
+over that edition's zips. Only the files the series wants are extracted; a TAC
+zip, for instance, also carries that city's Flyway Planning chart and sometimes
+an airspace graphic, none of which are map.
+
+**2. Find each sheet's map area.** A published chart is a map inside furniture:
+a paper collar with a legend panel and notes, or a drawn frame with grid ticks
+outside it. Georeferenced along with the map, that furniture would land on the
+globe as if it were terrain. Each sheet's map area is detected once per edition
+into `scripts/<series>_areas.json`, **reviewed by a human, and committed** — so
+a routine build does not re-detect, and `--detect` is an explicit request.
+
+The area is a pixel polygon, not a lon/lat rectangle: insets printed over the
+map, tilted island sheets and Alaskan legend panels are none of them
+rectangular in any geographic frame. It becomes a mask the warp reads as alpha.
+
+Two detectors, because the two kinds of sheet are different problems:
+
+- `detect_sectional_areas.py` (sectionals, TACs) walks in from each image edge
+  until the paper collar ends, fits a line to the west and east edges and a
+  quadratic to the north and south — meridians are straight in a conic
+  projection, parallels bow — then moves the fit inward past its worst reading.
+- `detect_ifr_areas.py` (IFR) measures the heavy frame rule instead. An IFR
+  chart's map is mostly white paper, so there is no collar edge to find; what
+  there is, is a 6–10 px black rule around the map where legend tables use 1–5 px
+  ones.
+
+Both write contact sheets with every outline drawn (`--sheet DIR`), and both
+print a per-edge paper check. Trust the numbers over the thumbnails: a clean
+contact sheet once hid leftover collar on 49 of 57 sheets.
+
+**3. Prepare.** Optional stages, each writing a directory the next one reads:
+
+- `render_pdfs.py` — for a series published as true vector PDFs, draw the sheets
+  from the vector geometry instead of tiling the FAA's rasters. This is
+  rendering, not upsampling: every pixel comes from the drawing.
+- `upsample_charts.py` — for a series with no vector source, super-resolve each
+  sheet 2x with Real-CUGAN.
+- `heal_frames.py` — for sheets that abut rather than overlap, paint over the
+  frame rule so neighbours join without a seam.
+
+**4. Mosaic.** `build_chart_tileset.py SERIES` warps every sheet into one
+pyramid. It does not use `gdal raster tile`: each max-zoom tile warps only the
+sheets that actually reach it, compositing front-to-back so it stops as soon as
+the tile is opaque, and the lower zooms are box-filtered from their children a
+level at a time. Measured at 388 tiles/s at z12, 14 KB a tile. (Warping the low
+zooms from the sheets instead was tried: a z8 tile reads a 16x source window and
+managed 13 tiles/s.)
+
+The `build_*.py` wrappers at the top of `scripts/` just run these stages in
+order for one product, so what a wrapper does is exactly what you would get
+typing the stages by hand. They take `--no-fetch`, `--detect` and `--resume`,
+and pass anything else through to `build_chart_tileset.py`.
+
+### Options worth knowing
+
+| Option | Meaning |
+| --- | --- |
+| `--max-zoom N` | Override the series' depth. |
+| `--detail-zoom N` / `--no-detail` | The sparse extra level (see the composite below). |
+| `--[no-]lossless` | Override the series' WebP mode; lossy quality is `--quality`. |
+| `--warp cpu\|gpu` | Which backend resamples the max-zoom tiles. Default `cpu`. |
+| `--resampling` | Warp kernel, default `cubic`. |
+| `--warp-tolerance PIXELS` | Let the warp approximate the projection, like `gdalwarp -et`. Default 0, exact. |
+| `--[no-]reverse-order` | Paint order where sheets overlap. |
+| `--only NAME ...` | Build from a few sheets, by file-name prefix. |
+| `--resume` / `--overwrite` | Keep existing tiles, or replace the tileset. |
+
+---
+
+## The five products
+
+### VFR sectionals — `tileset-sectionals`
+
+55 sheets covering the U.S. including Alaska, Hawaii and the Aleutians, each in
+its own Lambert Conformal Conic, overlapping its neighbours at the edges.
 
 ```bash
-.venv/Scripts/cesiumtiles vfr_wall_planning_geo.tif ./tileset
+.venv/Scripts/python scripts/build_sectionals.py
+```
+
+- **Upsampled 2x with Real-CUGAN** (denoise3x weights) before tiling. The FAA's
+  sectional rasters staircase at any zoom and, unlike the IFR charts, there is
+  no vector source to fall back on — the sectional PDFs wrap the very same
+  rasters. Whole sheets are upsampled rather than just their map areas, so the
+  reviewed manifests differ from the raster by a scale and no offset. This is
+  the expensive stage: ~900 MB per sheet, ~48 GB in total, 52 min on the GPU.
+- **z12, WebP q90.** The median lower-48 sheet is 42.3 m/px, native z11.5, so
+  the 2x upsample reaches z12.5 and a z12 tile still minifies. z13 would be 1.4x
+  finer than even the upsampled sheets, for 4x the tiles.
+- **Guam and American Samoa are excluded**, by choice. Both inset GeoTIFFs ship
+  inside `Hawaiian_Islands.zip` alongside sheets that are kept, so the exclusion
+  is per file, not per zip.
+- **Three sheets are hand-traced:** Hawaiian Islands and Honolulu, which are not
+  a map in a collar at all, and Los Angeles, whose legend panel and LA Basin
+  inset leave an L-shaped map area that any fitted edge cuts short.
+- 508,529 tiles / 5.30 GB, built 2026-09-18.
+
+### Sectionals with terminal area charts — `tileset-sectionals-tac`
+
+The same mosaic with each **VFR Terminal Area Chart** laid over it where one is
+published: 34 sheets from 30 zips, because Anchorage/Fairbanks,
+Denver/Colorado Springs, Seattle/Portland and Tampa/Orlando each ship two.
+
+```bash
+.venv/Scripts/python scripts/build_sectionals_tac.py
+```
+
+- **A composite is layers, not a copy.** `sectionals-tac` owns no sheets: it
+  names the `sectionals` and `tac` series and the order they paint in. Each
+  layer keeps its own downloads, its own preparation stages and its own reviewed
+  manifest, so building the composite after `tileset-sectionals` costs only the
+  TACs. Paint order runs layer by layer — every sectional is below every TAC,
+  whatever the file names — which is what "inserted where available" means.
+- **The TACs get the same 2x Real-CUGAN pass**, with the same weights, so the
+  two layers meet on equal terms where one is drawn over the other.
+- **z12, plus a sparse z13 detail level.** A TAC is 1:250,000 at 300 dpi —
+  21.17 m/px, exactly half the sectionals' pitch — so it holds one more level
+  than the sheets around it. Tiling the whole mosaic at z13 would quadruple it
+  (~2 M tiles, ~21 GB) to magnify the 96% that is sectional. Instead the pyramid
+  stops at z12 and one extra level holds **only the tiles a TAC reaches** — tens
+  of thousands, against half a million below. Cesium falls back to the stretched
+  z12 parent everywhere that level is absent, exactly as it already does over
+  ocean.
+- Every source paints into a kept detail tile, not just the TACs, so a TAC's
+  edge sits on magnified sectional rather than on a hard transparent boundary a
+  tile wide. The detail level feeds nothing below it: the overview cascade still
+  starts at z12, and `metadata.json` carries `fullzoom` beside `maxzoom` to say
+  where full coverage stops.
+- `--no-detail` builds a plain uniform pyramid instead; `--detail-zoom N` moves
+  the level.
+- 568,218 tiles / 5.93 GB, built 2026-09-20 in 26.5 min. The sparse z13 level is
+  **58,872 tiles** over the 34 TAC sheets, against 380,238 at the full z12 below
+  it: one sixth of a level, where a uniform z13 would have been four times the
+  whole pyramid. `metadata.json` reports `maxzoom` 13 and `fullzoom` 12.
+
+### IFR enroute low — `tileset-ifr-low`
+
+The CONUS low enroute charts, L-01 to L-36. Alaska, Pacific and area charts are
+out of scope, and so are the inset TIFFs some zips carry. L-06 is published as
+two halves, `ENR_L06N` and `ENR_L06S`, which makes 37 sheets.
+
+```bash
+.venv/Scripts/python scripts/build_ifr_low.py
+```
+
+- **Drawn from the FAA's vector PDFs, not its GeoTIFFs.** The published GeoTIFFs
+  are badly rasterised — every edge staircases, and no amount of super-resolution
+  recovers what the rasteriser threw away. The same charts ship as true vector
+  PDFs, which `render_pdfs.py` draws at 4x the GeoTIFF's 400 dpi. Each pixel
+  comes from the vector geometry, so type and line work antialias properly.
+  About 160 s a sheet, 5.2 GB of renders.
+  Rendering runs in 8192 px blocks: pdfium silently stops drawing past ~32767 px,
+  and a 48000 px sheet loses its right third with no error of any kind.
+- **The PDFs carry no georeferencing** — their own metadata says so, offering
+  only four bounding corners. `detect_pdf_windows.py` registers each GeoTIFF
+  against its PDF once per edition and commits the affine, CRS and page window
+  as `scripts/ifr_low_pdf.json`. `ENR_L06.pdf` is a single page holding both
+  panels, which is why a *window* is recorded rather than the page assumed.
+  After that only the PDFs are downloaded (130 MB against 386 MB of GeoTIFFs);
+  `build_ifr_low.py --detect` fetches the GeoTIFFs and re-derives both
+  manifests, which is the only thing they are still needed for.
+- **Seams are healed, not cropped.** Neighbouring IFR charts do not overlap:
+  they meet at their frame rules, and under a rule neither sheet has map.
+  Cropping inside the rules left a 1–3 km dark gap along every shared edge.
+  Instead each map area runs to its rule's outer edge and `heal_frames.py`
+  writes a copy of the sheet with the rule painted over by repeating the nearest
+  clean row or column outward — ~12 px, roughly 0.5–1 km, each sheet filling its
+  own half. That closed 31 of 32 seams; L-29/L-30 keeps a straight ~450 m sliver
+  where the FAA's two georeferenced sheets simply do not meet.
+- **z13, lossless WebP.** IFR charts are thin linework and small type on white,
+  which lossy compression softens. The 4x renders resolve past z14, so z13 tiles
+  are genuine vector detail.
+- Overlaps paint in *reverse* file-name order, so the lower-numbered chart is on
+  top.
+- 953,205 tiles / 3.05 GB, tiled in 31 min at 608 tiles/s.
+
+### IFR enroute high — `tileset-ifr-high`
+
+The same charts at altitude: H-01 to H-12 cover the lower 48 on twelve sheets
+where the low charts need 36. Alaska (AKH), the Caribbean (CB) and the oceanic
+charts are out of scope, as they are for the low set.
+
+```bash
+.venv/Scripts/python scripts/build_ifr_high.py
+```
+
+It is the low pipeline on the same scripts — fetch, detect, render from the
+vector PDFs, mosaic — with two settings that differ, both measured rather than
+inherited:
+
+- **z12 from a 4x render, one level shallower than the low charts.** All twelve
+  sheets are 24000×8000 at **92.60 m/px**, exactly half the low charts' 46.30,
+  this being the smaller-scale chart. Rendered at 4x that is 23.15 m/px, which
+  a z12 tile minifies by 0.79x — the identical ratio the low charts get from 4x
+  at z13. Tiling these at z13 would *magnify* 1.58x, which is the mistake the
+  low charts made when they were tiled at z13 from 2x renders.
+- **The sheets overlap, so nothing is healed.** This is the real difference.
+  Low charts abut at their frame rules, which is why their map areas run to the
+  rule's outer edge and `heal_frames.py` repaints the band. High sheets share a
+  great deal of ground — measured on the 2026-09-03 edition, east–west
+  neighbours overlap by 15–31% of a sheet, and H-10/H-12 by 49% — so there *is*
+  map under each rule: the next sheet's. Their map areas are cropped just inside
+  the rule instead, and the sheet beneath shows through. `detect_ifr_areas.py`
+  reads the series' `heal_frames` flag to decide which edge to record.
+
+313,057 tiles / 1.07 GB, tiled in 14.3 min at 373 tiles/s, built 2026-09-20.
+The whole product — download, register, render and tile — is about half an hour,
+which makes it much the cheapest of the four chart series.
+
+**H-12 is the odd sheet.** It is drawn at 78.71 m/px rather than 92.60, and its
+geotransform is rotated 61°: a tall eastern-seaboard chart in a landscape image.
+Because it is the finest sheet and sorts last, plain file-name order puts it on
+top of the coarser sheets it covers, so unlike the low charts this series paints
+in file-name order rather than reversed. That is still a placeholder for a real
+overlap rule, as it is everywhere else.
+
+### U.S. VFR wall planning chart — `tileset-planning`
+
+The single-sheet case, and the worked example of the library.
+
+```bash
+.venv/Scripts/python scripts/build_wall_planning.py
+```
+
+**There is no automated download.** The FAA product page's "Planning Set" link
+(`visual/<edition>/All_Files/Planning.zip`) returns 404 for every edition, so
+the source files are dropped into `source/wall-planning/` by hand. The wrapper
+checks for them and says what it needs: either the already-georeferenced chart,
+or the FAA's palette-indexed GeoTIFF (which carries the georeferencing) plus a
+full-colour RGB render of the same sheet at the same pixel size (which has the
+better pixels and no geo metadata). `geotransfer` marries those two.
+
+Then `build_vfr_tileset.py` crops to the neatline, upsamples 2x with Real-CUGAN
+and tiles to z11 — 98,014 tiles / 441 MB in 3.2 min. Useful variants:
+
+```bash
+scripts/build_vfr_tileset.py --dry-run                     # plan without writing tiles
+scripts/build_vfr_tileset.py --no-upsample                 # tile at the native z9
+scripts/build_vfr_tileset.py --max-zoom 7 --out tileset-draft
+scripts/build_vfr_tileset.py --detect-neatline             # re-measure for a new edition
+```
+
+**Trimming to the neatline** is worth understanding, because it is what
+`cesiumtiles --bbox-crs source` exists for. A printed sheet carries a white
+margin, a heavy border and a "Nautical Miles" scale bar, all georeferenced. The
+crop has to be expressed in the chart's own Lambert Conformal Conic, because a
+neatline is a rectangle *there* and not in lon/lat — this sheet's corners differ
+by 8.3° of longitude between NW and SW, so a lon/lat box leaves white wedges.
+And it has to be **inscribed** in the map rather than circumscribed about it:
+the neatline is not square to the pixel grid (its top edge runs from row 272 on
+the left to row 200 on the right), so any box containing the whole map also
+contains slices of border and paper. `--detect-neatline` re-measures it from the
+image: a chromatic bounding box first, since margins are white and only the map
+is coloured, then each edge shrunk until it holds no run of paper-white or
+neatline-black longer than 150 px, map ink being broken up at that scale.
+
+---
+
+## The tile tester
+
+`cesiumtiles-serve` renders a Cesium viewer at `/` and serves the tilesets
+beneath the directory you point it at. A tileset on disk is **data only** —
+`tiles/` and `metadata.json`, no HTML — so one tester can sit above several and
+switch between them.
+
+```bash
+.venv/Scripts/cesiumtiles-serve .          # find every tileset below the cwd
+.venv/Scripts/cesiumtiles-serve tileset-ifr-low
+```
+
+Open <http://127.0.0.1:8000/>. It uses no Cesium Ion token: our tiles are the
+base layer and terrain is the plain ellipsoid. The page reads `metadata.json` at
+runtime, so re-tiling needs no change to the HTML, and it exposes
+`window.viewer` and `window.tileTracker` for the dev console.
+
+| Option | Meaning |
+| --- | --- |
+| `-p`, `--port N` | Port to listen on (default 8000). |
+| `--host ADDR` | Bind address; default `127.0.0.1`, use `0.0.0.0` for the LAN. |
+| `--no-cors` | Omit `Access-Control-Allow-Origin`. |
+| `--open` | Open the viewer once the server is up. |
+
+A preview server is included at all because `python -m http.server` sends no
+CORS headers, which blocks the tiles the moment a Cesium app on another origin
+tries to read them. This one also sends correct MIME types, `no-cache` for
+`metadata.json`, and logs only failed requests rather than every one of a
+million tiles. It answers `/tilesets.json` with what it found, which is what
+fills the tester's Source menu.
+
+### Choosing a source
+
+The **Source** control is a menu. It lists the tilesets the server can see — the
+served directory itself if it holds a `metadata.json`, and each immediate
+subdirectory that does — then any URLs connected this session, then **Connect to
+URL...**, which opens a dialog for anything else:
+
+- a **tileset directory** URL, read through its `metadata.json`, so scheme,
+  zooms, extent and tile size all come across; or
+- a raw **`{z}/{x}/{y}` template**, used as given, with the scheme and tile size
+  taken from the dialog.
+
+A URL that loads joins the menu for the session; one that fails keeps the dialog
+open with the reason, and leaves the current tileset in place.
+
+**Switching sources leaves the camera where it is**, so two tilesets can be
+compared at a fixed viewpoint — flip between them and only the imagery changes.
+If the new tileset does not cover where you are looking, the panel says so and
+**Fly to extent** takes you there.
+
+A remote server must allow cross-origin requests. If it also omits
+`Timing-Allow-Origin` the browser withholds transfer sizes, and the panel
+reports network bytes as `n/a (cross-origin)` rather than pretending they are
+zero; tile counts still work.
+
+### Diagnostics
+
+- **On screen** — imagery tiles the globe is drawing, by zoom level, with the
+  x/y range at each, how many are still loading, and the camera altitude.
+- **Downloaded** — tiles fetched, bytes over the wire, average tile size, tiles
+  served from cache, and the most recent tile requested. Traffic is read from
+  Resource Timing rather than by patching Cesium.
+
+**Reset counters & cache** zeroes the counters *and* forces the next load to be
+genuinely cold. Script cannot clear the browser's HTTP cache, so it rebuilds the
+imagery layer against a fresh query string, which misses both Cesium's in-memory
+cache and the browser's. Without that, pressing reset and flying around would
+replay local copies and report almost no traffic. (Measured: a warm load reports
+0 downloaded / 37 cached / 10.8 KB; after a reset, 34 downloaded / 0 cached /
+2.51 MB.)
+
+A cache hit is not simply "zero bytes transferred" — browsers may report a fixed
+~300-byte header placeholder with a full body size and a 200 status. The panel
+classifies by whether `transferSize` is smaller than `encodedBodySize`, which is
+what actually indicates the body never crossed the wire.
+
+**Show tile grid** overlays each tile's boundary, coloured by level on a
+continuous deep-blue-to-almost-red ramp computed from `level / maxzoom`, so
+pointing the tester at a shallower or deeper source re-scales it rather than
+running off the end of a fixed list. The swatches beside the levels in *On
+screen* name them outright, so identity never rests on the colour. The overlay
+is drawn on canvas rather than fetched, so it does not disturb the counters.
+
+### Rendering controls
+
+These matter when comparing tilesets, because two of Cesium's defaults flatter
+or penalise them misleadingly:
+
+| control | what it does |
+| --- | --- |
+| `max SSE` | `globe.maximumScreenSpaceError`, default **2**. How aggressively the globe refines; 1 roughly doubles the tiles on screen. |
+| `scale` | Cesium defaults `useBrowserRecommendedResolution` to true, which **ignores the display's pixel ratio**: on a 1.5x screen the globe renders at two thirds of the panel's sharpness. This turns that off and sets `resolutionScale`; above 1 it supersamples. |
+| `magnify` | Texture magnification past the deepest zoom. Cesium's default is `LINEAR`, so every tile is bilinearly smeared once you pass max zoom — which reads as the *tileset* being soft when it is not. `nearest` keeps pixels honest. |
+| `MSAA` | `scene.msaaSamples`, default none here. Affects geometry edges, including the globe silhouette, more than imagery. |
+
+When judging an upsampler, set `magnify` to `nearest` and `scale` to your
+display's pixel ratio first — otherwise you are partly grading Cesium's bilinear
+filter.
+
+---
+
+## `cesiumtiles` — single-raster tilesets
+
+For one georeferenced raster, as opposed to a series:
+
+```bash
+.venv/Scripts/cesiumtiles chart.tif ./tileset
+.venv/Scripts/cesiumtiles chart.tif ./colorado --bbox -109.06 36.99 -102.04 41.00
+.venv/Scripts/cesiumtiles chart.tif ./small --format webp --lossy --quality 95
 ```
 
 ```python
 from cesiumtiles import build_tileset
 
-result = build_tileset("vfr_wall_planning_geo.tif", "./tileset")
+result = build_tileset("chart.tif", "./tileset")
 print(result.summary())
 ```
 
@@ -107,220 +468,43 @@ tileset/
   metadata.json             bounds, zooms, counts, url template
 ```
 
-A tileset is **data only** - no viewer is written into it. The tile tester is
-served by `cesiumtiles-serve`, which can therefore sit above several tilesets and
-switch between them.
-
-The tester reads `metadata.json` at runtime, so re-tiling with different bounds
-or zooms needs no change to the HTML. It exposes `window.viewer` and
-`window.tileTracker` for poking at the scene from the dev console.
-
-It also carries a diagnostics panel:
-
-- **On screen** — how many imagery tiles the globe is drawing, broken down by
-  zoom level with the x/y range at each, how many are still loading, and the
-  camera altitude.
-- **Downloaded** — tiles fetched, bytes over the wire, average tile size, tiles
-  served from cache, and the most recent tile requested.
-
-The **Rendering** section controls how Cesium draws the tiles, which matters when
-comparing tilesets because two of its defaults flatter or penalise them
-misleadingly:
-
-| control | what it does |
-| --- | --- |
-| `max SSE` | `globe.maximumScreenSpaceError`, default **2**. How aggressively the globe refines. Lower fetches deeper tiles sooner — 1 roughly doubles the tiles on screen. |
-| `scale` | Cesium defaults `useBrowserRecommendedResolution` to true, which **ignores the display's pixel ratio**: on a 1.5x screen the globe renders at two thirds of the panel's sharpness. This turns that off and sets `resolutionScale`; above 1 it supersamples. |
-| `magnify` | Texture magnification past the deepest zoom. Cesium's default is `LINEAR`, so every tile is bilinearly smeared once you pass max zoom — which reads as the *tileset* being soft when it is not. `nearest` keeps pixels hard and honest. |
-| `MSAA` | `scene.msaaSamples`. Affects geometry edges, including the globe silhouette, more than imagery. |
-
-When judging an upsampler, set `magnify` to `nearest` and `scale` to your display's
-pixel ratio first — otherwise you are partly grading Cesium's bilinear filter.
-
-**Show tile grid** overlays each tile's boundary as a semi-transparent border,
-coloured by zoom level, with matching swatches beside the levels in the *On
-screen* list. The overlay is drawn on canvas rather than fetched, so it does not
-disturb the traffic counters.
-
-The border is a continuous ramp: **deep blue at z0 through to almost-red at the
-maximum zoom**, drawn at 50% transparency over a faint dark hairline that keeps
-it visible where the imagery beneath is pale. The colour is computed from
-`level / maxzoom`, so pointing the tester at a shallower or deeper source
-re-scales the ramp rather than running off the end of a fixed list. The hue
-travels the short way round, through purple and red, which keeps it clear of the
-greens and yellows the terrain shading uses.
-
-One caveat worth knowing: on a smooth ramp, *adjacent* levels are the least
-distinguishable, and adjacent levels are exactly what Cesium renders together.
-The swatches in the *On screen* list name the levels outright, so identity never
-rests on the colour alone.
-
-### Pointing it at other tiles
-
-The viewer is a general tile tester, not tied to the tileset it ships beside.
-The **Source** menu lists every tileset the server can see: the served directory
-itself if it holds a `metadata.json`, and each immediate subdirectory that does
-(one level deep, not recursive). Picking one loads it. The server rescans on
-every page load, so a tileset built while it runs appears after a reload.
-
-Below a separator, **Connect to URL...** opens a dialog for anything else:
-
-- a **tileset directory** URL, read through its `metadata.json`, so scheme,
-  zooms, extent and size all come across automatically; or
-- a raw **`{z}/{x}/{y}` URL template**, used as given, with the scheme and tile
-  size taken from the dialog and a z0-18 range assumed.
-
-A URL that loads is added to the menu for the rest of the session; one that
-fails keeps the dialog open with the reason.
-
-Swapping sources **leaves the camera where it is**, so two tilesets can be
-compared at a fixed viewpoint — flip between `./tileset` and `./tileset-lossy`
-and only the imagery changes. If the new tileset does not cover where you are
-looking, the panel says so and **Fly to extent** takes you there.
-
-To compare local tilesets, serve their common parent:
-`.venv/Scripts/cesiumtiles-serve .`. The server finds the tilesets beneath it,
-opens the first, and lists the rest in the menu. The tester is always at `/`,
-whichever directory you serve.
-
-A remote server must allow cross-origin requests. If it also omits
-`Timing-Allow-Origin`, the browser withholds transfer sizes, and the panel
-reports network bytes as `n/a (cross-origin)` rather than pretending they are
-zero — tile counts still work.
-
-**Reset counters & cache** zeroes the counters *and* forces the next load to be
-genuinely cold. Script cannot clear the browser's HTTP cache, so it rebuilds the
-imagery layer against a fresh query string, which misses both Cesium's in-memory
-tile cache and the browser's. Without that, pressing reset and flying around
-would just replay local copies and report almost no traffic.
-
-Note that a cache hit is not simply "zero bytes transferred": browsers may report
-a fixed ~300-byte header placeholder with a full body size and a 200 status. The
-panel classifies by whether `transferSize` is smaller than `encodedBodySize`,
-which is what actually indicates the body never crossed the wire.
-
-### Previewing a tileset
-
-The tiles are plain static files, so any web server will do. A preview server is
-included because `python -m http.server` sends no CORS headers, which blocks the
-tiles the moment a Cesium app on a different origin or port tries to read them.
-
-```bash
-.venv/Scripts/cesiumtiles-serve
-```
-
-It serves the working directory by default and finds the tilesets beneath it, so
-they are addressed as `./tileset`, `./other` and so on, and several can be
-compared in one session.
-
-Then open <http://127.0.0.1:8000/>. `Ctrl-C` stops it. Equivalent forms:
-
-```bash
-.venv/Scripts/python -m cesiumtiles.serve tileset --port 8000
-```
-
-```python
-from cesiumtiles import serve_tileset
-
-server = serve_tileset("tileset", port=8000, background=True)
-...
-server.shutdown()
-```
+Tiling is delegated to GDAL's `gdal raster tile`, which since GDAL 3.11 is the
+maintained reference implementation (`gdal2tiles` is deprecated in favour of it
+from 3.13). This package supplies what that algorithm does not: geographic bbox
+cropping, zoom defaults derived from the source resolution, and Cesium metadata
+and a viewer — GDAL emits Leaflet, OpenLayers, MapML and STAC front ends, but
+not Cesium. Counts and bounds are read back off disk after the run rather than
+assumed from the request.
 
 | Option | Meaning |
 | --- | --- |
-| `-p`, `--port N` | Port to listen on (default 8000). |
-| `--host ADDR` | Bind address. Default `127.0.0.1`; use `0.0.0.0` to expose on the LAN. |
-| `--no-cors` | Omit `Access-Control-Allow-Origin`. |
-| `--open` | Open the viewer in a browser once the server is up. |
-
-It serves correct MIME types for `.webp`/`.png`/`.jpg`, sends `no-cache` for
-`index.html` and `metadata.json` so a re-tile is visible on reload, and logs
-only failed requests rather than every one of thousands of tiles. It also
-answers `/tilesets.json` with the tilesets it found, which is what fills the
-tester's menu; on any other server the menu falls back to the tileset the page
-opened with.
-
-Under Claude Code, `.claude/launch.json` defines `tileset` on port 8000 so the
-browser pane can start it directly.
-
-### Choosing the zoom range
-
-`--max-zoom` defaults to the level at which tile pixels match the source's own
-resolution, so no detail is discarded and none is invented. For the VFR wall
-planning chart (262 m/px in Lambert Conformal Conic) that lands at **z9**;
-zooming past it in Cesium just magnifies the top level, which is expected.
-
-`--min-zoom` defaults to 0 so Cesium always has a complete pyramid to descend.
-
-Every tile in the covered rectangle is written by default, including the fully
-transparent ones along the chart's curved Lambert Conformal Conic edges — 6,552
-for the chart cropped to its neatline (7,190 for the whole uncropped sheet). Blank tiles cost almost nothing (the pyramid is 285.0 MB
-either way), and keeping them means Cesium never requests a URL that 404s.
-`--skip-blank` drops the count to 5,577 if you would rather have the smaller
-tree and can tolerate the misses.
-
-### Cropping
-
-`--bbox WEST SOUTH EAST NORTH` crops before tiling, in lon/lat degrees by
-default. The crop is exact: it is applied as a warp cutline, so pixels outside
-the rectangle become transparent rather than being merely clipped to the
-nearest tile edge.
-
-```bash
-.venv/Scripts/cesiumtiles chart.tif ./colorado --bbox -109.06 36.99 -102.04 41.00
-```
-
-Tilesets are large; treat any you make this way as scratch and delete them when
-you are done.
-
-Use `--bbox-crs` to give the rectangle in some other frame, e.g.
-`--bbox-crs EPSG:3857` with metre coordinates, or **`--bbox-crs source`** for the
-raster's own CRS. Note that the *reported* bounds in `metadata.json` snap outward
-to whole tiles, since that is what Cesium needs for its imagery rectangle.
-
-#### Trimming to a map's neatline
-
-A printed chart carries a margin, a border and a scale bar, and they are
-georeferenced along with the map — so without a crop they get pasted onto the
-globe as if they were terrain. Cropping them off is what `--bbox-crs source` is
-for, because **a neatline is a rectangle in the projection the chart was drawn
-in, not in lon/lat**. On the VFR wall planning chart the sheet's corners
-differ by 8.3 degrees of longitude between NW and SW, so a lon/lat box would
-leave white wedges in the corners.
-
-The crop also has to be **inscribed** in the map rather than circumscribed about
-it. The neatline is not square to the pixel grid — its top edge runs from row 272
-on the left of the sheet to row 200 on the right — so any axis-aligned box
-containing the whole map also contains slices of border and paper. Trimming to
-the inscribed box costs about 1.8% of the area and is what actually keeps the
-edges clean.
-
-```bash
-.venv/Scripts/cesiumtiles vfr_wall_planning_geo.tif ./tileset     --bbox-crs source --bbox -2065471.156 -1353550.704 2560432.418 1453780.3
-```
-
-`scripts/build_vfr_tileset.py` does this for you, and can re-measure the
-neatline from the image with `--detect-neatline` when a new chart edition comes
-out.
-
-### Options
-
-| Option | Meaning |
-| --- | --- |
-| `--scheme mercator\|geographic` | `mercator` (default) is EPSG:3857 WebMercatorQuad — the standard slippy-map grid, and zero-config for Cesium's `UrlTemplateImageryProvider`. `geographic` is EPSG:4326 WorldCRS84Quad, matching Cesium's native globe tiling. |
-| `--format webp\|png\|jpeg` | Default `webp`. |
-| `--lossy` / `--quality N` | Lossy webp. Roughly 4x smaller, but can ring around hairline linework and text. |
+| `--bbox W S E N` | Crop before tiling. Applied as a warp cutline, so it is pixel-exact rather than snapped to tile edges. |
+| `--bbox-crs CRS` | The frame those numbers are in; `source` means the raster's own CRS, which is what a neatline is rectangular in. |
+| `--scheme mercator\|geographic` | `mercator` (default) is EPSG:3857 WebMercatorQuad, the standard slippy grid and zero-config for Cesium's `UrlTemplateImageryProvider`. `geographic` is EPSG:4326 WorldCRS84Quad. |
 | `--min-zoom` / `--max-zoom` | Override the automatic range. |
-| `--resampling` / `--overview-resampling` | GDAL kernels for the warp and the overview cascade; `cubic` and `lanczos` by default. |
-| `--skip-blank` | Omit fully transparent tiles. Smaller, but the viewer will generate 404s for them. |
+| `--format webp\|png\|jpeg` | Default `webp`. |
+| `--lossy` / `--quality N` | Lossy WebP, roughly 4x smaller, but it can ring around hairline linework and type. |
+| `--resampling` / `--overview-resampling` | GDAL kernels for the warp and the overview cascade; `cubic` and `lanczos`. |
+| `--skip-blank` | Omit fully transparent tiles. Smaller, but the viewer will generate 404s. |
 | `--threads` | Worker count, or `ALL_CPUS` (default). |
-| `--resume` | Write only missing tiles. |
-| `-f`, `--overwrite` | Replace a non-empty output directory. |
+| `--resume` / `-f`, `--overwrite` | Write only missing tiles; replace a non-empty directory. |
+| `--title` / `-q`, `--quiet` | Name recorded in metadata; suppress the progress bar. |
+
+**Zoom defaults.** `--max-zoom` lands where tile pixels match the source's own
+resolution, so no detail is discarded and none invented; `--min-zoom` is 0, so
+Cesium always has a complete pyramid to descend. Every tile in the covered
+rectangle is written, including the fully transparent ones along a conic
+projection's curved edges — blank tiles cost almost nothing and keeping them
+means Cesium never requests a URL that 404s.
+
+**Reported bounds** in `metadata.json` snap outward to whole tiles, because that
+is the tile coverage; `data_bounds` holds the true unsnapped extent, and is what
+an imagery rectangle must be given.
 
 ### Format sizes
 
-Measured on real chart tiles, extrapolated to the full 7,190-tile pyramid:
+Measured on real chart tiles, extrapolated to a 7,190-tile pyramid of the wall
+planning chart:
 
 | Format | KB/tile | Full tileset |
 | --- | --- | --- |
@@ -329,48 +513,16 @@ Measured on real chart tiles, extrapolated to the full 7,190-tile pyramid:
 | WebP q95 | 11.4 | ~64 MB |
 | WebP q90 | 8.6 | ~48 MB |
 
-Lossless is the default, but **q95 was reviewed on the real chart and showed no
-discernible ringing** — including on hairline symbology and type, which is where
-it would show first. `tileset-lossy` is that build: same 6,372 tiles at
-**72.3 MB against 280.4 MB**, a 3.9x saving. Worth considering as the default if
-serving cost matters more than exactness.
-
-### Parallelism
-
-Tiling runs in parallel: GDAL spawns worker processes, each taking a range of
-tiles. Measured on a 24-core machine over a 2,455-tile western-US crop:
-
-| Threads | Wall time | Speed-up |
-| --- | --- | --- |
-| 1 | 135.1 s | 1.0x |
-| 4 | 64.4 s | 2.1x |
-| 8 | 47.6 s | 2.8x |
-| `ALL_CPUS` (24) | 35.3 s | 3.8x |
-
-Scaling flattens well before 24 cores because only the top zoom parallelises
-well. Splitting that same job by level: **z9 alone is 12.8 s for 1,804 tiles**
-(141 tiles/s), while **z0-z8 is 25.9 s for 651 tiles** (25 tiles/s). The
-overview cascade is inherently sequential — each level is built from the one
-below — so it dominates wall time and caps the overall speed-up.
-
-Converting the source to a tiled COG with overviews does **not** help (34.6 s
-vs 36.0 s measured); the stripped source layout is not the bottleneck.
-
-### How it works
-
-Tiling is delegated to GDAL's `gdal raster tile`, which since GDAL 3.11 is the
-maintained reference implementation — `gdal2tiles` is deprecated in favour of
-it from 3.13. This package supplies what that algorithm does not: geographic
-bbox cropping, zoom defaults derived from the source resolution, and Cesium
-metadata and a viewer (GDAL emits Leaflet, OpenLayers, MapML and STAC front
-ends, but not Cesium).
-
-Counts and bounds in `TilesetResult` are read back off disk after the run
-rather than assumed from the request.
+Lossless is the default for single rasters, and the IFR series; the sectionals
+and TACs use q90, reviewed on the real charts.
 
 ---
 
 ## `geotransfer` — georeferencing transfer
+
+```bash
+.venv/Scripts/geotransfer reference.tif image.tif out.tif
+```
 
 ```python
 from geotransfer import copy_geo_metadata
@@ -382,65 +534,168 @@ copy_geo_metadata(
 )
 ```
 
-```bash
-.venv/Scripts/geotransfer vfr_geotiff_original.tif vfr_wall_planning.tif out.tif
-```
-
-The image file is duplicated byte-for-byte and only the GeoTIFF header tags are
+The image file is duplicated byte for byte and only the GeoTIFF header tags are
 rewritten. Nothing is decoded, resampled or recompressed, so band count, colour
 interpretation, compression and predictor all survive exactly — a 250 MB chart
 takes well under a second.
 
-Copies CRS, affine transform (or GCPs and RPCs, if the reference is
+It copies the CRS, the affine transform (or GCPs and RPCs, if the reference is
 georeferenced that way) and the `AREA_OR_POINT` pixel-convention tag. The
 reference's colour table, band structure and nodata are **not** copied; those
 belong to the image file.
 
 | Option | Meaning |
 | --- | --- |
-| `overwrite` / `-f` | Replace `output` if it exists. |
-| `strict_size` / `--no-strict-size` | Size checking is on by default. |
-| `copy_nodata` / `--copy-nodata` | Also copy the reference's nodata value. |
+| `-f`, `--overwrite` | Replace `output` if it exists. |
+| `--no-strict-size` | Allow inputs of different pixel dimensions (checking is on by default). |
+| `--copy-nodata` | Also copy the reference's nodata value. |
 
 ---
 
-## Planned work
+## Two warp backends
 
-Four things worth building next, roughly in dependency order. Each notes what
-already exists to build on.
+`build_chart_tileset.py --warp cpu|gpu`. Both are kept and tested; `cpu` is the
+default.
 
-### Upsample the source before tiling — *done*
+- **`cpu`** warps each max-zoom tile with `gdal.Warp`, in worker processes.
+- **`gpu`** evaluates the projection in torch, prefilters isotropically and
+  samples on the card, one source sheet at a time in paint order. Tiles that
+  only one sheet touches finish on the device; seam tiles accumulate as
+  premultiplied partials in a fixed pool of device slots and composite once,
+  when their last sheet has painted.
 
-> Implemented: `build_vfr_tileset.py` stage 3 upsamples 2x with Real-CUGAN,
-> raising the native zoom to z10. `--no-upsample` skips it. What follows is the
-> reasoning, kept because it is the argument for the choice.
+The filter is isotropic, and that is correct rather than a shortcut: LCC and Web
+Mercator are both conformal, so an output pixel's footprint is a circle (axis
+ratio measured at 1.004, including a sheet rotated 90°). Anisotropic filtering
+was planned and dropped on that measurement — which also means the GPU does not
+produce visibly better tiles. Its case is speed, and only sometimes:
 
-The chart's native resolution runs out at **z9** — 262 m/px in Lambert Conformal
-Conic, which is where `--max-zoom`'s auto-detection lands. Past that Cesium
-magnifies the top level and the linework goes soft. Upsampling the GeoTIFF 2x
-before tiling would put a genuine z10 in the pyramid, with hairlines and type
-resampled smoothly rather than stretched.
+- Two IFR sheets, z0–z13: CPU 2.0 min, GPU 0.7 min.
+- All 37 IFR sheets, z0–z13: CPU 31.2 min, GPU 28.8 min. With every sheet
+  bordering others, the seam traffic dominates, and GPU tiles also compress 8.6%
+  worse under the same encoder.
 
-Worth being honest about what this buys: classical upsampling (lanczos, cubic,
-Lanczos-3 in `gdal.Warp`) **adds no information**. It makes magnification look
-clean instead of blocky, which matters a lot for chart symbology, but it does not
-recover detail the scan never had. The costs are concrete: 4x the pixels (212 Mpx
-→ 850 Mpx), roughly 4x the tiles at the new top level (~4,700 → ~19,000), and a
-source file that no longer fits comfortably in memory, so the warp wants to stay
-a VRT rather than being materialised.
+Output agrees closely but not exactly: 97.7% of z13 pixels identical, p99
+difference 4, the outliers being 1 px shifts of mask and sheet edges.
 
-`build_vfr_tileset.py` is the place for it — a stage between the crop and the
-tiling, with the neatline detection running on the original rather than the
-upsampled copy.
+**Accuracy-for-speed knobs**, meant for trials rather than for a chart being
+kept. `--warp-tolerance PIXELS` lets the warp approximate the projection, in
+source pixels, like `gdalwarp -et`. On the CPU that is where the time is:
+measured on a synthetic hairline sheet, `0.125` builds the max zoom **1.7x
+faster** and moves 8% of pixels, by up to the full range; looser costs more
+accuracy for no more speed. On the GPU the geometry is already approximated to
+~1,000x inside that tolerance for ~1% of a batch, so the knob does nothing
+there — its lever is `--resampling bilinear` instead of cubic, worth ~1.8x on
+the sampler and noticeably smaller tiles.
 
-**Which kernel.** The usual signal-processing framing does not fit this artwork.
-Sinc-family reconstruction assumes the raster is a bandlimited sampling of a
-continuous field; a chart is a *rasterised vector drawing* — piecewise-constant
-regions meeting at step edges, which have unbounded bandwidth. A sinc kernel
-therefore overshoots on both sides of every edge, which is the halo. Measured on
-a 256x256 Denver crop (flat fills, magenta airways, type and relief together),
-upsampling 2x, where "ringing" counts output pixels straying outside the range of
-the four source pixels they sit between:
+Tiles are decoded and encoded with **imagecodecs**, not GDAL. Opening a 256 px
+WebP as a GDAL dataset costs more than decoding it and serialises threads:
+GDAL managed 720 tiles/s on one thread and *fell* to 940/s on 22, where
+`imagecodecs.webp_decode` does 6,300/s on one and ~18,700/s on 22, pixel for
+pixel identical. Encoding is ~28% faster with byte-identical output, since both
+call the same libwebp.
+
+---
+
+## Public site
+
+`www/index.html` is the page deployed beside the tilesets on a real server: one
+button per tileset floating over a full-window globe, Cesium's 3D/2D/Columbus
+picker, and nothing else. Switching never moves the camera, so charts compare in
+place. Under the charts is Esri's Light Gray Canvas.
+
+It is standalone rather than generated by `viewer.py`, and it cannot scan its
+own folder, so it reads a `tilesets.json` written on the server by
+`www/update_tilesets.sh` — same format `cesiumtiles-serve` answers with — and
+falls back to the server's directory listing where there is one.
+
+---
+
+## Installing by hand
+
+```bash
+py -3 -m venv .venv
+.venv/Scripts/python -m pip install -r requirements-dev.txt
+.venv/Scripts/python -m pip install -e .
+```
+
+Runtime only: `-r requirements.txt`.
+
+**Two dependencies come from their own indexes**, both already in
+`requirements.txt`:
+
+- **GDAL.** PyPI's `GDAL` is source-only on Windows for every Python version, so
+  `--extra-index-url https://gisidx.github.io/gwi` points at Christoph Gohlke's
+  [geospatial-wheels](https://github.com/cgohlke/geospatial-wheels), which
+  publishes real `cp314` win_amd64 binaries. That gives **GDAL 3.13.3** — newer
+  than the 3.8.4 Ubuntu 24.04's apt provides, so there is no advantage to
+  building this under WSL. `osgeo.gdal` and `rasterio` coexist in one venv, each
+  using its own GDAL build.
+- **PyTorch.** `--extra-index-url https://download.pytorch.org/whl/cu126` for
+  CUDA builds. cu126 is right for an Ada card (sm_89); cu128 is for Blackwell.
+  On a machine with no NVIDIA GPU, swap that index for `.../whl/cpu` —
+  `upsample.py` falls back by itself, it is only slow.
+
+Model weights for the upsampler download on first use, into `source/models/`.
+
+---
+
+## Tests
+
+```bash
+.venv/Scripts/python -m pytest      # 235 tests, ~70 s
+```
+
+Everything runs against small synthetic rasters built in a temp directory; none
+of it needs the chart files. The tile arithmetic in `cesiumtiles.scheme` is
+checked against [mercantile](https://github.com/mapbox/mercantile), a separate
+implementation of the same grid, so agreement is evidence rather than tautology.
+Mosaic tests build the same LCC scenes on **both** warp backends and require
+them to agree.
+
+---
+
+## Still open
+
+- **Overlap order is a placeholder.** Sheets are painted in file-name order
+  (reversed for IFR), which is arbitrary, and it shows: the FAA's Phoenix
+  GeoTIFF has a blank white row through its map near 35.6 N, and Phoenix sorts
+  after Las Vegas, so it paints over good Las Vegas map. Preferring the sheet
+  whose own map area is further from its edge would fix that and most seam
+  artefacts generally.
+- **Empty ocean returns 404s.** Tiles are written only where a sheet has map, so
+  a client requests and fails tiles over the gaps inside the extent. The tester
+  no longer warns about these, but the requests still happen.
+- **Nothing is scheduled.** The FAA republishes on a 56-day cycle, which wants a
+  job that fetches the new edition, skips products whose edition has not moved,
+  re-runs detection and stops for a human to review the manifests before
+  rebuilding.
+- **A better upsampler, maybe.** Real-CUGAN won the first round, but it is a
+  1.28 M-parameter CNN with a receptive field of a few tens of pixels. 15 of the
+  42 architectures `spandrel` recognises are attention-based and
+  `scripts/upsample.py` loads any of them unchanged (`--model weights.pth`), so
+  trying DAT, HAT, ATD, DRCT or SwinIR is a weights download. Prefer weights
+  tuned for line art over the usual natural-image training; a model trained on
+  photographs reaches for texture this artwork does not have. Measure line
+  continuity on thin airways, not just sharpness: Real-ESRGAN was found to cut
+  line continuity 18–23% against waifu2x at 3x, and a model that breaks thin
+  lines is disqualified whatever else it does.
+- **Diffusion upsamplers are probably the wrong tool** and were considered.
+  They *sample*, so tiles would differ run to run, and their advantage is
+  inventing plausible texture — skin, foliage, fabric. A chart has no texture to
+  invent, only flat fills, hard edges and type. The first round already hinted
+  at this: the winner was the smallest model tried, and the one that synthesised
+  most lost.
+
+### Why a learned upsampler at all
+
+The chart content is a *rasterised vector drawing* — piecewise-constant regions
+meeting at step edges — not a bandlimited sampling of a continuous field. Every
+GDAL kernel except `near` is a linear filter, so each bandlimits edges by
+construction and rings on them. Measured on a 256x256 Denver crop holding flat
+fills, magenta airways, type and relief together, upsampling 2x, where "ringing"
+counts output pixels straying outside the range of the four source pixels they
+sit between:
 
 | kernel | ringing | worst excursion | sharpness |
 | --- | --- | --- | --- |
@@ -450,318 +705,68 @@ the four source pixels they sit between:
 | cubicspline | 2.86% | 23 | 6.12 |
 | lanczos | 10.85% | 32 | 8.90 |
 
-No GDAL kernel gives both zero ringing and sharp edges, and none can: **every
-one of them except `near` is a linear filter**, so each bandlimits edges by
-construction and the ringing is the Gibbs overshoot that follows. `near` avoids
-it only by aliasing instead. Choosing among them is choosing among options that
-share the defect, so the answer has to come from outside that family.
+No kernel gives both zero ringing and sharp edges, and none can; `near` avoids
+ringing only by aliasing instead. So the answer had to come from outside that
+family — a model trained on line art, which is the closest well-studied analogue
+to cartographic artwork. Edge-directed interpolation assumes natural images,
+pixel-art scalers assume aliased input from a small palette (chart type and
+hairlines are antialiased, and the relief is continuous tone), and vectorising
+destroys the relief.
 
-**Ruled out, and why:**
+One cheap win came out of the same measurement and applies everywhere: the
+tiling warp used to default to `lanczos`, which rang worst. Every pipeline now
+warps with `cubic`, which halves the ringing at nearly the same sharpness.
+`scripts/upsample_test.py` is the harness.
 
-- **Edge-directed interpolation** (NEDI, DCCI, ICBI, EGII) — non-linear and
-  genuinely edge-aware, but built for *natural* images: smooth gradients
-  interrupted by edges. The literature is lukewarm even there, with NEDI often
-  scoring below plain bicubic, since edge direction is hard to estimate from the
-  low-resolution data. Our prior is stronger and different — piecewise-constant
-  regions — and these methods do not exploit it.
-- **Pixel-art scalers** (hqx, xBR/xBRZ, Super-xBR, scale2x) — the closest match
-  to the premise, non-linear, and they produce clean diagonals with neither blur
-  nor ringing. The blocker is that they assume **aliased** input from a small
-  palette. This chart is antialiased on type and hairlines, and its shaded relief
-  is continuous tone; both would be quantised into something worse than they
-  started. Right family, wrong source.
-- **Vectorise and re-rasterise** (potrace, or Kopf & Lischinski's *Depixelizing
-  Pixel Art*) — theoretically correct for the flat-region part, since the chart
-  was vector before it was raster, and the palette-indexed original hands you the
-  quantisation. But it destroys the shaded relief and can distort small type.
-
-**Recommended: a learned model trained on line art.** That content class — flat
-regions, hard antialiased lines, limited palette — is the closest well-studied
-analogue to cartographic artwork, and unlike the pixel-art scalers these handle
-antialiased input natively. In order of interest:
-
-1. **waifu2x (cunet)** — the most conservative, and the one measurement in the
-   literature that bears directly on charts favours it: Real-ESRGAN was found to
-   reduce **line continuity by 18–23% against waifu2x at 3x**. Continuity is what
-   an airway, a boundary or a road *is*; a model that breaks thin lines is
-   disqualifying regardless of how sharp the result looks.
-2. **Real-CUGAN** — anime-trained with 2x/3x/4x and, usefully here, tunable
-   enhancement strength (five weights at 2x). The right setting for this job is
-   the weakest one that still cleans artifacts.
-3. **APISR** (CVPR 2024) — current state of the art on this content class at only
-   1.03M parameters, so cheap to evaluate.
-
-**All three are trained on anime, not maps**, and two differences matter enough
-to test before committing: charts carry **dense small type**, which anime does
-not, so glyph deformation needs checking; and the **shaded relief** is continuous
-tone that an illustration model may posterise into bands. Evaluate on a crop
-holding type, hairlines and relief together, and measure rather than eyeball —
-`scripts/upsample_test.py` already has the ringing and sharpness harness, and
-wants a line-continuity check adding to it.
-
-**The chart is not uniformly piecewise-constant**, and that is probably the most
-useful thing to know before starting. The shaded relief is genuine continuous
-tone, where lanczos is the *right* kernel; the linework, fills and type are
-piecewise-constant, where it rings. The strongest approach is likely to segment
-the two — the palette-indexed original is a natural source for that mask — and
-resample each with what suits it.
-
-**A cheap win independent of all this — *done*:** the tiling warp defaulted to
-`lanczos`, which measured worst for ringing. For the reprojection step, which
-resamples at roughly 1:1, `cubic` halves the ringing at nearly the same
-sharpness, so every pipeline now warps with `cubic` (single-chart tiling, the
-chart-series mosaic, and the wall planning build).
-
-### Tile the VFR sectional set — *done*
-
-The sectional series is 55 sheets that overlap at their edges, each in its own
-Lambert Conformal Conic, each inside a printed collar. Four scripts build it:
-
-```bash
-.venv/Scripts/python scripts/fetch_charts.py sectionals          # current edition -> source/sectionals
-.venv/Scripts/python scripts/detect_sectional_areas.py --sheet review/
-.venv/Scripts/python scripts/upsample_charts.py sectionals       # -> source/sectionals/upscaled
-.venv/Scripts/python scripts/build_chart_tileset.py sectionals   # -> ./tileset-sectionals
-```
-
-- **Upsampling** runs Real-CUGAN 2x (denoise3x weights) over every sheet before
-  tiling. The FAA's sectional rasters staircase at any zoom and, unlike the IFR
-  charts, there is no vector source to fall back on — their PDFs wrap the same
-  rasters. Whole sheets are upsampled rather than just their map areas, so the
-  reviewed manifests differ from the raster by a scale and no offset. This is
-  the expensive stage: ~35 minutes on a GPU, hours on a CPU, ~900 MB per sheet.
-
-- **Fetching** picks the newest edition directory that is not in the future
-  (the FAA posts the next one early) and runs `WORKERS` downloaders at once.
-  Each series in `scripts/chart_series.py` says which zips and GeoTIFFs it
-  wants; anything else is not extracted, and the build skips it too. The
-  sectional series excludes the Guam (Mariana Islands) and American Samoa
-  insets, which ship in `Hawaiian_Islands.zip` alongside sheets we keep.
-- **Map areas** live in `scripts/sectionals_areas.json`, one pixel polygon per
-  sheet. They are detected (walk in from each edge until the paper collar
-  ends, fit a line or arc, move inward past the worst reading) and then
-  reviewed; the script prints how much paper is left just inside each edge and
-  writes contact sheets with every outline drawn. Enlarged insets printed over
-  the map are hand-authored `exclude` boxes. Three sheets are hand-traced: the
-  two that are not a map in a collar (Hawaiian Islands, Honolulu), and Los
-  Angeles, whose legend panel and LA Basin inset leave an L-shaped map area that
-  a fitted edge cuts short.
-  Rerun and review for each edition.
-- **The mosaic** is `cesiumtiles.mosaic`, not `gdal raster tile`: every z12
-  tile warps just the sheets that reach it, with each sheet's map area burnt
-  into a mask the warp reads as alpha, and composites them. Lower zooms are
-  box-filtered from their children, a level at a time, fully parallel. Sheets
-  crossing 180 degrees are handled.
-- **Choices:** max zoom z12 (only the 1:250k Honolulu inset would use z13, at 4x
-  the tiles), WebP q90, and overlaps resolved by file name — later on top.
-- **Two warp backends.** `--warp cpu` (the default) warps each block with
-  `gdal.Warp`; `--warp gpu` evaluates the projection in torch, prefilters
-  isotropically and samples on the card, one source sheet at a time. Both are
-  kept and tested, and they agree to within a level or two per pixel.
-- **Speed knobs, for trials rather than for a chart being kept.** The warp is
-  exact by default (the projection evaluated per pixel, not fitted), because a
-  fraction of a pixel decides whether a chart hairline covers a cell.
-  `--warp-tolerance PIXELS` lets it approximate, in source pixels, like
-  `gdalwarp -et`: measured on a synthetic hairline sheet, `0.125` builds the max
-  zoom **1.7x faster** on the CPU backend and moves 8% of pixels, by up to the
-  full range; looser than that costs more accuracy for no more speed. On the GPU
-  backend the geometry is already approximated to ~1,000x inside that tolerance
-  for ~1% of a batch, so the knob there is `--resampling bilinear` instead of
-  cubic: **~1.8x** the sampler's throughput, and noticeably smaller tiles.
-
-Still open:
-
-- **Overlap order is a placeholder.** It already shows: the FAA's Phoenix
-  GeoTIFF has a blank white row running through its map near 35.6 N, and
-  Phoenix sorts after Las Vegas, so it is drawn on top of good Las Vegas map.
-  Preferring the sheet whose own map area is further from its edge would fix
-  this and most seam artefacts generally.
-- **Empty ocean returns 404s.** Tiles are only written where a sheet has map,
-  so Cesium requests (and fails) tiles over the gaps inside the extent. The
-  tester no longer warns about these, but the requests still happen.
-- **No upsampling** yet; the wall chart's Real-CUGAN stage is not in this path.
-
-### Tile the IFR low enroute set — *done*
-
-The CONUS low enroute charts, L-01 to L-36, build the same way:
-
-```bash
-.venv/Scripts/python scripts/fetch_charts.py ifr-low          # -> source/ifr-low/pdf
-.venv/Scripts/python scripts/render_pdfs.py ifr-low           # -> source/ifr-low/rendered
-.venv/Scripts/python scripts/heal_frames.py ifr-low           # -> source/ifr-low/healed
-.venv/Scripts/python scripts/build_chart_tileset.py ifr-low   # -> ./tileset-ifr-low
-```
-
-- **Scope:** only `ENR_L01`-`ENR_L36`. Alaska, Pacific and area charts are left
-  out, and so are the inset TIFFs some zips carry. L-06 is published as two
-  halves, `ENR_L06N` and `ENR_L06S`, so the series has 37 sheets.
-- **The sheets are drawn from the FAA's vector PDFs, not its GeoTIFFs.** The
-  published GeoTIFFs are badly rasterised — every edge staircases, and no
-  amount of super-resolution recovers what the rasteriser threw away. The same
-  charts are also published as true vector PDFs, which `render_pdfs.py` draws
-  at 4x the GeoTIFF's 400 dpi (1600 dpi). That is *rendering*, not upsampling:
-  each pixel comes from the vector geometry, so type and line work antialias
-  properly. A sheet takes about 160 s, and the 37 renders total 5.2 GB. The
-  scale is chosen against `max_zoom`: at 4x a z13 tile's warp *minifies*, which
-  is the regime that resamples cleanly.
-  **Rendering is done in 8192 px blocks**, not whole sheets: pdfium stops
-  drawing past ~32767 px without any error, and a 48000 px sheet silently loses
-  its right third (see CLAUDE.md).
-- **The PDFs are not georeferenced** — their own metadata says so, offering
-  only four bounding corners. So `detect_pdf_windows.py` registers each
-  GeoTIFF against its PDF once per edition and commits the result as
-  `scripts/ifr_low_pdf.json`: the affine, the CRS, and which box of which page
-  the sheet is. `ENR_L06.pdf` is a single page holding both panels that ship as
-  `ENR_L06N` and `ENR_L06S`, which is why a window is recorded rather than
-  assumed. After that only the PDFs are downloaded (~130 MB against 386 MB of
-  GeoTIFFs); `build_ifr_low.py --detect` fetches the GeoTIFFs and re-derives
-  both manifests, which is the only thing they are still needed for.
-- **Map areas are found differently.** An IFR chart's map is mostly white, so
-  the sectional detector's "walk in until the paper ends" has nothing to find.
-  Instead every sheet frames its map with a heavy black rule, 6-10 px, while
-  legend tables use 1-5 px rules; the map is the rectangle just inside the
-  thick rules on each axis. Where a sheet frames a second panel beside the map
-  (L-23's Wilmington-Bimini inset strip), the widest panel is the map and the
-  other is reported and dropped.
-- **Seams are healed, not cropped.** Neighbouring IFR charts do not overlap:
-  they meet at their frame rules, and under a rule neither sheet has map.
-  Cropping inside the rules left a 1-3 km dark gap along every shared edge.
-  Instead the map area runs to each rule's outer edge, and `heal_frames.py`
-  writes a copy of each sheet with the rule painted over by repeating the
-  nearest clean row or column outward (~12 px, ~0.5-1 km per side), which the
-  build tiles. That closed 31 of 32 seams; L-29/L-30 still has a straight
-  ~450 m sliver where the FAA's two georeferenced sheets simply do not meet.
-- **Same engine** as the sectionals, at **z13** and **lossless WebP**: IFR
-  charts are thin linework and small type on white, which lossy q90 softens.
-  The 4x renders reach z14 natively, so z13 tiles are genuine vector detail.
-  `build_chart_tileset.py --[no-]lossless` overrides a series' default. Overlaps are
-  painted in *reverse* file-name order, so the lower-numbered chart is on top;
-  `build_chart_tileset.py --[no-]reverse-order` overrides a series' default.
-
-### Automate fetching and building every current FAA chart
-
-The FAA republishes on a **56-day cycle**, so this should be a scheduled job
-rather than something run by hand:
-
-- Fetch the current edition list, download the VFR and IFR products, and unpack
-  the GeoTIFFs (or the vector PDFs, for the IFR charts). *Done for sectionals
-  and IFR low* (`scripts/fetch_charts.py`). The reviewed manifests are tied to
-  an edition, so a scheduled job has to re-detect and someone has to look.
-- Detect each sheet's neatline, upsample, mosaic where a series overlaps, and
-  tile — the pipeline above, driven by a manifest rather than constants.
-- Track edition dates so an unchanged chart is skipped instead of rebuilt.
-- Plan for the storage: the full VFR sectional set alone is tens of GB of source
-  before any tiling.
-
-`scripts/build_vfr_tileset.py` is the single-chart case of this and is already
-parameterised the right way; the generalisation is a manifest of charts plus a
-download stage, with `--detect-neatline` doing the per-edition measurement so
-new editions do not inherit stale constants.
-
-### Try a transformer upsampler
-
-Real-CUGAN won the first round, but it is a small CNN — 1.28 M parameters, 26
-convolutions, a receptive field of a few tens of pixels. The obvious next step is
-a model that can see further along a line before deciding what it is.
-
-**Attention-based architectures are the interesting tier**, and they are already
-drop-in: **15 of the 42 architectures `spandrel` recognises are attention-based**,
-and `scripts/upsample.py` loads any of them unchanged. Trying one is
-`--model path/to/weights.pth`, nothing else. Worth a look, roughly in order:
-
-| model | why |
-| --- | --- |
-| **DAT** (Dual Aggregation Transformer) | Aggregates across both spatial and channel dimensions; strong 2x results and several line-art-tuned weights exist. |
-| **HAT** (Hybrid Attention Transformer) | Combines channel attention with window self-attention, which activates more input pixels than SwinIR. Big, but this is a batch job. |
-| **ATD** (Adaptive Token Dictionary, CVPR 2024) | Learns a token dictionary rather than attending over a fixed window; good quality per parameter. |
-| **DRCT** | Addresses the information bottleneck that limits SwinIR-style networks; a strong recent baseline. |
-| **SwinIR** / **Swin2SR** | The reference transformer SR. Not the strongest any more, but the most line-art-tuned weights exist for it, so it is the easiest honest comparison. |
-| **SeemoRe**, **MoESR**, **SPAN**, **OmniSR**, **PLKSR** | Efficiency-oriented. Include them: the first round was won by the *smallest* model tried, so more capacity is not obviously the answer. |
-
-All are a **single deterministic forward pass**, like the CNNs — same input, same
-output, reproducible tiles. Weights tuned for illustration and line art (rather
-than the usual DIV2K natural-image training) are on
-[OpenModelDB](https://openmodeldb.info); a model trained on photographs will
-reach for texture this artwork does not have.
-
-**What to measure.** `scripts/upsample_test.py` has the ringing and sharpness
-harness. Two more signals proved useful in the first round and are worth
-formalising: **line continuity** on thin airways and boundaries, which is the
-property that separates these models on line art and the one that disqualifies a
-model outright; and **lossless WebP size as a proxy for local complexity** — with
-tile count held constant, APISR's output was 30% larger than Real-CUGAN's, which
-correctly predicted it was synthesising more high-frequency content than the
-source justified.
-
-### Diffusion upsamplers — probably the wrong tool
-
-**StableSR**, **SeeSR**, **SUPIR**, **DiffBIR**, and the one-step distillations
-(**OSEDiff**, **ResShift**, **CCSR**, **AdcSR**) are the genuinely generative
-tier, and two things argue against them here.
-
-They **sample**, so they are not reproducible: the literature reports noticeable
-instability across noise samples for StableSR, PASD, SeeSR, SUPIR and AddSR, with
-CCSR existing specifically to address it. Tiles that differ run to run are a poor
-fit for a chart, and it is also the regime where the worry about invented detail
-actually bites — unlike a deterministic 2x convolution, where it does not.
-
-And their advantage is inventing plausible *texture*: skin, foliage, fabric. A
-chart has no texture to invent, only flat fills, hard edges and type. The first
-round already hinted at this — the winner was the smallest model, and the one
-that synthesised most lost.
-
-Worth revisiting only if a transformer plateaus and the remaining gap is clearly
-reconstruction rather than invention.
-
-## Tests
-
-```bash
-.venv/Scripts/python -m pytest
-```
-
-145 tests, all against small synthetic rasters built in a temp directory — none
-need the chart files. The tile arithmetic in `cesiumtiles.scheme` is checked
-against [mercantile](https://github.com/mapbox/mercantile), a separate
-implementation of the same grid, so agreement is evidence rather than tautology.
+---
 
 ## Layout
 
 ```
-pyproject.toml            packaging + pytest config
-requirements.txt          runtime deps (incl. the GDAL wheel index)
-requirements-dev.txt      runtime + test deps
+pyproject.toml              packaging + pytest config
+requirements.txt            runtime deps (GDAL and PyTorch indexes)
+requirements-dev.txt        runtime + test deps
 scripts/
-    setup_repo.py         fresh clone -> working venv
-    build_sectionals.py   wrappers: download + build one product each
+    setup_repo.py           fresh clone -> working venv
+    build_sectionals.py     one wrapper per product: fetch, prepare, tile
+    build_sectionals_tac.py
     build_ifr_low.py
+    build_ifr_high.py
     build_wall_planning.py
-    pipeline.py           what the wrappers share: run stages in order
-    layout.py             where everything lives (source/, models, ...)
-    chart_series.py       each FAA chart series, described once
-    fetch_charts.py       download a series' current edition (+ fetch_chart.py worker)
-    detect_*_areas.py     find each sheet's map area -> *_areas.json (reviewed, committed)
-    build_chart_tileset.py  mosaic a series into tiles
-    build_vfr_tileset.py  the wall planning chart pipeline
-    upsample.py           2x super-resolution
-source/                   every download and intermediate (gitignored)
+    build_vfr_tileset.py    the single-chart pipeline the last one drives
+    pipeline.py             what the wrappers share: run stages in order
+    chart_series.py         each FAA chart series, described once
+    layout.py               where everything lives (source/, models, ...)
+    fetch_charts.py         download a series' current edition (+ fetch_chart.py worker)
+    detect_sectional_areas.py   map areas for sectionals and TACs -> *_areas.json
+    detect_ifr_areas.py     map areas and frame rules for IFR sheets
+    detect_pdf_windows.py   register each PDF against its GeoTIFF -> *_pdf.json
+    render_pdfs.py          draw sheets from vector PDFs
+    upsample_charts.py      2x super-resolution over a series
+    upsample.py             the upsampler itself, block by block
+    heal_frames.py          paint over frame rules so sheets join
+    *_areas.json            reviewed, committed map areas
+source/                     every download and intermediate (gitignored)
 src/geotransfer/
-    core.py               copy_geo_metadata / read_georeference
+    core.py                 copy_geo_metadata / read_georeference
     cli.py
 src/cesiumtiles/
-    scheme.py             XYZ grid maths for both tiling schemes
-    core.py               build_tileset
-    mosaic.py             build_mosaic: many overlapping sheets, masked
-    viewer.html           the tile tester page (plain HTML - edit this)
-    viewer.py             fills in its placeholders
-    serve.py              local preview server (CORS, tile MIME types)
+    scheme.py               XYZ grid maths for both tiling schemes
+    core.py                 build_tileset: one raster
+    mosaic.py               build_mosaic: many overlapping sheets, masked
+    gpumosaic.py            the GPU backend's top level and pyramid
+    gpuwarp.py              projection and sampling in torch
+    viewer.html             the tile tester page (plain HTML - edit this)
+    viewer.py               fills in its four placeholders
+    serve.py                local preview server (CORS, tile MIME types)
     cli.py
-tests/
-    test_core.py          georeferencing transfer
-    test_scheme.py        tile maths vs mercantile
-    test_tiles.py         end-to-end tileset builds
-    test_mosaic.py        mosaics: overlap order, masks, antimeridian
-    test_serve.py         preview server behaviour
-.claude/
-    launch.json           dev-server definitions for the browser pane
-CLAUDE.md                 orientation notes for Claude Code
+www/
+    index.html              the public site: one button per tileset
+    update_tilesets.sh      writes tilesets.json beside it
+tests/                      235 tests, all on synthetic rasters
+CLAUDE.md                   orientation notes, gotchas and measurements
 ```
+
+`CLAUDE.md` is worth reading before changing anything: it records the decisions
+that were settled with measurements, and the mistakes that have already been
+made twice.

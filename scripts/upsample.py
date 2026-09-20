@@ -4,8 +4,8 @@
 Why a model rather than a kernel: every resampling kernel GDAL offers except
 `near` is linear, so each bandlimits edges by construction and rings on them. On
 a rasterised vector drawing -- flat regions meeting at step edges -- that
-ringing is the dominant artifact. The README's "Upsample the source before
-tiling" section has the measurements and the comparison of candidates.
+ringing is the dominant artifact. The README's "Why a learned upsampler at all"
+section has the measurements and the comparison of candidates.
 
 Runs block by block, so peak memory stays in the hundreds of MB however large
 the raster is: a 754 Mpx output never exists in RAM. Blocks are read with an

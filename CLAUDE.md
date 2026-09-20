@@ -17,10 +17,11 @@ Two packages under `src/`, one venv, one test suite.
 
 **Everything downloaded or derived from downloads lives under `source/`** (the
 user asked for this, so the lot can be deleted in one go): `source/sectionals/`
-(55 GeoTIFFs) and `source/ifr-low/pdf/` (36 vector PDFs) from
+(55 GeoTIFFs), `source/tac/` (34 terminal area charts from 30 zips) and
+`source/ifr-low/pdf/` (36 vector PDFs) and `source/ifr-high/pdf/` (12) from
 `scripts/fetch_charts.py SERIES`, then `source/ifr-low/rendered/` (37 sheets
-drawn from those PDFs) and `source/ifr-low/healed/` (frame-healed copies, both
-below),
+drawn from those PDFs), `source/ifr-low/healed/` (frame-healed copies, both
+below) and `source/ifr-high/rendered/` (12 sheets, not healed -- see below),
 `source/models/` (upsampler weights), `source/vendor/nunif`, and
 `source/wall-planning/`. Paths come from `scripts/layout.py`; use it rather than
 building paths from `REPO`. Tilesets stay at the top level.
@@ -35,8 +36,9 @@ automated download**: the FAA product page's "Planning Set" link
 user chose a manual drop-in; `build_wall_planning.py` checks for the files.
 
 **Wrappers, one per product** (the user asked for these over running stages by
-hand): `build_sectionals.py`, `build_ifr_low.py`, `build_wall_planning.py`, all
-thin, running stage scripts through `pipeline.py`. The chart wrappers do **not**
+hand): `build_sectionals.py`, `build_sectionals_tac.py`, `build_ifr_low.py`,
+`build_ifr_high.py`, `build_wall_planning.py`, all thin, running stage scripts through
+`pipeline.py`. The chart wrappers do **not**
 re-detect map areas unless `--detect` is passed, because the manifests are
 reviewed and committed. `scripts/setup_repo.py` takes a fresh clone to a working
 venv; it has been run against an existing venv, not from a truly fresh clone.
@@ -99,7 +101,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 223 tests, ~60s
+.venv/Scripts/python -m pytest                        # 235 tests, ~70s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -218,6 +220,20 @@ costs a lot of context for no gain.
 - **Windows `SO_REUSEADDR` lets a second server hijack a bound port** (opposite
   of POSIX). `serve.py` sets `allow_reuse_address` only on non-Windows for this
   reason — don't "simplify" it back to `True`.
+- **`build_mosaic`'s CPU pool defaults to `os.cpu_count()`, and 28 workers do
+  not fit in this box's 32 GB.** The first `sectionals-tac` build died seconds
+  into the z13 detail pass with `numpy ... Unable to allocate 48.0 MiB for an
+  array with shape (3, 2048, 2048)` -- the *first* allocation each worker makes.
+  Each worker holds a 256 MB GDAL cache plus ~250 MB of block buffers (48 MB
+  premultiplied colour, 16 MB alpha, ~145 MB transient inside `_warp_layer`), so
+  28 of them want roughly 14 GB before any pixels move, on top of the parent's
+  plans. Measured with `--workers 16`, the same build peaked at **44.2 GB of
+  commit charge** (the page file grew; the limit was 41.5 GB at rest) and
+  finished. So: pass `--workers` on a big mosaic, and note the failure is an
+  *ordinary* MemoryError from numpy, not a GDAL message -- nothing points at the
+  pool. The detail level renders first (`_build_cpu`), so a crash there costs no
+  max-zoom work. The same class of problem already narrowed the mask pool
+  (`MASK_WORKERS`, `MASK_CACHE_MB`); the render pool has no such cap yet.
 
 ## Design notes
 
@@ -322,8 +338,19 @@ for it gone; the document `<title>` stays.
 (`heal_frames.py`) -> `build_chart_tileset.py SERIES`.
 **`scripts/chart_series.py` is the one place a series is described**: its index
 URL, which zips and files it wants (regexes), exclusions, download directory,
-manifests (`scripts/<series>_areas.json`, `<series>_pdf.json`) and tileset
-directory. Add a series there, not by copying scripts.
+**which script detects its map areas** (`detector`), manifests
+(`scripts/<series>_areas.json`, `<series>_pdf.json`) and tileset directory. Add
+a series there, not by copying scripts. `pipeline.py` reads `detector` off the
+series, so the wrappers no longer name a detection script and
+`detect_sectional_areas.py` now takes a series argument like the IFR one.
+
+**A composite series is layers, not sheets.** `sectionals-tac` has a `layers`
+list and nothing else of its own: each layer stays the series it is, with its
+own downloads, stages and reviewed manifest, and the composite only fixes the
+paint order (every sheet of one layer below every sheet of the next) and which
+layers earn the detail level. A composite raises rather than returning a
+`directory` or `manifest`, so a stage cannot quietly write into a directory
+nothing else reads. Building it after `tileset-sectionals` costs only the TACs.
 
 **The manifests are always in downloaded-GeoTIFF pixel space.** A series that
 renders PDFs tiles rasters drawn at `pdf_scale` times that, so pixel polygons
@@ -376,6 +403,48 @@ inset GeoTIFFs, which are not extracted and which the build also skips. Exclusio
   no tiles over ocean by design.
 - **Palette sheets are RGB-expanded before warping**, or resampling blends
   indices. A test guards it.
+
+**Terminal area charts (`tac`) and the `sectionals-tac` composite.** 30 zips
+from `visual/<edition>/tac-files/` yield **34 sheets**, because
+Anchorage/Fairbanks, Denver/Colorado Springs, Seattle/Portland and
+Tampa/Orlando each ship two -- compare sheet counts against zip counts here
+too. The `tif_pattern` keeps `* TAC.tif` and nothing else: a zip also carries
+that city's Flyway Planning chart (`Denver FLY.tif`), sometimes an airspace
+graphic (`Anchorage Graphic.tif`) or `New York TAC VFR Planning Charts.tif`,
+none of which are map. 678 MB downloaded.
+
+- **A TAC is 1:250,000 at 300 dpi: 21.1679 m/px**, read off the world files --
+  exactly half the sectionals' 42.3. Measured through
+  `prepare_sources`, 32 of the 34 downloaded sheets already report native
+  **z13** and the two Alaskan ones z12; upsampled 2x they reach past it. Same
+  Real-CUGAN denoise3x weights as the sectionals, so the two layers meet on
+  equal terms.
+- **z12 with a sparse z13 detail level, not z13 everywhere** (the user's call).
+  A uniform z13 would be ~2 M tiles / ~21 GB to magnify the 96% that is
+  sectional -- the trade already rejected for `tileset-sectionals`. Instead
+  `build_mosaic(detail_zoom=)` plans one level past `max_zoom` from
+  `plan_detail_tiles`, keeping only tiles a source marked `detail` reaches:
+  tens of thousands of tiles, not two million. Cesium falls back to the
+  stretched z12 parent where the level is absent, exactly as it already does
+  over ocean.
+- **Every source paints into a kept detail tile, not just the detail ones**, so
+  a TAC's edge sits on the magnified sectional rather than on a hard
+  transparent boundary a tile wide.
+- **The detail level feeds nothing below it.** The overview cascade still
+  starts at `max_zoom`; so does the coverage read-back, because a sparse top
+  level's columns describe one city, not the chart. `metadata.json` carries
+  `fullzoom` beside `maxzoom` to say where the full coverage stops.
+- **The TACs paint on top at every level** (the user's call), which is what
+  "inserted where available" means -- not only at the finest one.
+- **Los Angeles TAC is hand-traced and `manual`**, like the LA sectional and
+  for the same reason: its west band fit spanned 4676-6326 px (every other
+  sheet's worst side spans under 90) and the fitted slant silently dropped a
+  wedge of the Pacific. Its neatline is a drawn rule, measured at west
+  4669, east 14878, north 103, south 5890, each >99.8% dark across the full
+  span of the opposite pair; the manifest is that rectangle inset 12 px.
+  **The paper check did not catch it** -- it never catches map cut off, only
+  collar left in (it flags 0 of 34 sheets). The per-side band spread the
+  detector prints is what catches it.
 
 Detection lessons, each learnt from a wrong outline:
 
@@ -475,7 +544,9 @@ Detection lessons, each learnt from a wrong outline:
   legend column rules are 5), and L-34's right rule reads only 0.94 dark
   because something crosses it. L-23 frames a Wilmington-Bimini inset strip
   beside its map; the widest framed panel is taken and the other dropped.
-- **IFR sheets abut; they do not overlap, and the frame rule is the seam.**
+- **IFR *low* sheets abut; they do not overlap, and the frame rule is the seam.**
+  (The high charts do overlap -- see below -- so this is a property of the low
+  set, not of IFR charts.)
   Cropping inside the rule (the first build) left dark 1-3 km gaps along all 32
   shared edges; the user saw them as black lines. Growing the outline showed the
   seams only close at the rule's *outer* edge, so there is no map under the rule
@@ -488,6 +559,39 @@ Detection lessons, each learnt from a wrong outline:
   it), so the FAA's two georeferenced sheets just do not meet there; closing it
   would need a bleed past the frame, which would overpaint real map elsewhere.
   The healed build ran 17.6 min, against ~9 min for the unhealed one.
+- **IFR high (`ifr-high`) is the low pipeline at half the scale**, on the same
+  scripts: CONUS H-01 to H-12 (not AKH, CB or the oceanic charts), 12 GeoTIFF
+  zips and 6 PDF zips (`DEHUS1,3,..,11`, two sheets each -- 12 sheets from 6
+  zips, so check the counts). `build_ifr_high.py`.
+- **The high sheets are 24000x8000 at 92.60 m/px**, measured off the downloads:
+  exactly half the low charts' 46.30, this being the smaller-scale chart. So
+  `pdf_scale=4` gives 23.15 m/px and **z12** minifies it 0.79x -- the same ratio
+  ifr-low gets from 4x at z13. z13 here would magnify 1.58x, which is the
+  mistake ifr-low made from 2x renders. Keep the pair in step.
+- **The high sheets overlap; they do not abut.** Measured on the 2026-09-03
+  edition with `prepare_sources` footprints, east-west neighbours share 15-31%
+  of a sheet (H-07/H-08 31.1%, H-05/H-10 25.1%) and H-10/H-12 share 48.7%;
+  north-south neighbours 3-4%. **Do not heal these**, and do not conclude
+  anything from lon/lat bounding boxes: those suggested H-01/H-03 overlap 27
+  degrees of longitude, and a pixel probe put the shared points outside H-01
+  entirely -- the sheets are conic rectangles, not lon/lat ones.
+  `heal_frames=False`, and `detect_ifr_areas.py` reads that flag to write
+  `include` from `frame.clean` rather than `frame.outer`, so each rule is
+  cropped away and the sheet beneath shows through instead of being crossed by
+  a black line.
+- **The high crop was checked at a seam, not just in aggregate.** H-08 sorts
+  after H-07 and paints over it, so H-08's west crop edge lands mid-map on
+  H-07. At that edge (lon -90.13) the z12 tiles have **no full-height dark
+  column and min alpha 255** -- no leaked rule, no gap. The nearest dark line is
+  444 px away and is an ARTCC boundary over the Gulf. A whole-tileset scan is
+  not enough on its own: 3.7% of ifr-high z12 tiles hold a full-tile dark run,
+  but so do 3.3% of *healed* ifr-low's, so that statistic measures map content
+  (grid lines, boundaries), not artefacts. Use ifr-low as the control.
+- **H-12 is the odd high sheet**: 78.71 m/px rather than 92.60, and its
+  geotransform is rotated 61 degrees -- a tall eastern-seaboard chart in a
+  landscape image. Being the finest and sorting last, plain file-name order puts
+  it on top, so `ifr-high` sets `reverse_order=False` where `ifr-low` sets True.
+  A placeholder, like every overlap rule here.
 - **The Phoenix GeoTIFF has a blank white row through its map** near 35.6 N.
   That is the FAA's file, not the mask; it shows because Phoenix sorts after Las
   Vegas. A better overlap rule is the fix, not a mask.
@@ -732,3 +836,9 @@ were checked against the real tilesets.
   z12**, upsampled 2x, WebP q90) and `tileset-ifr-low/` (**3.05 GB, 953,205 tiles at
   z13**, lossless, from 4x PDF renders, 31.2 min at 608 tiles/s) are
   the other real products and are expected to persist too.
+  `tileset-ifr-high/` is **1.07 GB, 313,057 tiles at z12** (lossless, from 4x PDF
+  renders, 14.3 min at 373 tiles/s, built 2026-09-20); the whole product takes
+  about half an hour end to end, the cheapest of the four series.
+  `tileset-sectionals-tac/` joined them on 2026-09-20: **5.93 GB, 568,218 tiles**,
+  z0-z12 full plus a sparse z13 of 58,872 tiles over the 34 TACs (against 380,238
+  at z12), tiled in 26.5 min. `tileset-ifr-high/` is the fifth product.

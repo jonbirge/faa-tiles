@@ -17,7 +17,7 @@ from chart_series import SERIES, series  # noqa: E402
 
 def test_unknown_series_is_refused():
     with pytest.raises(SystemExit):
-        series("ifr-high")
+        series("ifr-middle")
 
 
 def test_sectionals_are_upsampled_from_the_downloaded_geotiffs():
@@ -68,6 +68,8 @@ def test_a_stage_a_series_does_not_run_has_no_input():
 
 def test_every_stage_reads_the_previous_stages_output():
     for s in SERIES.values():
+        if s.is_composite:
+            continue
         previous = s.directory
         for script, output in s.stages:
             assert s.input_directory(script) == previous
@@ -75,10 +77,15 @@ def test_every_stage_reads_the_previous_stages_output():
         assert s.build_directory == previous
 
 
-@pytest.mark.parametrize("name, zoom", [("sectionals", 12), ("ifr-low", 13)])
+@pytest.mark.parametrize("name, zoom", [
+    ("sectionals", 12), ("ifr-low", 13), ("ifr-high", 12), ("tac", 13),
+    ("sectionals-tac", 12),
+])
 def test_max_zoom(name, zoom):
     """The user's call. Each matches where its prepared sheets stop holding
-    detail: IFR renders from vector at 4x reach z14, upsampled sectionals z12.5."""
+    detail: IFR low renders from vector at 4x reach z14, the high charts are
+    drawn at half the scale so theirs reach z13, upsampled sectionals z12.5,
+    and a TAC is 1:250,000 -- half the sectionals' pitch, so one level finer."""
     assert series(name).max_zoom == zoom
 
 
@@ -105,6 +112,88 @@ def test_ifr_low_pdf_pattern(name, wanted):
     assert series("ifr-low").wants_pdf(name) is wanted
 
 
+@pytest.mark.parametrize("name, wanted", [
+    ("ENR_H01.zip", True),
+    ("ENR_H12.zip", True),
+    ("ENR_L01.zip", False),       # the low charts are their own series
+    ("ENR_AKH01.zip", False),     # Alaska high
+    ("ENR_A01.zip", False),       # area charts
+    ("ENR_H01_tif.zip", False),
+])
+def test_ifr_high_zip_pattern(name, wanted):
+    assert series("ifr-high").wants_zip(name) is wanted
+
+
+@pytest.mark.parametrize("name, wanted", [
+    ("DEHUS1.zip", True),
+    ("DEHUS11.zip", True),
+    ("dehus9.zip", True),         # the index's spelling varies
+    ("DELUS1.zip", False),        # low altitude
+    ("DEHAK1.zip", False),        # Alaska
+    ("DEHCB1.zip", False),        # Caribbean
+    ("DEHCB1_tif.zip", False),
+])
+def test_ifr_high_pdf_zip_pattern(name, wanted):
+    assert series("ifr-high").wants_pdf_zip(name) is wanted
+
+
+def test_ifr_high_is_the_low_pipeline_at_half_the_scale():
+    """The same scripts, one zoom shallower.
+
+    The sheets are 24000x8000 at 92.60 m/px, exactly half the low charts'
+    46.30, so 4x rendering lands the warp in the same minifying regime one
+    level up the pyramid.
+    """
+    high, low = series("ifr-high"), series("ifr-low")
+    assert high.detector == low.detector
+    assert high.pdf_scale == low.pdf_scale == 4 and high.pixel_scale == 4
+    assert high.max_zoom == low.max_zoom - 1
+    assert high.lossless
+    assert not high.fetches_tifs and high.upsample_scale == 0
+    assert high.manifest.name == "ifr_high_areas.json"
+    assert high.pdf_manifest.name == "ifr_high_pdf.json"
+    assert high.tileset.name == "tileset-ifr-high"
+
+
+def test_only_the_abutting_ifr_series_heals_its_frames():
+    """Healing repaints the frame rule from the map just inside it, which is
+    right only where there is no map under the rule. The low sheets abut, so
+    there is none; the high sheets overlap -- east-west neighbours share 15-31%
+    of a sheet on the 2026-09-03 edition -- so the rule is cropped away instead
+    and the sheet beneath shows through. detect_ifr_areas.py reads this flag to
+    decide whether a map area runs to the rule's outer or clean edge.
+    """
+    assert series("ifr-low").heal_frames
+    assert not series("ifr-high").heal_frames
+    # So the high charts tile the renders directly; only the low ones heal.
+    assert [script for script, _ in series("ifr-high").stages] == ["render_pdfs.py"]
+    assert [script for script, _ in series("ifr-low").stages] == [
+        "render_pdfs.py", "heal_frames.py"]
+    assert series("ifr-high").build_directory == series("ifr-high").render_directory
+
+
+def test_the_two_ifr_series_never_claim_each_others_sheets():
+    """Both are published in one directory, so the patterns have to separate
+    them: the same fetch lists ENR_L.. beside ENR_H.., DELUS beside DEHUS."""
+    high, low = series("ifr-high"), series("ifr-low")
+    for name in ("ENR_H01.tif", "ENR_H12.tif"):
+        assert high.wants_tif(name) and not low.wants_tif(name)
+    for name in ("ENR_L01.tif", "ENR_L06N.tif"):
+        assert low.wants_tif(name) and not high.wants_tif(name)
+    for name in ("ENR_H01.pdf", "ENR_H09.pdf"):
+        assert high.wants_pdf(name) and not low.wants_pdf(name)
+    for name in ("ENR_L01.pdf", "ENR_L36.pdf"):
+        assert low.wants_pdf(name) and not high.wants_pdf(name)
+
+
+def test_no_high_sheet_is_published_in_halves():
+    """L-06 ships as ENR_L06N and ENR_L06S; nothing in the high set does, so
+    the pattern takes the plain name only."""
+    s = series("ifr-high")
+    assert s.wants_tif("ENR_H06.tif")
+    assert not s.wants_tif("ENR_H06N.tif") and not s.wants_tif("ENR_H06S.tif")
+
+
 def test_l06_ships_as_two_geotiff_panels():
     """One PDF page, two GeoTIFFs: the tif pattern must keep both halves."""
     s = series("ifr-low")
@@ -113,5 +202,65 @@ def test_l06_ships_as_two_geotiff_panels():
 
 
 def test_every_series_has_its_own_directories():
-    directories = {s.directory for s in SERIES.values()}
-    assert len(directories) == len(SERIES)
+    """Composites excepted -- they own no sheets, and say so rather than
+    quietly pointing a stage at a directory nothing writes."""
+    plain = [s for s in SERIES.values() if not s.is_composite]
+    assert len({s.directory for s in plain}) == len(plain)
+    for s in SERIES.values():
+        if s.is_composite:
+            with pytest.raises(SystemExit):
+                s.directory
+            with pytest.raises(SystemExit):
+                s.manifest
+
+
+def test_every_series_names_a_detector_or_is_a_composite():
+    """A composite detects nothing itself; every layer it paints must."""
+    for s in SERIES.values():
+        assert bool(s.detector) is not s.is_composite
+        if s.is_composite:
+            assert all(m.detector for m in s.members)
+
+
+def test_terminal_area_charts_keep_only_the_chart_itself():
+    s = series("tac")
+    assert s.wants_zip("Boston_TAC.zip") and s.wants_zip("Anchorage-Fairbanks_TAC.zip")
+    assert not s.wants_zip("Seattle_SEC.zip")
+    # One zip can hold two TACs, so the sheets are chosen per GeoTIFF.
+    assert s.wants_tif("Anchorage TAC.tif") and s.wants_tif("Fairbanks TAC.tif")
+    assert s.wants_tif("Colorado Springs TAC.tif") and s.wants_tif("Puerto Rico-VI TAC.tif")
+    # The other products that ship in the same zips are not map.
+    assert not s.wants_tif("Denver FLY.tif")            # flyway planning chart
+    assert not s.wants_tif("Anchorage Graphic.tif")     # airspace graphic
+    assert not s.wants_tif("New York TAC VFR Planning Charts.tif")
+    # Rasters at source like the sectionals, and upsampled the same way.
+    assert s.fetches_tifs and s.upsample_scale == 2 and s.pixel_scale == 2
+    assert s.upsample_model == series("sectionals").upsample_model
+    assert [script for script, _ in s.stages] == ["upsample_charts.py"]
+
+
+def test_sectionals_tac_paints_its_layers_in_order_over_their_own_directories():
+    s = series("sectionals-tac")
+    assert s.is_composite
+    assert [m.name for m in s.members] == ["sectionals", "tac"]
+    # The layers are the series themselves, so nothing is downloaded, upsampled
+    # or reviewed twice: a layer already built as its own tileset is reused.
+    assert [m.directory for m in s.members] == [series("sectionals").directory,
+                                                series("tac").directory]
+    assert [m.manifest for m in s.members] == [series("sectionals").manifest,
+                                               series("tac").manifest]
+    assert s.tileset.name == "tileset-sectionals-tac"
+
+
+def test_only_the_finer_layer_earns_the_detail_level():
+    s = series("sectionals-tac")
+    assert s.detail_layers == ("tac",)
+    # One sparse level past the level that covers the whole mosaic.
+    assert s.detail_zoom == s.max_zoom + 1
+    assert s.detail_zoom == series("tac").max_zoom
+    assert all(name in s.layers for name in s.detail_layers)
+
+
+def test_a_plain_series_has_no_detail_level():
+    for name in ("sectionals", "ifr-low", "ifr-high", "tac"):
+        assert series(name).detail_zoom == 0 and not series(name).detail_layers
