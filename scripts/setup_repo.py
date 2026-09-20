@@ -89,8 +89,10 @@ def main(argv=None) -> int:
     print(f"""
 Setup complete. Next:
 
-  {shown} scripts/build_sectionals.py      # download + tile VFR sectionals   (~7 min)
-  {shown} scripts/build_ifr_low.py         # download + tile IFR low enroute  (~5 min)
+  {shown} scripts/build_sectionals.py      # VFR sectionals      ~80 min, 48 GB of intermediates
+  {shown} scripts/build_sectionals_tac.py  # the same + the TACs  ~60 min more
+  {shown} scripts/build_ifr_low.py         # IFR low enroute      ~130 min
+  {shown} scripts/build_ifr_high.py        # IFR high enroute     ~50 min
   {shown} scripts/build_wall_planning.py   # wall planning chart; needs files in source/wall-planning/
   {shown} -m cesiumtiles.serve .           # tile tester at http://127.0.0.1:8000/
 """)

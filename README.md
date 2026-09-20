@@ -3,14 +3,15 @@
 Turn the FAA's published aeronautical charts into static `z/x/y` tile pyramids
 you can drape on a Cesium globe, plus the tooling to keep them current.
 
-Four tilesets are built here today. Each is a different product, and each is
+Five tilesets are built here today. Each is a different product, and each is
 built by one command:
 
 | Tileset | Chart | Sheets | Zooms | Tiles | Size |
 | --- | --- | --- | --- | --- | --- |
 | `tileset-sectionals` | VFR sectionals | 55 | z0–z12 | 508,529 | 5.30 GB |
-| `tileset-sectionals-tac` | the same, with terminal area charts over them | 55 + 34 | z0–z12 + sparse z13 | — | — |
+| `tileset-sectionals-tac` | the same, with terminal area charts over them | 55 + 34 | z0–z12 + sparse z13 | 568,218 | 5.93 GB |
 | `tileset-ifr-low` | IFR enroute low, CONUS | 37 | z0–z13 | 953,205 | 3.05 GB |
+| `tileset-ifr-high` | IFR enroute high, CONUS | 12 | z0–z12 | 313,057 | 1.07 GB |
 | `tileset-planning` | U.S. VFR wall planning chart | 1 | z0–z11 | 98,014 | 441 MB |
 
 Underneath are two installable packages:
@@ -38,6 +39,7 @@ come from their own package indexes — checks the imports load, and makes
 .venv/Scripts/python scripts/build_sectionals.py       # VFR sectionals            z12
 .venv/Scripts/python scripts/build_sectionals_tac.py   # + terminal area charts    z12 + z13 detail
 .venv/Scripts/python scripts/build_ifr_low.py          # IFR enroute low           z13, lossless
+.venv/Scripts/python scripts/build_ifr_high.py         # IFR enroute high          z12, lossless
 .venv/Scripts/python scripts/build_wall_planning.py    # VFR wall planning chart   z11
 .venv/Scripts/cesiumtiles-serve .                      # http://127.0.0.1:8000/
 ```
@@ -51,13 +53,14 @@ an RTX 4070 SUPER, writing to a local SSD:
 | Product | Download | Intermediates | Prepare | Tile |
 | --- | --- | --- | --- | --- |
 | sectionals | 3.2 GB | ~48 GB upsampled | 52 min (GPU) | 26 min |
-| sectionals + TACs | + 678 MB | + ~12 GB | ~+15 min | ~35–50 min |
+| sectionals + TACs | + 678 MB | + ~12 GB upsampled | 12 min (GPU) | 26 min |
 | IFR low | 130 MB of PDFs | 5.2 GB rendered + healed | ~100 min | 31 min |
+| IFR high | 61 MB of PDFs | 1.9 GB rendered | 6 min | 14 min |
 | wall planning | manual drop-in | ~2 GB | 1 min (GPU) | 3 min |
 
 Without an NVIDIA GPU the upsampling stages run on the CPU at about 1/35 the
-speed — hours rather than minutes. The IFR product does not upsample at all, so
-it is GPU-free.
+speed — hours rather than minutes. Neither IFR product upsamples at all, so
+both are GPU-free.
 
 Every download and every intermediate lives under `source/`, so deleting that
 one directory reclaims all of it. Tilesets are written at the top level.
@@ -67,10 +70,10 @@ one directory reclaims all of it. Tilesets are written at the top level.
 ## How a chart series is built
 
 A "series" is one FAA product: the sectionals, the terminal area charts, the
-IFR low enroute charts. `scripts/chart_series.py` describes each one in a single
-place — where it is published, which zips and files to keep, what preparation it
-needs, how deep to tile it — and every stage looks the series up there. Adding a
-product means adding a `Series`, not copying scripts.
+IFR enroute charts high and low. `scripts/chart_series.py` describes each one in
+a single place — where it is published, which zips and files to keep, what
+preparation it needs, how deep to tile it — and every stage looks the series up
+there. Adding a product means adding a `Series`, not copying scripts.
 
 ```
 fetch_charts.py  ->  detect_*_areas.py  ->  (prepare)  ->  build_chart_tileset.py
@@ -149,7 +152,7 @@ and pass anything else through to `build_chart_tileset.py`.
 
 ---
 
-## The four products
+## The five products
 
 ### VFR sectionals — `tileset-sectionals`
 
@@ -210,6 +213,10 @@ Denver/Colorado Springs, Seattle/Portland and Tampa/Orlando each ship two.
   where full coverage stops.
 - `--no-detail` builds a plain uniform pyramid instead; `--detail-zoom N` moves
   the level.
+- 568,218 tiles / 5.93 GB, built 2026-09-20 in 26.5 min. The sparse z13 level is
+  **58,872 tiles** over the 34 TAC sheets, against 380,238 at the full z12 below
+  it: one sixth of a level, where a uniform z13 would have been four times the
+  whole pyramid. `metadata.json` reports `maxzoom` 13 and `fullzoom` 12.
 
 ### IFR enroute low — `tileset-ifr-low`
 
@@ -251,6 +258,46 @@ two halves, `ENR_L06N` and `ENR_L06S`, which makes 37 sheets.
 - Overlaps paint in *reverse* file-name order, so the lower-numbered chart is on
   top.
 - 953,205 tiles / 3.05 GB, tiled in 31 min at 608 tiles/s.
+
+### IFR enroute high — `tileset-ifr-high`
+
+The same charts at altitude: H-01 to H-12 cover the lower 48 on twelve sheets
+where the low charts need 36. Alaska (AKH), the Caribbean (CB) and the oceanic
+charts are out of scope, as they are for the low set.
+
+```bash
+.venv/Scripts/python scripts/build_ifr_high.py
+```
+
+It is the low pipeline on the same scripts — fetch, detect, render from the
+vector PDFs, mosaic — with two settings that differ, both measured rather than
+inherited:
+
+- **z12 from a 4x render, one level shallower than the low charts.** All twelve
+  sheets are 24000×8000 at **92.60 m/px**, exactly half the low charts' 46.30,
+  this being the smaller-scale chart. Rendered at 4x that is 23.15 m/px, which
+  a z12 tile minifies by 0.79x — the identical ratio the low charts get from 4x
+  at z13. Tiling these at z13 would *magnify* 1.58x, which is the mistake the
+  low charts made when they were tiled at z13 from 2x renders.
+- **The sheets overlap, so nothing is healed.** This is the real difference.
+  Low charts abut at their frame rules, which is why their map areas run to the
+  rule's outer edge and `heal_frames.py` repaints the band. High sheets share a
+  great deal of ground — measured on the 2026-09-03 edition, east–west
+  neighbours overlap by 15–31% of a sheet, and H-10/H-12 by 49% — so there *is*
+  map under each rule: the next sheet's. Their map areas are cropped just inside
+  the rule instead, and the sheet beneath shows through. `detect_ifr_areas.py`
+  reads the series' `heal_frames` flag to decide which edge to record.
+
+313,057 tiles / 1.07 GB, tiled in 14.3 min at 373 tiles/s, built 2026-09-20.
+The whole product — download, register, render and tile — is about half an hour,
+which makes it much the cheapest of the four chart series.
+
+**H-12 is the odd sheet.** It is drawn at 78.71 m/px rather than 92.60, and its
+geotransform is rotated 61°: a tall eastern-seaboard chart in a landscape image.
+Because it is the finest sheet and sorts last, plain file-name order puts it on
+top of the coarser sheets it covers, so unlike the low charts this series paints
+in file-name order rather than reversed. That is still a placeholder for a real
+overlap rule, as it is everywhere else.
 
 ### U.S. VFR wall planning chart — `tileset-planning`
 
@@ -684,6 +731,7 @@ scripts/
     build_sectionals.py     one wrapper per product: fetch, prepare, tile
     build_sectionals_tac.py
     build_ifr_low.py
+    build_ifr_high.py
     build_wall_planning.py
     build_vfr_tileset.py    the single-chart pipeline the last one drives
     pipeline.py             what the wrappers share: run stages in order

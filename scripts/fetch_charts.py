@@ -2,7 +2,8 @@
 
     python scripts/fetch_charts.py SERIES [--workers N] [--out DIR] [--list]
 
-SERIES is a name from chart_series.py (``sectionals``, ``tac``, ``ifr-low``).
+SERIES is a name from chart_series.py (``sectionals``, ``tac``, ``ifr-low``,
+``ifr-high``).
 A composite series (``sectionals-tac``) downloads nothing of its own: it fetches
 each of its members in turn, into their own directories, so the sheets a member
 already has on disk are shared rather than downloaded twice.

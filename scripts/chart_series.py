@@ -276,6 +276,54 @@ SERIES = {
             lossless=True,
         ),
         Series(
+            name="ifr-high",
+            title="FAA IFR Enroute High (CONUS)",
+            index_url="https://aeronav.faa.gov/enroute/",
+            files_path="",
+            # H-01 to H-12 cover the lower 48 on twelve sheets, where the low
+            # charts need 36. Alaska (AKH), Caribbean (CB) and the oceanic
+            # charts are out of scope, as they are for ifr-low.
+            zip_pattern=r"ENR_H\d\d\.zip",
+            # One GeoTIFF per zip, and no split panels: unlike L-06, no high
+            # sheet is published in halves.
+            tif_pattern=r"ENR_H\d\d\.tif",
+            # Same drawn frame as the low charts, so the same detector.
+            detector="detect_ifr_areas.py",
+            # The same twelve charts as vector PDFs, two per zip: DEHUS1 is
+            # H-01 and H-02, through DEHUS11 for H-11 and H-12. Six zips.
+            pdf_zip_pattern=r"DEHUS\d{1,2}\.zip",
+            pdf_pattern=r"ENR_H\d\d\.pdf",
+            # 4x, as for ifr-low, and for the same reason: it is what puts the
+            # warp in the minifying regime at this series' max_zoom. Measured
+            # off the downloaded sheets, all twelve are 24000x8000 at 92.60
+            # m/px -- exactly half the low charts' 46.30, this being the
+            # smaller-scale chart. So the 4x render is 23.15 m/px, native z13,
+            # and a z12 tile (29.3 m/px on the ground here) minifies it 0.79x:
+            # the identical ratio ifr-low gets from 4x at z13.
+            pdf_scale=4,
+            # Plain file-name order, unlike ifr-low. These sheets really do
+            # overlap, so order decides what is seen rather than just tidying a
+            # seam, and H-12 -- the one sheet drawn finer (78.71 m/px, rotated
+            # 61 degrees) over the eastern seaboard -- sorts last and so lands
+            # on top of the coarser sheets it covers. Still a placeholder for a
+            # real overlap rule, as it is everywhere else.
+            reverse_order=False,
+            # Not healed, because these sheets overlap rather than abutting:
+            # measured on the 2026-09-03 edition, east-west neighbours share
+            # 15-31% of a sheet and H-10/H-12 share 49%. There is map under
+            # each frame rule -- the next sheet's -- so the rule is cropped away
+            # (detect_ifr_areas.py writes ``include`` from ``clean``) and the
+            # neighbour shows through, rather than being painted over.
+            heal_frames=False,
+            # One level shallower than ifr-low, because the chart is drawn at
+            # half the scale. z13 from these renders would magnify 1.58x, which
+            # is the mistake ifr-low made when it was tiled at z13 from 2x.
+            max_zoom=12,
+            # Same artwork as the low charts: thin linework and small type on
+            # white, which lossy compression softens.
+            lossless=True,
+        ),
+        Series(
             name="tac",
             title="FAA VFR Terminal Area Charts",
             index_url="https://aeronav.faa.gov/visual/",

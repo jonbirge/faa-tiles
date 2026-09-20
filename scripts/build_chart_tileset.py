@@ -4,7 +4,8 @@
     .venv/Scripts/python scripts/build_chart_tileset.py SERIES [--out DIR] [options]
 
 SERIES is a name from chart_series.py (``sectionals``, ``tac``, ``ifr-low``,
-``sectionals-tac``). Stages, each its own script so it can be rerun alone:
+``ifr-high``, ``sectionals-tac``). Stages, each its own script so it can be
+rerun alone:
 
   1. fetch_charts.py SERIES      download the current edition into source/SERIES
                                  -- GeoTIFFs, or just the vector PDFs for a
@@ -13,16 +14,17 @@ SERIES is a name from chart_series.py (``sectionals``, ``tac``, ``ifr-low``,
                                  scripts/SERIES_areas.json; rerun and review
                                  for every new edition. Which script is the
                                  series' ``detector``:
-                                   sectionals, tac: detect_sectional_areas.py
-                                   ifr-low:        detect_ifr_areas.py
-  3. render_pdfs.py SERIES       (ifr-low) draw the sheets from their PDFs at 4x
-  4. heal_frames.py SERIES       (ifr-low) paint over the frame rule
+                                   sectionals, tac:       detect_sectional_areas.py
+                                   ifr-low, ifr-high:     detect_ifr_areas.py
+  3. render_pdfs.py SERIES       (the IFR series) draw the sheets from their
+                                 PDFs at 4x
+  4. heal_frames.py SERIES       (the IFR series) paint over the frame rule
   5. this script                 mosaic the sheets into z/x/y tiles
 
 Overlaps are resolved by file name: sheets are painted in lexicographic order,
 so where two overlap, the one later in the alphabet is on top. ``--reverse-order``
 paints in reverse, putting the earliest name on top; each series sets its own
-default (on for ``ifr-low``), and ``--no-reverse-order`` overrides it. Either way
+default (on for the IFR series), and ``--no-reverse-order`` overrides it. Either way
 it is a placeholder for a smarter rule, not a considered choice.
 
 A **composite** series (``sectionals-tac``) paints several series into one
@@ -34,7 +36,7 @@ and which of them earn the detail level. That level is one zoom past
 terminal area charts their own resolution without quadrupling the mosaic that
 surrounds them. ``--no-detail`` builds a plain uniform pyramid instead.
 
-Tiles are lossy WebP q90 unless the series sets ``lossless`` (``ifr-low`` does);
+Tiles are lossy WebP q90 unless the series sets ``lossless`` (both IFR series do);
 ``--[no-]lossless`` overrides it.
 
 The warp is exact by default and resamples with cubic. ``--warp-tolerance`` lets
