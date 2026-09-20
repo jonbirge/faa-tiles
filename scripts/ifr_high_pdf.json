@@ -1,0 +1,290 @@
+{
+  "ENR_H01.tif": {
+    "pdf": "ENR_H01.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      -2842968.75,
+      91.6780727,
+      -13.0149189,
+      1594896.39,
+      -13.0216605,
+      -91.684661
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.92
+  },
+  "ENR_H02.tif": {
+    "pdf": "ENR_H02.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      -1168469.55,
+      92.6026758,
+      -0.00717231494,
+      1243623.4,
+      -0.000203471189,
+      -92.5971214
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.92
+  },
+  "ENR_H03.tif": {
+    "pdf": "ENR_H03.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      -2943495.28,
+      91.6761117,
+      -13.0080829,
+      889253.689,
+      -13.0200458,
+      -91.6831876
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.924
+  },
+  "ENR_H04.tif": {
+    "pdf": "ENR_H04.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      -2860098.99,
+      91.6787061,
+      -13.0224541,
+      157082.047,
+      -13.021372,
+      -91.6721528
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.919
+  },
+  "ENR_H05.tif": {
+    "pdf": "ENR_H05.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      -1168463.23,
+      92.5985547,
+      -0.00250619826,
+      530425.345,
+      -0.000656338966,
+      -92.5943732
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.906
+  },
+  "ENR_H06.tif": {
+    "pdf": "ENR_H06.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      -1207202.99,
+      92.6011809,
+      -0.00338479037,
+      -182592.872,
+      -0.000466060086,
+      -92.5943636
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.924
+  },
+  "ENR_H07.tif": {
+    "pdf": "ENR_H07.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      -1216551.5,
+      92.6057237,
+      -0.0112680551,
+      -895208.342,
+      -0.00217606346,
+      -92.5835462
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.918
+  },
+  "ENR_H08.tif": {
+    "pdf": "ENR_H08.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      270535.671,
+      92.4470701,
+      5.28924521,
+      -884105.899,
+      5.28500292,
+      -92.444632
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.91
+  },
+  "ENR_H09.tif": {
+    "pdf": "ENR_H09.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      432337.401,
+      92.4481937,
+      5.28797944,
+      -160767.947,
+      5.285407,
+      -92.4572368
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.906
+  },
+  "ENR_H10.tif": {
+    "pdf": "ENR_H10.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      455374.731,
+      92.4484398,
+      5.28460533,
+      554797.025,
+      5.28663636,
+      -92.4402939
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.91
+  },
+  "ENR_H11.tif": {
+    "pdf": "ENR_H11.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      419969.681,
+      92.4480962,
+      5.28922061,
+      1176539.79,
+      5.28459247,
+      -92.4506612
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.928
+  },
+  "ENR_H12.tif": {
+    "pdf": "ENR_H12.pdf",
+    "window": [
+      0,
+      0,
+      24000,
+      8000
+    ],
+    "size": [
+      24000,
+      8000
+    ],
+    "dpi": 400.0,
+    "geotransform": [
+      685056.468,
+      37.6943491,
+      69.0991209,
+      -695969.733,
+      69.0954355,
+      -37.699251
+    ],
+    "projection": "PROJCS[\"US_IFR\",GEOGCS[\"NAD83\",DATUM[\"North_American_Datum_1983\",SPHEROID[\"GRS 1980\",6378137,298.257221999999,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"6269\"]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4269\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",39],PARAMETER[\"central_meridian\",-95],PARAMETER[\"standard_parallel_1\",45],PARAMETER[\"standard_parallel_2\",33],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]",
+    "match": 0.909
+  }
+}

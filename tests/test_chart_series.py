@@ -17,7 +17,7 @@ from chart_series import SERIES, series  # noqa: E402
 
 def test_unknown_series_is_refused():
     with pytest.raises(SystemExit):
-        series("ifr-high")
+        series("ifr-middle")
 
 
 def test_sectionals_are_upsampled_from_the_downloaded_geotiffs():
@@ -78,11 +78,13 @@ def test_every_stage_reads_the_previous_stages_output():
 
 
 @pytest.mark.parametrize("name, zoom", [
-    ("sectionals", 12), ("ifr-low", 13), ("tac", 13), ("sectionals-tac", 12),
+    ("sectionals", 12), ("ifr-low", 13), ("ifr-high", 12), ("tac", 13),
+    ("sectionals-tac", 12),
 ])
 def test_max_zoom(name, zoom):
     """The user's call. Each matches where its prepared sheets stop holding
-    detail: IFR renders from vector at 4x reach z14, upsampled sectionals z12.5,
+    detail: IFR low renders from vector at 4x reach z14, the high charts are
+    drawn at half the scale so theirs reach z13, upsampled sectionals z12.5,
     and a TAC is 1:250,000 -- half the sectionals' pitch, so one level finer."""
     assert series(name).max_zoom == zoom
 
@@ -108,6 +110,88 @@ def test_ifr_low_pdf_zip_pattern(name, wanted):
 ])
 def test_ifr_low_pdf_pattern(name, wanted):
     assert series("ifr-low").wants_pdf(name) is wanted
+
+
+@pytest.mark.parametrize("name, wanted", [
+    ("ENR_H01.zip", True),
+    ("ENR_H12.zip", True),
+    ("ENR_L01.zip", False),       # the low charts are their own series
+    ("ENR_AKH01.zip", False),     # Alaska high
+    ("ENR_A01.zip", False),       # area charts
+    ("ENR_H01_tif.zip", False),
+])
+def test_ifr_high_zip_pattern(name, wanted):
+    assert series("ifr-high").wants_zip(name) is wanted
+
+
+@pytest.mark.parametrize("name, wanted", [
+    ("DEHUS1.zip", True),
+    ("DEHUS11.zip", True),
+    ("dehus9.zip", True),         # the index's spelling varies
+    ("DELUS1.zip", False),        # low altitude
+    ("DEHAK1.zip", False),        # Alaska
+    ("DEHCB1.zip", False),        # Caribbean
+    ("DEHCB1_tif.zip", False),
+])
+def test_ifr_high_pdf_zip_pattern(name, wanted):
+    assert series("ifr-high").wants_pdf_zip(name) is wanted
+
+
+def test_ifr_high_is_the_low_pipeline_at_half_the_scale():
+    """The same scripts, one zoom shallower.
+
+    The sheets are 24000x8000 at 92.60 m/px, exactly half the low charts'
+    46.30, so 4x rendering lands the warp in the same minifying regime one
+    level up the pyramid.
+    """
+    high, low = series("ifr-high"), series("ifr-low")
+    assert high.detector == low.detector
+    assert high.pdf_scale == low.pdf_scale == 4 and high.pixel_scale == 4
+    assert high.max_zoom == low.max_zoom - 1
+    assert high.lossless
+    assert not high.fetches_tifs and high.upsample_scale == 0
+    assert high.manifest.name == "ifr_high_areas.json"
+    assert high.pdf_manifest.name == "ifr_high_pdf.json"
+    assert high.tileset.name == "tileset-ifr-high"
+
+
+def test_only_the_abutting_ifr_series_heals_its_frames():
+    """Healing repaints the frame rule from the map just inside it, which is
+    right only where there is no map under the rule. The low sheets abut, so
+    there is none; the high sheets overlap -- east-west neighbours share 15-31%
+    of a sheet on the 2026-09-03 edition -- so the rule is cropped away instead
+    and the sheet beneath shows through. detect_ifr_areas.py reads this flag to
+    decide whether a map area runs to the rule's outer or clean edge.
+    """
+    assert series("ifr-low").heal_frames
+    assert not series("ifr-high").heal_frames
+    # So the high charts tile the renders directly; only the low ones heal.
+    assert [script for script, _ in series("ifr-high").stages] == ["render_pdfs.py"]
+    assert [script for script, _ in series("ifr-low").stages] == [
+        "render_pdfs.py", "heal_frames.py"]
+    assert series("ifr-high").build_directory == series("ifr-high").render_directory
+
+
+def test_the_two_ifr_series_never_claim_each_others_sheets():
+    """Both are published in one directory, so the patterns have to separate
+    them: the same fetch lists ENR_L.. beside ENR_H.., DELUS beside DEHUS."""
+    high, low = series("ifr-high"), series("ifr-low")
+    for name in ("ENR_H01.tif", "ENR_H12.tif"):
+        assert high.wants_tif(name) and not low.wants_tif(name)
+    for name in ("ENR_L01.tif", "ENR_L06N.tif"):
+        assert low.wants_tif(name) and not high.wants_tif(name)
+    for name in ("ENR_H01.pdf", "ENR_H09.pdf"):
+        assert high.wants_pdf(name) and not low.wants_pdf(name)
+    for name in ("ENR_L01.pdf", "ENR_L36.pdf"):
+        assert low.wants_pdf(name) and not high.wants_pdf(name)
+
+
+def test_no_high_sheet_is_published_in_halves():
+    """L-06 ships as ENR_L06N and ENR_L06S; nothing in the high set does, so
+    the pattern takes the plain name only."""
+    s = series("ifr-high")
+    assert s.wants_tif("ENR_H06.tif")
+    assert not s.wants_tif("ENR_H06N.tif") and not s.wants_tif("ENR_H06S.tif")
 
 
 def test_l06_ships_as_two_geotiff_panels():
@@ -178,5 +262,5 @@ def test_only_the_finer_layer_earns_the_detail_level():
 
 
 def test_a_plain_series_has_no_detail_level():
-    for name in ("sectionals", "ifr-low", "tac"):
+    for name in ("sectionals", "ifr-low", "ifr-high", "tac"):
         assert series(name).detail_zoom == 0 and not series(name).detail_layers

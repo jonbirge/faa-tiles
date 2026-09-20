@@ -3,7 +3,8 @@
 
     .venv/Scripts/python scripts/detect_ifr_areas.py [SERIES] [--sheet DIR] [CHART ...]
 
-SERIES defaults to ``ifr-low``. The sectional detector does not work here: it
+SERIES defaults to ``ifr-low``; ``ifr-high`` is drawn the same way at half the
+scale. The sectional detector does not work here: it
 finds the map where the paper collar ends, and an IFR chart's map is itself
 mostly white paper.
 
@@ -14,14 +15,21 @@ grid ticks and legend panels outside it. Legend tables are ruled too, but with
 rows (or columns) across the middle of the sheet. That is a measurement, not a
 fit.
 
-Adjacent IFR charts do not overlap: they meet at their frames, and under a
-frame rule there is no map on either sheet. Cropping inside the rule therefore
-leaves a 1-3 km gap along every shared edge. So each manifest entry records the
-frame -- ``outer``, the rectangle to the rule's outside edge, and ``clean``, the
-rectangle just inside its anti-aliased inner edge -- and its ``include`` runs to
-the outer edge. heal_frames.py then paints over the rule on a copy of the sheet
-by repeating the nearest clean pixels outward, and the build tiles those copies,
-so neighbouring sheets meet with no black line and no gap.
+Whether the map area stops inside or outside that rule depends on the series.
+Each manifest entry records both: ``outer``, the rectangle to the rule's outside
+edge, and ``clean``, the rectangle just inside its anti-aliased inner edge.
+
+Low charts (``ifr-low``) do not overlap. They meet at their frames, and under a
+rule there is no map on either sheet, so cropping inside it leaves a 1-3 km gap
+along every shared edge. Their ``include`` runs to ``outer``, and heal_frames.py
+paints over the rule on a copy of each sheet by repeating the nearest clean
+pixels outward, so neighbours meet with no black line and no gap.
+
+High charts (``ifr-high``) do overlap -- measured on the 2026-09-03 edition,
+east-west neighbours share 15-31% of a sheet -- so there *is* map under the
+rule: the next sheet's. Their ``include`` is ``clean``, cropping the rule away
+so it never draws a line across the map beneath, and nothing is healed. The
+series' ``heal_frames`` is what selects between the two.
 
 Some sheets carry a second framed panel beside the main map -- L-23 has a
 "Wilmington - Bimini Inset" strip down its left side, at its own scale and so
@@ -77,6 +85,22 @@ def _thick_rules(fraction: np.ndarray) -> list[tuple[int, int]]:
         else:
             runs.append([i, i])
     return [(a, b) for a, b in runs if b - a + 1 >= THICK]
+
+
+def map_area(frame: dict, heal_frames: bool) -> list[list[int]]:
+    """The map-area polygon for a detected ``frame``, as a pixel rectangle.
+
+    Where it stops depends on what is under the rule, which is a property of
+    the series rather than of the sheet. Sheets that abut (``ifr-low``) have no
+    map under the rule on either side, so the area runs to its **outer** edge
+    and heal_frames.py repaints the band; cropping inside it instead leaves a
+    gap along every shared edge. Sheets that overlap (``ifr-high``) do have map
+    under it -- their neighbour's -- so the area stops at the **clean** edge and
+    the rule is dropped, letting the sheet beneath show through rather than
+    drawing a black line across it.
+    """
+    x0, y0, x1, y1 = frame["outer" if heal_frames else "clean"]
+    return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
 
 
 def detect(path: Path) -> tuple[dict | None, str]:
@@ -174,9 +198,8 @@ def main(argv=None) -> int:
                 entry.pop("frame", None)
                 print(f"!! {name}: {report}", flush=True)
             else:
-                x0, y0, x1, y1 = frame["outer"]
                 entry["frame"] = frame
-                entry["include"] = [{"pixel": [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]}]
+                entry["include"] = [{"pixel": map_area(frame, chart_series.heal_frames)}]
                 print(f"{'??' if 'dropped' in report else '  '} {name}: {report}", flush=True)
         ordered = {k: manifest[k] for k in sorted(manifest) if manifest[k]}
         path.write_text(json.dumps(ordered, indent=1) + "\n", encoding="utf-8", newline="\n")
