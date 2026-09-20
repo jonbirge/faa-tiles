@@ -43,10 +43,13 @@ it approximate the projection (in source pixels, like gdalwarp's -et) and
 fidelity for speed on either backend, and both are meant for trials rather than
 for a chart being kept.
 
-Max zoom comes from the series (``max_zoom``), currently z11 for both, and
-``--max-zoom`` overrides it. The sheets' native resolution is about z12 -- the
-lower 48 sectionals ~z11.6, the finest IFR sheets ~z12.0 -- so z11 trades some
-detail for about a quarter of the tiles.
+Max zoom comes from the series (``max_zoom``) and ``--max-zoom`` overrides it.
+Each series stops where its *prepared* sheets stop holding detail, which is not
+the same as where the downloads do: the sectionals are 42.3 m/px (native z11.5)
+and z12.5 once upsampled 2x, so z12; the IFR sheets are drawn from vector at 4x
+and resolve past z14, so z13. Match this to whatever the last preparation stage
+produces -- the IFR sheets went a whole build at z13 from 2x renders, magnifying,
+before that was noticed.
 """
 
 from __future__ import annotations
