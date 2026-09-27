@@ -120,6 +120,52 @@ def test_metadata_credits_every_layer_that_painted(world):
     assert metadata["attribution"] == "(c) Example Survey"
 
 
+@pytest.fixture
+def joint(world, tmp_path, monkeypatch):
+    """The coarse layer as a joint production: sheet ``c`` is another
+    country's, and the sheet index says so."""
+    index = tmp_path / "t_coarse_sheets.json"
+    index.write_text('{"sheets": {"a": {"crown": false}, "c": {"crown": true}}}',
+                     encoding="utf-8")
+    monkeypatch.setattr(Series, "sheet_index",
+                        property(lambda self: tmp_path / f"{self.name.replace('-', '_')}_sheets.json"))
+    coarse = dataclasses.replace(chart_series.SERIES["t-coarse"], flagged=(("crown", CLOSED),))
+    monkeypatch.setitem(chart_series.SERIES, "t-coarse", coarse)
+    _sheet(tmp_path / "t-coarse" / "c.tif", (10, 40, 20, 50), alpha=True)
+    return world
+
+
+def test_a_sheet_can_be_under_other_terms_than_its_series(joint):
+    coarse = chart_series.SERIES["t-coarse"]
+    assert coarse.licence_of("a.tif") is OPEN and coarse.licence_of("c.tif") is CLOSED
+    # A sheet the index does not know is the series'.
+    assert coarse.licence_of("z.tif") is OPEN
+    assert chart_series.SERIES["t-fine"].licence_of("b.tif") is CLOSED
+
+
+def test_redistributable_only_leaves_out_a_closed_sheet_of_an_open_series(joint, capsys):
+    members, _ = build.painted_members(joint, redistributable_only=True)
+    by_layer = {}
+    chosen = build.layers(joint, _args(), members, by_layer, redistributable_only=True)
+    assert [Path(s.path).name for s in chosen] == ["a.tif"]
+    assert by_layer == {"t-coarse": ["a.tif"]}
+    assert "leaving out 1 sheet(s) under All rights reserved" in capsys.readouterr().out
+    assert build.layer_metadata(joint, members, by_layer)["redistributable"] is True
+
+    everything = build.layers(joint, _args())
+    assert [Path(s.path).name for s in everything] == ["a.tif", "c.tif", "b.tif"]
+
+
+def test_metadata_describes_a_series_once_for_each_of_its_terms(joint):
+    members, _ = build.painted_members(joint, only_layers=["t-coarse"])
+    metadata = build.layer_metadata(joint, members, {"t-coarse": ["a.tif", "c.tif"]})
+    assert [(layer["name"], layer["sheets"], layer["redistributable"])
+            for layer in metadata["layers"]] == [("t-coarse", ["a.tif"], True),
+                                                 ("t-coarse-crown", ["c.tif"], False)]
+    assert metadata["redistributable"] is False
+    assert metadata["attribution"] == "(c) Example Survey; Example ANSP"
+
+
 def test_a_layer_that_painted_nothing_is_not_credited(world):
     members, _ = build.painted_members(world)
     metadata = build.layer_metadata(world, members, {"t-coarse": ["a.tif"]})

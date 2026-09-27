@@ -144,7 +144,9 @@ def painted_members(chart_series, redistributable_only: bool = False, only_layer
 
     ``redistributable_only`` leaves out every member whose licence does not
     allow publishing tiles derived from it, which is how a tileset meant for a
-    public site is built from the same downloads as the full one.
+    public site is built from the same downloads as the full one. (A member
+    some of whose *sheets* are under other terms is kept here, and loses those
+    sheets in :func:`layers`.)
     ``only_layers`` names the layers to paint and drops the rest unremarked:
     it is for a trial, or for building while a layer is still downloading.
     """
@@ -169,23 +171,28 @@ def layer_metadata(chart_series, members, sheets_by_layer) -> dict:
     """
     described, credits = [], []
     for member in members:
-        sheets = sheets_by_layer.get(member.name, [])
-        if not sheets:
-            continue
-        licence = member.licence
-        described.append({
-            "name": member.name,
-            "title": member.title,
-            "publisher": member.publisher,
-            "licence": licence.name,
-            "licence_url": licence.url,
-            "redistributable": licence.redistributable,
-            "attribution": licence.attribution,
-            "historical": member.historical,
-            "sheets": sheets,
-        })
-        if licence.attribution and licence.attribution not in credits:
-            credits.append(licence.attribution)
+        # A series some of whose sheets are under other terms is described
+        # once for each: the series' own first, under its own name.
+        by_licence = {member.licence: []}
+        for sheet in sheets_by_layer.get(member.name, []):
+            by_licence.setdefault(member.licence_of(sheet), []).append(sheet)
+        flags = {licence: flag for flag, licence in member.flagged}
+        for licence, sheets in by_licence.items():
+            if not sheets:
+                continue
+            described.append({
+                "name": member.name + (f"-{flags[licence]}" if licence in flags else ""),
+                "title": member.title,
+                "publisher": member.publisher,
+                "licence": licence.name,
+                "licence_url": licence.url,
+                "redistributable": licence.redistributable,
+                "attribution": licence.attribution,
+                "historical": member.historical,
+                "sheets": sheets,
+            })
+            if licence.attribution and licence.attribution not in credits:
+                credits.append(licence.attribution)
     return {
         "layers": described,
         "attribution": "; ".join(credits),
@@ -193,7 +200,8 @@ def layer_metadata(chart_series, members, sheets_by_layer) -> dict:
     }
 
 
-def layers(chart_series, args, members=None, sheets_by_layer=None) -> list[MosaicSource]:
+def layers(chart_series, args, members=None, sheets_by_layer=None,
+           redistributable_only: bool = False) -> list[MosaicSource]:
     """Every sheet to paint, in paint order, across a series' layers.
 
     A plain series is one layer of its own sheets; a composite is its members in
@@ -203,7 +211,8 @@ def layers(chart_series, args, members=None, sheets_by_layer=None) -> list[Mosai
     the next's, whatever their names.
 
     ``sheets_by_layer``, if given, is filled with the sheet names each layer
-    contributes.
+    contributes. ``redistributable_only`` leaves out the sheets that are under
+    terms of their own which do not allow republishing.
     """
     chosen: list[MosaicSource] = []
     for member in (chart_series.members if members is None else members):
@@ -221,6 +230,13 @@ def layers(chart_series, args, members=None, sheets_by_layer=None) -> list[Mosai
                          zoom=member.max_zoom if chart_series.stepped else None)
         if args.only:
             sheets = [s for s in sheets if any(Path(s.path).name.startswith(n) for n in args.only)]
+        if redistributable_only and member.flagged:
+            closed = [s for s in sheets
+                      if not member.licence_of(Path(s.path).name).redistributable]
+            if closed:
+                print(f"layer {member.name}: leaving out {len(closed)} sheet(s) under "
+                      f"{member.licence_of(Path(closed[0].path).name).name}", flush=True)
+                sheets = [s for s in sheets if s not in closed]
         reverse = member.reverse_order if args.reverse_order is None else args.reverse_order
         if reverse:
             sheets.reverse()
@@ -309,7 +325,7 @@ def main(argv=None) -> int:
     if not members:
         raise SystemExit(f"no layer of {chart_series.name} is redistributable")
     sheets_by_layer: dict[str, list[str]] = {}
-    chosen = layers(chart_series, args, members, sheets_by_layer)
+    chosen = layers(chart_series, args, members, sheets_by_layer, args.redistributable_only)
 
     max_zoom = args.max_zoom if args.max_zoom is not None else chart_series.max_zoom
     detail_zoom = args.detail_zoom if args.detail_zoom is not None else chart_series.detail_zoom

@@ -22,6 +22,9 @@ and the sheet says 1. So:
    meridian in blue, shows each where it meets the edge of the map and its
    label is printed, six sheets to a page, and writes ``readings.json`` with
    the pixel of each scan where its two marked lines cross.
+   ``--imprints`` draws the part of each sheet that says who produced it as
+   well: the series were a joint production, and a sheet with a British,
+   Australian or Canadian imprint is Crown copyright.
 2. Someone reads the labels and fills the readings in.
 3. ``--apply READINGS.json`` writes them into the sheet index, which is
    committed. A sheet is rectified only once it has a reading, unless
@@ -85,6 +88,11 @@ CELL = (1000, 500)
 CAPTION = 40
 # A cell is two views side by side: the parallel's label, then the meridian's.
 PANEL = (CELL[0] // 2, CELL[1])
+# The part of a scan that says who made the sheet: this much of it, from this
+# far left of and below the south-west corner of the map. Measured on ONC J-25
+# and R-8, whose titles are 1,500 px wide with the imprint in the 500 px below.
+IMPRINT = (1500, 750)
+IMPRINT_FROM = (-200, 40)
 
 
 def load_index(chart_series) -> dict:
@@ -351,6 +359,39 @@ def corner(found: graticule.Survey) -> Corner:
                   (parallel_end, meridian_end), (i, j), meets)
 
 
+def imprint_window(found: graticule.Survey):
+    """The window of the scan under the south-west corner of the map, where
+    these sheets print their title and, under it, who produced them; None if
+    the map runs off the scan to the south and there is no margin to print in.
+
+    The corner is where the southernmost parallel stops to the west: the
+    middle one of where the three southernmost do, since a line may be lost
+    before it gets there or followed on past.
+    """
+    if found.stops["south"][1] < graticule.MARGIN and "south" not in found.neatline:
+        return None
+    southern = [line for line, _ in found.parallels][::-1][:3]
+    column = float(np.median([end_of(line, "west", found.coarse)[0] for line in southern]))
+    row = southern[0].at(column)
+    width, height = IMPRINT
+    left = int(max(0, min(found.width - width, column + IMPRINT_FROM[0])))
+    top = int(max(0, min(found.height - height, row + IMPRINT_FROM[1])))
+    return left, top, left + width, top + height
+
+
+def captioned(view: Image.Image, caption: str) -> Image.Image:
+    """A view of a scan under a strip that says which sheet it is of. Under,
+    not over: a caption drawn on the view covered what was to be read."""
+    cell = Image.new("RGB", (view.width, view.height + CAPTION), (255, 255, 160))
+    cell.paste(view, (0, CAPTION))
+    try:
+        font = ImageFont.truetype("arial.ttf", 26)
+    except OSError:
+        font = ImageFont.load_default()
+    ImageDraw.Draw(cell).text((8, 4), caption, fill=(0, 0, 0), font=font)
+    return cell
+
+
 def draw_panel(rgb: np.ndarray, found: graticule.Survey, shown: Corner, window):
     """A window of the scan with the two lines marked over it, each as far as
     it was traced: not on across the margin, where its label is."""
@@ -374,17 +415,12 @@ def draw_panel(rgb: np.ndarray, found: graticule.Survey, shown: Corner, window):
 
 def draw_cell(rgb: np.ndarray, found: graticule.Survey, caption: str):
     shown = corner(found)
-    cell = Image.new("RGB", (CELL[0], CELL[1] + CAPTION), (255, 255, 160))
+    views = Image.new("RGB", CELL, (255, 255, 160))
     for i, window in enumerate(shown.windows):
-        cell.paste(draw_panel(rgb, found, shown, window), (i * PANEL[0], CAPTION))
-    draw = ImageDraw.Draw(cell)
-    draw.line([(PANEL[0], CAPTION), (PANEL[0], CELL[1] + CAPTION)], fill=(255, 255, 160), width=6)
-    try:
-        font = ImageFont.truetype("arial.ttf", 26)
-    except OSError:
-        font = ImageFont.load_default()
-    draw.text((8, 4), caption, fill=(0, 0, 0), font=font)
-    return cell, shown
+        views.paste(draw_panel(rgb, found, shown, window), (i * PANEL[0], 0))
+    ImageDraw.Draw(views).line([(PANEL[0], 0), (PANEL[0], CELL[1])], fill=(255, 255, 160),
+                               width=6)
+    return captioned(views, caption), shown
 
 
 def _spacing(family, reference):
@@ -394,11 +430,17 @@ def _spacing(family, reference):
 
 
 def survey_one(task):
-    stem, scan, entry, index = task
+    stem, scan, entry, index, imprints = task
     try:
         sheet = sheet_for(stem, entry, index)
         rgb = read_scan(Path(scan))
         found = graticule.survey(rgb, sheet)
+        imprint = imprint_window(found) if imprints else None
+        if imprint is not None:
+            left, top, right, bottom = imprint
+            imprint = captioned(
+                Image.fromarray(np.ascontiguousarray(rgb[top:bottom, left:right])),
+                f"{entry.get('title', stem)}  [{stem}]")
         nominal = ""
         if entry.get("limits_from"):
             nominal = (f"  index ({entry['limits_from']}): W {entry['west']:g}  S {entry['south']:g}"
@@ -416,37 +458,52 @@ def survey_one(task):
                         _spacing(found.meridians, found.along_y)],
             "ink": [round(float(np.median([line.ink for line, _ in family])))
                     for family in (found.parallels, found.meridians)],
-        }, cell
+        }, cell, imprint
     except Exception as exc:
-        return stem, {"failed": f"{type(exc).__name__}: {exc}"}, None
+        return stem, {"failed": f"{type(exc).__name__}: {exc}"}, None, None
 
 
-def review(chart_series, index, scans, out_dir: Path, workers: int) -> int:
+def pages(cells, out_dir: Path, name: str, readings: dict, key: str) -> int:
+    """Lay cells out six to a page and write the pages; note in ``readings``
+    which page each sheet is on. Returns how many pages there were."""
+    across, down = PAGE
+    per_page = across * down
+    for first in range(0, len(cells), per_page):
+        number = first // per_page
+        here = cells[first:first + per_page]
+        wide, tall = here[0][1].size
+        page = Image.new("RGB", (across * wide, down * tall), "white")
+        for i, (stem, cell) in enumerate(here):
+            page.paste(cell, ((i % across) * wide, (i // across) * tall))
+            readings[stem][key] = number
+        page.save(out_dir / f"{name}-{number:03d}.jpg", quality=88)
+    return math.ceil(len(cells) / per_page)
+
+
+def review(chart_series, index, scans, out_dir: Path, workers: int,
+           imprints: bool = False) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
-    tasks = [(stem, str(path), index["sheets"][stem], index) for stem, path in scans]
-    readings, cells = {}, []
+    tasks = [(stem, str(path), index["sheets"][stem], index, imprints) for stem, path in scans]
+    readings, cells, imprinted = {}, [], []
     started = time.monotonic()
     with mp.get_context("spawn").Pool(workers) as pool:
-        for done, (stem, outcome, cell) in enumerate(pool.imap(survey_one, tasks), 1):
+        for done, (stem, outcome, cell, imprint) in enumerate(pool.imap(survey_one, tasks), 1):
             readings[stem] = outcome
             if cell is not None:
                 cells.append((stem, cell))
+            if imprint is not None:
+                imprinted.append((stem, imprint))
             if done % 20 == 0 or done == len(tasks):
                 print(f"  surveyed {done}/{len(tasks)}, "
                       f"{(time.monotonic() - started) / 60:.1f} min", flush=True)
-    across, down = PAGE
-    per_page = across * down
-    tall = CELL[1] + CAPTION
-    for page in range(0, len(cells), per_page):
-        sheet = Image.new("RGB", (across * CELL[0], down * tall), "white")
-        for i, (stem, cell) in enumerate(cells[page:page + per_page]):
-            sheet.paste(cell, ((i % across) * CELL[0], (i // across) * tall))
-            readings[stem]["page"] = page // per_page
-        sheet.save(out_dir / f"corners-{page // per_page:03d}.jpg", quality=88)
+    written = pages(cells, out_dir, "corners", readings, "page")
+    if imprinted:
+        print(f"wrote {pages(imprinted, out_dir, 'imprint', readings, 'imprint_page')} pages of "
+              f"imprints")
     (out_dir / "readings.json").write_text(json.dumps(readings, indent=1) + "\n",
                                            encoding="utf-8", newline="\n")
     failed = [stem for stem, outcome in readings.items() if "failed" in outcome]
-    print(f"wrote {math.ceil(len(cells) / per_page)} pages and readings.json to {out_dir}")
+    print(f"wrote {written} pages and readings.json to {out_dir}")
     if failed:
         print(f"{len(failed)} scan(s) could not be surveyed: {', '.join(failed[:20])}"
               + (" ..." if len(failed) > 20 else ""))
@@ -486,6 +543,9 @@ def main(argv=None) -> int:
     ap.add_argument("--force", action="store_true", help="redo sheets that are up to date")
     ap.add_argument("--review", type=Path, metavar="DIR",
                     help="draw every sheet's corner into DIR for its labels to be read")
+    ap.add_argument("--imprints", action="store_true",
+                    help="with --review, draw the part of every sheet that says who produced "
+                         "it as well: a sheet produced outside the US is under other terms")
     ap.add_argument("--apply", type=Path, metavar="READINGS",
                     help="write the readings in this file into the sheet index")
     ap.add_argument("--trust-index", action="store_true",
@@ -511,7 +571,7 @@ def main(argv=None) -> int:
         raise SystemExit(f"no scans in {in_dir}; run scripts/fetch_charts.py "
                          f"{chart_series.name} first")
     if args.review:
-        return review(chart_series, index, scans, args.review, args.workers)
+        return review(chart_series, index, scans, args.review, args.workers, args.imprints)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path, areas_path = out_dir / REPORT, out_dir / AREAS

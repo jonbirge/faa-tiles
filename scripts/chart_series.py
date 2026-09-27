@@ -9,6 +9,8 @@ Standard library only.
 
 from __future__ import annotations
 
+import functools
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -95,15 +97,16 @@ US_MILITARY_LICENCE = Licence(
                 "scans courtesy of the University of Texas Libraries",
     note="17 USC 105 for sheets with a US imprint. The University of Texas, which hosts "
          "the scans, warns that the US Government may claim copyright outside the US. "
-         "Sheets produced by the UK or Australia are Crown copyright and are a series of "
-         "their own.",
+         "Sheets produced by the UK, Australia or Canada are Crown copyright: the sheet "
+         "index flags them, and they are under CROWN_LICENCE.",
 )
 
 CROWN_LICENCE = Licence(
-    name="Crown copyright (UK Ministry of Defence, Australian Department of Defence)",
+    name="Crown copyright (UK Ministry of Defence, Australian Department of Defence, "
+         "Canadian Department of Energy, Mines and Resources)",
     url="https://maps.lib.utexas.edu/maps/faq.html",
-    attribution="UK Ministry of Defence / Australian Department of Defence; scans courtesy "
-                "of the University of Texas Libraries",
+    attribution="UK Ministry of Defence / Australian Department of Defence / Natural "
+                "Resources Canada; scans courtesy of the University of Texas Libraries",
     note="TPC E-2A, for one, carries a 1996 Crown copyright notice, which runs 50 years. "
          "Not redistributable until cleared sheet by sheet.",
 )
@@ -179,6 +182,14 @@ class Series:
     # them, from the reviewed sheet index (rectify_charts.py). Everything after
     # that names a sheet's raster ``<sheet>.tif``, as for any other series.
     scan_suffix: str = ""
+    # Sheets under other terms than the rest of their series, as ``(flag in
+    # the sheet index, licence of the sheets that carry it)``. The ONC and TPC
+    # series were a joint production: most sheets have a US imprint and are
+    # public domain, and the ones the UK, Australia or Canada produced are
+    # Crown copyright. They are one series on the shelf and one here -- one
+    # download, one index, one graticule -- and differ only in who may
+    # republish them, which is a fact about a sheet.
+    flagged: tuple[tuple[str, Licence], ...] = ()
     urls: tuple[str, ...] = ()
     regions: tuple[str, ...] = ()
     # Seconds to wait between downloads, for a publisher whose terms or whose
@@ -411,6 +422,17 @@ class Series:
         replaces the full tileset it was cut down from."""
         return REPO / f"tileset-{self.name}-public"
 
+    def licence_of(self, name: str) -> Licence:
+        """The terms one sheet is under: its series', unless the sheet index
+        flags it as one of the sheets that are under others."""
+        if self.flagged:
+            entry = _sheets(self.sheet_index, self.sheet_index.stat().st_mtime_ns).get(
+                Path(name).stem, {})
+            for flag, licence in self.flagged:
+                if entry.get(flag):
+                    return licence
+        return self.licence
+
     def wants_zip(self, name: str) -> bool:
         return bool(self.zip_pattern) and re.fullmatch(
             self.zip_pattern, name, re.IGNORECASE) is not None
@@ -427,6 +449,11 @@ class Series:
     def wants_pdf(self, name: str) -> bool:
         return bool(self.pdf_pattern) and re.fullmatch(
             self.pdf_pattern, name, re.IGNORECASE) is not None
+
+
+@functools.lru_cache(maxsize=8)
+def _sheets(path: Path, _stamp: int) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))["sheets"]
 
 
 SERIES = {
@@ -809,6 +836,7 @@ SERIES = {
             index_url="https://maps.lib.utexas.edu/maps/onc/",
             link_pattern=r".*/maps/onc/txu-pclmaps-oclc-8322829_(?P<sheet>[a-z]_\d+[a-z]?)\.jpg",
             scan_suffix=".jpg",
+            flagged=(("crown", CROWN_LICENCE),),
             lossy_intermediates=True,
             tif_pattern=r"[a-z]_\d+[a-z]?\.tif",
             # The library asks little of its visitors and gets a great deal of
@@ -831,6 +859,7 @@ SERIES = {
             index_url="https://maps.lib.utexas.edu/maps/tpc/",
             link_pattern=r".*/maps/tpc/txu-pclmaps-oclc-22834566_(?P<sheet>[a-z]-\d+-?[a-z]r?)\.jpg",
             scan_suffix=".jpg",
+            flagged=(("crown", CROWN_LICENCE),),
             lossy_intermediates=True,
             tif_pattern=r"[a-z]-\d+-?[a-z]r?\.tif",
             fetch_delay=1.0,

@@ -240,6 +240,31 @@ def test_a_line_followed_out_into_the_margin_gives_way_too():
     assert rectify.corner(found).steps == (1, 0)
 
 
+def test_the_imprint_is_looked_for_under_the_south_west_corner():
+    scan = Scan(seed=13, margin_south=900, margin_west=400)
+    found = graticule.survey(scan.rgb, scan.sheet())
+    left, top, right, bottom = rectify.imprint_window(found)
+    assert (right - left, bottom - top) == rectify.IMPRINT
+    column, row = scan.pixel([(WEST, SOUTH)])[0]
+    assert left == pytest.approx(column - 200, abs=20)
+    # Below the map, all of it.
+    assert row + 20 < top < row + 80
+
+
+def test_a_map_that_runs_off_the_scan_has_no_imprint_to_show():
+    scan = Scan(seed=13, margin_south=-300)
+    found = graticule.survey(scan.rgb, scan.sheet())
+    assert rectify.imprint_window(found) is None
+
+
+def test_review_pages_hold_six_sheets_and_say_which(tmp_path):
+    cells = [(f"s{i}", Image.new("RGB", (100, 60), "white")) for i in range(8)]
+    readings = {stem: {} for stem, _ in cells}
+    assert rectify.pages(cells, tmp_path, "corners", readings, "page") == 2
+    assert Image.open(tmp_path / "corners-000.jpg").size == (200, 180)
+    assert [readings[f"s{i}"]["page"] for i in (0, 5, 6, 7)] == [0, 0, 1, 1]
+
+
 def test_the_caption_is_above_the_scan_and_not_over_it():
     """A caption drawn on the cell covered the labels along its top edge."""
     scan = Scan(seed=12)
