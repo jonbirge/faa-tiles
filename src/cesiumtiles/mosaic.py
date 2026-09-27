@@ -817,6 +817,7 @@ def build_mosaic(
     resume: bool = False,
     overwrite: bool = False,
     title: str | None = None,
+    extra_metadata: Mapping | None = None,
     quiet: bool = False,
 ) -> TilesetResult:
     """Mosaic ``sources`` into ``output_dir/tiles/{z}/{x}/{y}.webp``.
@@ -832,7 +833,17 @@ def build_mosaic(
 
     ``tolerance`` is how far the warp may cut the projection's corner, in source
     pixels, on either backend: 0 evaluates it exactly (see ERROR_THRESHOLD).
+
+    ``extra_metadata`` is merged into ``metadata.json`` for what only the caller
+    knows -- who published each layer and on what terms. It cannot replace a key
+    the build measures.
     """
+    # Refused here rather than when the metadata is written, which is after
+    # the whole build.
+    clash = sorted(set(extra_metadata or ()) & MEASURED_METADATA)
+    if clash:
+        raise ValueError(f"extra_metadata would replace measured keys: {', '.join(clash)}")
+
     output_dir = Path(output_dir)
     tile_dir = output_dir / "tiles"
     suffix = ".webp"
@@ -964,14 +975,24 @@ def build_mosaic(
         bounds_lonlat=covered,
         per_zoom=per_zoom,
     )
-    _write_metadata(result, prepared, data_bounds, title, full_top)
+    _write_metadata(result, prepared, data_bounds, title, full_top, extra_metadata)
     say(f"done in {(time.monotonic() - started) / 60:.1f} min")
     return result
 
 
-def _write_metadata(result: TilesetResult, prepared, data_bounds, title, full_zoom) -> None:
+# What a build writes into metadata.json from what it measured. A caller's
+# ``extra_metadata`` may add to these, never replace them.
+MEASURED_METADATA = frozenset({
+    "name", "source", "sources", "format", "scheme", "crs", "convention", "tilesize",
+    "minzoom", "maxzoom", "fullzoom", "nativezoom", "url_template", "bounds",
+    "data_bounds", "center", "tiles", "bytes", "tiles_per_zoom",
+})
+
+
+def _write_metadata(result: TilesetResult, prepared, data_bounds, title, full_zoom,
+                    extra: Mapping | None = None) -> None:
     west, south, east, north = result.bounds_lonlat
-    metadata = {
+    measured = {
         "name": title or result.output_dir.name,
         "source": f"{len(prepared)} rasters",
         "sources": [p.name for p in prepared],
@@ -997,5 +1018,7 @@ def _write_metadata(result: TilesetResult, prepared, data_bounds, title, full_zo
         "bytes": result.total_bytes,
         "tiles_per_zoom": {str(z): count for z, count in sorted(result.per_zoom.items())},
     }
+    assert set(measured) == MEASURED_METADATA, "MEASURED_METADATA is out of step"
+    metadata = {**measured, **(extra or {})}
     path = result.output_dir / "metadata.json"
     path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")

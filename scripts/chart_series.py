@@ -1,7 +1,10 @@
-"""The FAA chart series this repo downloads and tiles, and where each lives.
+"""The chart series this repo downloads and tiles, and where each lives.
 
 Every stage -- fetch_charts.py, the area detectors, build_chart_tileset.py --
-looks a series up here, so a series is described once. Standard library only.
+looks a series up here, so a series is described once. The FAA's series came
+first; the series from other publishers, which ``worldwide-vfr`` paints around
+them, are described the same way and say who published them and on what terms.
+Standard library only.
 """
 
 from __future__ import annotations
@@ -16,9 +19,49 @@ from layout import REPO, SCRIPTS, SOURCE  # noqa: E402
 
 
 @dataclass(frozen=True)
+class Licence:
+    """The terms a publisher releases a chart on.
+
+    Free to download is not the same as free to republish. Every series records
+    which it is, because the tilesets built here can end up on a public site:
+    ``redistributable`` says whether tiles derived from the chart may be
+    published, and a build can be held to the series where it is true
+    (``build_chart_tileset.py --redistributable-only``). It is False unless the
+    terms were read and say otherwise -- unclear terms are not permission.
+    """
+
+    name: str
+    url: str = ""
+    redistributable: bool = False
+    # The credit line the terms ask for, shown wherever the tiles are.
+    attribution: str = ""
+    # What decided ``redistributable``, in a sentence, for whoever reviews it.
+    note: str = ""
+
+
+# Works of the US government are not subject to copyright in the US, and the
+# FAA publishes its digital charts for free use.
+FAA_LICENCE = Licence(
+    name="Public domain (US Government work)",
+    url="https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/",
+    redistributable=True,
+    attribution="Federal Aviation Administration",
+    note="17 USC 105: no copyright in works of the United States Government.",
+)
+
+
+@dataclass(frozen=True)
 class Series:
     name: str
     title: str
+    # Who publishes the chart, and on what terms. Carried into the tileset's
+    # metadata.json with the sheets each layer contributed.
+    publisher: str = "Federal Aviation Administration"
+    licence: Licence = FAA_LICENCE
+    # A chart kept for its coverage rather than its currency: decades-old
+    # sheets filling regions where nothing current is published free. Never
+    # something to navigate by, and the metadata says so.
+    historical: bool = False
     # Directory listing holding one MM-DD-YYYY folder per edition. The FAA
     # posts the next edition's folder early, so the current one is the latest
     # that is not in the future.
@@ -185,6 +228,12 @@ class Series:
     @property
     def tileset(self) -> Path:
         return REPO / f"tileset-{self.name}"
+
+    @property
+    def public_tileset(self) -> Path:
+        """Where a build held to redistributable layers is written, so it never
+        replaces the full tileset it was cut down from."""
+        return REPO / f"tileset-{self.name}-public"
 
     def wants_zip(self, name: str) -> bool:
         return bool(self.zip_pattern) and re.fullmatch(

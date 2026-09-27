@@ -117,7 +117,53 @@ def sources(chart_series, directory: Path, manifest: dict, detail: bool = False)
             for p in charts]
 
 
-def layers(chart_series, args) -> list[MosaicSource]:
+def painted_members(chart_series, redistributable_only: bool = False):
+    """The series a build paints, in paint order, as ``(kept, left out)``.
+
+    ``redistributable_only`` leaves out every member whose licence does not
+    allow publishing tiles derived from it, which is how a tileset meant for a
+    public site is built from the same downloads as the full one.
+    """
+    members = chart_series.members
+    if not redistributable_only:
+        return members, ()
+    kept = tuple(m for m in members if m.licence.redistributable)
+    return kept, tuple(m for m in members if not m.licence.redistributable)
+
+
+def layer_metadata(chart_series, members, sheets_by_layer) -> dict:
+    """Who published each layer and on what terms, for metadata.json.
+
+    ``attribution`` is the credit line for the whole tileset: each distinct
+    attribution once, in paint order.
+    """
+    described, credits = [], []
+    for member in members:
+        sheets = sheets_by_layer.get(member.name, [])
+        if not sheets:
+            continue
+        licence = member.licence
+        described.append({
+            "name": member.name,
+            "title": member.title,
+            "publisher": member.publisher,
+            "licence": licence.name,
+            "licence_url": licence.url,
+            "redistributable": licence.redistributable,
+            "attribution": licence.attribution,
+            "historical": member.historical,
+            "sheets": sheets,
+        })
+        if licence.attribution and licence.attribution not in credits:
+            credits.append(licence.attribution)
+    return {
+        "layers": described,
+        "attribution": "; ".join(credits),
+        "redistributable": all(layer["redistributable"] for layer in described),
+    }
+
+
+def layers(chart_series, args, members=None, sheets_by_layer=None) -> list[MosaicSource]:
     """Every sheet to paint, in paint order, across a series' layers.
 
     A plain series is one layer of its own sheets; a composite is its members in
@@ -125,9 +171,12 @@ def layers(chart_series, args) -> list[MosaicSource]:
     so a layer that is already downloaded and prepared is simply reused. Paint
     order runs within a layer first: all of one series' sheets sit below all of
     the next's, whatever their names.
+
+    ``sheets_by_layer``, if given, is filled with the sheet names each layer
+    contributes.
     """
     chosen: list[MosaicSource] = []
-    for member in chart_series.members:
+    for member in (chart_series.members if members is None else members):
         manifest = json.loads(member.manifest.read_text(encoding="utf-8"))
         if args.charts:
             directory = args.charts
@@ -146,6 +195,8 @@ def layers(chart_series, args) -> list[MosaicSource]:
                   f"{'reverse ' if reverse else ''}file-name order, "
                   f"{Path(sheets[-1].path).name} on top", flush=True)
         chosen.extend(sheets)
+        if sheets_by_layer is not None:
+            sheets_by_layer[member.name] = [Path(s.path).name for s in sheets]
     if not chosen:
         # sources() has already refused an empty directory, so the only way to
         # get here is a filter that matched nothing.
@@ -198,16 +249,29 @@ def main(argv=None) -> int:
     ap.add_argument("--reverse-order", action=argparse.BooleanOptionalAction, default=None,
                     help="paint sheets in reverse file-name order, so the earliest name is on "
                          "top where sheets overlap (default: the series' setting)")
+    ap.add_argument("--redistributable-only", action="store_true",
+                    help="leave out every layer whose licence does not allow publishing "
+                         "tiles derived from it (chart_series.py records which), for a "
+                         "tileset that is going on a public site. Writes to "
+                         "tileset-SERIES-public unless --out says otherwise.")
     ap.add_argument("--resume", action="store_true", help="keep tiles already written")
     ap.add_argument("--overwrite", action="store_true", help="replace an existing tileset")
     args = ap.parse_args(argv)
     chart_series = series(args.series)
-    out = args.out or chart_series.tileset
+    out = args.out or (chart_series.public_tileset if args.redistributable_only
+                       else chart_series.tileset)
 
     if args.charts and chart_series.is_composite:
         raise SystemExit(f"--charts cannot stand in for {chart_series.name}'s layers "
                          f"({', '.join(chart_series.layers)}), which read separate directories")
-    chosen = layers(chart_series, args)
+    members, left_out = painted_members(chart_series, args.redistributable_only)
+    if left_out:
+        print("redistributable only; leaving out: "
+              + ", ".join(f"{m.name} ({m.licence.name})" for m in left_out), flush=True)
+    if not members:
+        raise SystemExit(f"no layer of {chart_series.name} is redistributable")
+    sheets_by_layer: dict[str, list[str]] = {}
+    chosen = layers(chart_series, args, members, sheets_by_layer)
 
     max_zoom = args.max_zoom if args.max_zoom is not None else chart_series.max_zoom
     detail_zoom = args.detail_zoom if args.detail_zoom is not None else chart_series.detail_zoom
@@ -234,6 +298,7 @@ def main(argv=None) -> int:
         resampling=args.resampling, tolerance=args.warp_tolerance,
         workers=args.workers, resume=args.resume, overwrite=args.overwrite,
         title=chart_series.title,
+        extra_metadata=layer_metadata(chart_series, members, sheets_by_layer),
     )
     print(result.summary())
     print(f"preview it with:  .venv/Scripts/cesiumtiles-serve {out.parent}")
