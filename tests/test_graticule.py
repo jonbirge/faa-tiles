@@ -379,3 +379,19 @@ def test_a_scan_at_another_resolution_is_still_registered(scan):
     registered = g.register(scan.rgb, coarse, scan.reading())
     assert len(registered.control) >= 0.9 * _drawn(scan)
     assert registered.pixel_size[0] == pytest.approx(PIXEL, rel=0.003)
+
+
+def test_the_local_mean_is_the_same_taken_a_band_at_a_time(monkeypatch):
+    """To the last bit: the sums are of whole numbers, and exact."""
+    rng = np.random.default_rng(3)
+    dark = rng.integers(0, 256, (700, 300)).astype(np.float32)
+    whole = g.thin(dark)
+    assert whole.dtype == np.float32
+    # Against the mean taken the plain way, a pixel at a time, here and there.
+    padded = np.pad(dark, g.BACKGROUND, mode="edge").astype(np.float64)
+    for row, column in ((0, 0), (5, 299), (350, 150), (511, 17), (512, 17), (699, 299)):
+        n = 2 * g.BACKGROUND + 1
+        mean = padded[row:row + n, column:column + n].mean()
+        assert whole[row, column] == pytest.approx(max(0.0, dark[row, column] - mean), abs=1e-4)
+    monkeypatch.setattr(g, "BAND", 64)
+    assert np.array_equal(g.thin(dark), whole)

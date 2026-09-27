@@ -60,7 +60,9 @@ from osgeo import gdal, osr
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import graticule  # noqa: E402
+from cesiumtiles.core import lean_workers  # noqa: E402
 from chart_series import SERIES, series  # noqa: E402
 
 gdal.UseExceptions()
@@ -575,7 +577,7 @@ def main(argv=None) -> int:
     ap.add_argument("sheets", nargs="*", help="sheets to do, by file stem (default: all)")
     ap.add_argument("--workers", type=int, default=8,
                     help="scans worked on at once; each holds its scan several times over "
-                         "in memory, about 2 GB (default: %(default)s)")
+                         "in memory, about 1.1 GB (default: %(default)s)")
     ap.add_argument("--force", action="store_true",
                     help="redo sheets that are up to date, or with --review, already surveyed")
     ap.add_argument("--review", type=Path, metavar="DIR",
@@ -591,6 +593,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     chart_series = series(args.series)
     index = load_index(chart_series)
+    lean_workers()
     if args.apply:
         return apply_readings(chart_series, index, args.apply)
 

@@ -49,7 +49,8 @@ import numpy as np
 from osgeo import gdal, ogr, osr
 
 from cesiumtiles.core import (
-    TileBuildError, TilesetResult, _scan_tiles, encode_webp, webp_options, webp_params,
+    TileBuildError, TilesetResult, _scan_tiles, encode_webp, lean_workers, webp_options,
+    webp_params,
 )
 from cesiumtiles.scheme import MERCATOR_HALF_WORLD, WEB_MERCATOR
 
@@ -1052,6 +1053,7 @@ def build_mosaic(
     clash = sorted(set(extra_metadata or ()) & MEASURED_METADATA)
     if clash:
         raise ValueError(f"extra_metadata would replace measured keys: {', '.join(clash)}")
+    lean_workers()
 
     output_dir = Path(output_dir)
     tile_dir = output_dir / "tiles"

@@ -71,6 +71,8 @@ MIN_COARSE = 12
 RESPONSE_CEILING = 120.0
 # Window for the local mean that "thin" is measured against, pixels each side.
 BACKGROUND = 15
+# Rows of a scan whose local mean is worked out at a time.
+BAND = 512
 # A cell holds a mark if its response is at least this, of RESPONSE_CEILING.
 MARK = 38.0
 
@@ -336,13 +338,26 @@ def darkness(rgb: np.ndarray) -> np.ndarray:
 
 
 def thin(dark: np.ndarray) -> np.ndarray:
-    """Darkness above the local mean: thin dark features, not dark areas."""
+    """Darkness above the local mean: thin dark features, not dark areas.
+
+    A band of rows at a time. The mean is taken from a summed-area table,
+    which has to be in doubles to be exact, and one of a whole scan with the
+    copies made on the way to it was 2.5 GB: what decided how many scans could
+    be worked on at once was this, on a machine with 28 cores idle.
+    """
     k = BACKGROUND
-    padded = np.pad(dark, k, mode="edge").astype(np.float64)
-    integral = np.pad(padded.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
     n = 2 * k + 1
-    total = integral[n:, n:] - integral[:-n, n:] - integral[n:, :-n] + integral[:-n, :-n]
-    return np.clip(dark - total / (n * n), 0, None).astype(np.float32)
+    height = dark.shape[0]
+    out = np.empty(dark.shape, np.float32)
+    for top in range(0, height, BAND):
+        bottom = min(height, top + BAND)
+        # The band and k rows either side, the edge rows repeated past the edge.
+        rows = np.clip(np.arange(top - k, bottom + k), 0, height - 1)
+        padded = np.pad(dark[rows], ((0, 0), (k, k)), mode="edge").astype(np.float64)
+        integral = np.pad(padded.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+        total = integral[n:, n:] - integral[:-n, n:] - integral[n:, :-n] + integral[:-n, :-n]
+        out[top:bottom] = np.clip(dark[top:bottom] - total / (n * n), 0, None)
+    return out
 
 
 def strips(response: np.ndarray, coarse: int) -> np.ndarray:
@@ -353,10 +368,12 @@ def strips(response: np.ndarray, coarse: int) -> np.ndarray:
     a cell the response is the greatest down each column and the median across
     the columns: there in most of the strip's width, or not a line.
     """
-    t = np.minimum(response, RESPONSE_CEILING)
-    height, width = t.shape
+    height, width = response.shape
     rows, columns = height // FINE, width // coarse
-    cells = t[:rows * FINE, :columns * coarse].reshape(rows, FINE, columns, coarse).max(axis=1)
+    # The ceiling is put on after the greatest is taken, which comes to the
+    # same thing and does not need a copy of the scan to do it to.
+    cells = np.minimum(response[:rows * FINE, :columns * coarse]
+                       .reshape(rows, FINE, columns, coarse).max(axis=1), RESPONSE_CEILING)
     deep = np.maximum(cells[:-1], cells[1:])
     return np.median(deep, axis=2)
 
