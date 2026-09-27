@@ -18,10 +18,10 @@ comes from the labels printed at the sheet's corner, and they have to be read.
 The published indexes do not serve: they gave TPC E-2A as starting at 1 52' W,
 and the sheet says 1. So:
 
-1. ``--review DIR`` surveys every scan and draws the corner of each -- the end
-   parallel and the end meridian of its graticule, marked, with the labels
-   beside them -- six to a page, and writes ``readings.json`` with what the
-   index would have said, for comparison.
+1. ``--review DIR`` surveys every scan and marks a parallel in red and a
+   meridian in blue, shows each where it meets the edge of the map and its
+   label is printed, six sheets to a page, and writes ``readings.json`` with
+   the pixel of each scan where its two marked lines cross.
 2. Someone reads the labels and fills the readings in.
 3. ``--apply READINGS.json`` writes them into the sheet index, which is
    committed. A sheet is rectified only once it has a reading, unless
@@ -50,6 +50,7 @@ import multiprocessing as mp
 import sys
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 from osgeo import gdal, osr
@@ -76,9 +77,14 @@ INSET = 4.0
 # A crossing further than this from a smooth surface through the others, in
 # pixels, was measured on the wrong line.
 OUTLIER = 8.0
-# Review pages: cells across and down, and the size of a cell in scan pixels.
+# Review pages: cells across and down, the size of a cell in scan pixels, and
+# the height of the strip above each that names the sheet. Above, not over: a
+# caption drawn on the cell covered the very label it was there to have read.
 PAGE = (2, 3)
 CELL = (1000, 500)
+CAPTION = 40
+# A cell is two views side by side: the parallel's label, then the meridian's.
+PANEL = (CELL[0] // 2, CELL[1])
 
 
 def load_index(chart_series) -> dict:
@@ -103,8 +109,8 @@ def reading_of(entry) -> graticule.Reading | None:
     read = entry.get("read")
     if not read:
         return None
-    return graticule.Reading(read["parallel_end"], float(read["parallel"]),
-                             read["meridian_end"], float(read["meridian"]))
+    return graticule.Reading(float(read["column"]), float(read["row"]),
+                             float(read["parallel"]), float(read["meridian"]))
 
 
 def sheet_for(stem: str, entry: dict, index: dict) -> graticule.Sheet:
@@ -247,61 +253,144 @@ def work(task):
 
 # -- review -----------------------------------------------------------------
 
-def corner(found: graticule.Survey):
-    """Which end of each family to read, and the scan window that shows both
-    end lines and the labels printed beside them.
+class Corner(NamedTuple):
+    """The two lines marked for reading: where they cross in the scan, the
+    window of the scan in which each one's label is looked for (the parallel's,
+    then the meridian's), the end of each family they were counted from and how
+    many lines in from it."""
 
-    An end with a margin beyond it is chosen over one the map runs off, because
-    a sheet's labels are printed in its margin: south over north, west over
-    east, if both have one.
+    parallel: graticule.Line
+    meridian: graticule.Line
+    at: tuple[float, float]
+    windows: tuple[tuple[int, int, int, int], tuple[int, int, int, int]]
+    ends: tuple[str, str]
+    steps: tuple[int, int]
+    # Where each line stops at the edge of the map, ``(column, row)``, or None
+    # for one whose ends both run off the scan.
+    meets: tuple
+
+
+def end_of(line: graticule.Line, side: str, coarse: int) -> tuple[float, float]:
+    """Where a traced line stops on ``side``, as ``(along, across)`` of the
+    line. A chain's end mark is the middle of the last strip the line filled;
+    the line itself went on about half a strip."""
+    if side in ("west", "north"):
+        along = line.along[0] - coarse / 2
+    else:
+        along = line.along[-1] + coarse / 2
+    return float(along), line.at(along)
+
+
+def corner(found: graticule.Survey) -> Corner:
+    """The two lines to read, where they cross, and where to look for the label
+    of each.
+
+    A line's label is printed in the margin where the line meets the edge of
+    the map, so that is what is shown: the parallel where it stops to the west,
+    or to the east if the map runs off the scan to the west, and the meridian
+    where it stops to the south, or the north. The first round of reading
+    showed one window about where the two lines cross, which is the same place
+    only if the edge of the map is a meridian. On an ONC it is not: the map is
+    a rectangle on the paper, its west edge is ruled straight up from the
+    south-west corner, and north of the equator the meridian through that
+    corner leans away from it into the map.
+
+    The lines are the end ones, south and west for choice, unless one stops
+    half an interval from where the next two in do, short or past. A line is
+    lost under type before it reaches the edge, and on ONC L-3 one was followed
+    out of the map along a line of the notes printed beside it.
     """
     def has_margin(side):
         return side in found.neatline or found.stops[side][1] >= graticule.MARGIN
 
-    parallel_end = "south" if has_margin("south") or not has_margin("north") else "north"
-    meridian_end = "west" if has_margin("west") or not has_margin("east") else "east"
-    parallel = found.end_line(parallel_end)
-    meridian = found.end_line(meridian_end)
-    at = graticule.crossing(parallel, meridian)
-    if at is None:
-        row = parallel.at(found.along_x)
-        at = (meridian.at(row), row)
-    x, y = at
-    width, height = CELL
-    # The labels are printed in the margin, beside where the two end lines
-    # meet: below and to the left of a south-western corner. So the corner sits
-    # off-centre in the window, with the larger part of it given to the margin.
-    left = x - (0.4 if meridian_end == "west" else 0.6) * width
-    top = y - (0.45 if parallel_end == "south" else 0.55) * height
-    left = int(max(0, min(found.width - width, left)))
-    top = int(max(0, min(found.height - height, top)))
-    return parallel_end, meridian_end, (left, top, left + width, top + height)
+    def first_with_margin(sides):
+        return next((side for side in sides if has_margin(side)), None)
+
+    parallel_end = first_with_margin(("south", "north")) or "south"
+    meridian_end = first_with_margin(("west", "east")) or "west"
+    # The side a parallel's label is on is the end the meridians are counted
+    # from, and the other way about.
+    label_side = (first_with_margin(("west", "east")), first_with_margin(("south", "north")))
+    parallels = [line for line, _ in found.parallels]
+    meridians = [line for line, _ in found.meridians]
+    if parallel_end == "south":
+        parallels = parallels[::-1]
+    if meridian_end == "east":
+        meridians = meridians[::-1]
+    reach = (_spacing(found.meridians, found.along_y), _spacing(found.parallels, found.along_x))
+
+    def choose(lines, side, reach):
+        if side is None:
+            return 0, None
+        ends = [end_of(line, side, found.coarse) for line in lines[:3]]
+        usual = float(np.median([along for along, _ in ends]))
+        i = next((i for i, (along, _) in enumerate(ends) if abs(along - usual) <= reach / 2),
+                 int(np.argmin([abs(along - usual) for along, _ in ends])))
+        return i, ends[i]
+
+    i, parallel_meets = choose(parallels, label_side[0], reach[0])
+    j, meridian_meets = choose(meridians, label_side[1], reach[1])
+    parallel, meridian = parallels[i], meridians[j]
+    # Where the two cross, or would if they were traced that far.
+    column = float(meridian.across.mean())
+    for _ in range(6):
+        row = parallel.at(column)
+        column = meridian.at(row)
+    at = (float(column), float(row))
+
+    def window(centre):
+        width, height = PANEL
+        left = int(max(0, min(found.width - width, centre[0] - width / 2)))
+        top = int(max(0, min(found.height - height, centre[1] - height / 2)))
+        return left, top, left + width, top + height
+
+    meets = (parallel_meets,
+             None if meridian_meets is None else (meridian_meets[1], meridian_meets[0]))
+    return Corner(parallel, meridian, at,
+                  (window(meets[0] or at), window(meets[1] or at)),
+                  (parallel_end, meridian_end), (i, j), meets)
+
+
+def draw_panel(rgb: np.ndarray, found: graticule.Survey, shown: Corner, window):
+    """A window of the scan with the two lines marked over it, each as far as
+    it was traced: not on across the margin, where its label is."""
+    left, top, right, bottom = window
+    view = Image.fromarray(np.ascontiguousarray(rgb[top:bottom, left:right])).convert("RGBA")
+    marks = Image.new("RGBA", view.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(marks)
+    half = found.coarse / 2
+    # Drawn over the lines themselves, thin and see-through, so that nothing
+    # printed is covered.
+    for line, low, high, colour, as_point in (
+            (shown.parallel, left, right, (255, 0, 0, 130), lambda a, b: (a - left, b - top)),
+            (shown.meridian, top, bottom, (0, 90, 255, 130), lambda a, b: (b - left, a - top))):
+        start, stop = max(low, line.along[0] - half), min(high, line.along[-1] + half)
+        if stop - start < 2:
+            continue
+        along = np.linspace(start, stop, max(2, int((stop - start) / 8)))
+        draw.line([as_point(a, line.at(a)) for a in along], fill=colour, width=5)
+    return Image.alpha_composite(view, marks).convert("RGB")
 
 
 def draw_cell(rgb: np.ndarray, found: graticule.Survey, caption: str):
-    parallel_end, meridian_end, window = corner(found)
-    left, top, right, bottom = window
-    cell = Image.fromarray(np.ascontiguousarray(rgb[top:bottom, left:right])).convert("RGBA")
-    marks = Image.new("RGBA", cell.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(marks)
-    parallel = found.end_line(parallel_end)
-    meridian = found.end_line(meridian_end)
-    # Drawn over the lines themselves, thin and see-through, and only inside
-    # the map, so that no label is covered.
-    draw.line([(a - left, b - top) for a, b in zip(parallel.along, parallel.across)],
-              fill=(255, 0, 0, 130), width=5)
-    draw.line([(b - left, a - top) for a, b in zip(meridian.along, meridian.across)],
-              fill=(0, 90, 255, 130), width=5)
-    cell = Image.alpha_composite(cell, marks).convert("RGB")
+    shown = corner(found)
+    cell = Image.new("RGB", (CELL[0], CELL[1] + CAPTION), (255, 255, 160))
+    for i, window in enumerate(shown.windows):
+        cell.paste(draw_panel(rgb, found, shown, window), (i * PANEL[0], CAPTION))
     draw = ImageDraw.Draw(cell)
+    draw.line([(PANEL[0], CAPTION), (PANEL[0], CELL[1] + CAPTION)], fill=(255, 255, 160), width=6)
     try:
         font = ImageFont.truetype("arial.ttf", 26)
     except OSError:
         font = ImageFont.load_default()
-    box = draw.textbbox((0, 0), caption, font=font)
-    draw.rectangle((0, 0, box[2] + 16, box[3] + 12), fill=(255, 255, 160))
     draw.text((8, 4), caption, fill=(0, 0, 0), font=font)
-    return cell, parallel_end, meridian_end
+    return cell, shown
+
+
+def _spacing(family, reference):
+    """Pixels from one line of a family to the next, in the middle of the scan."""
+    at = [(line.at(reference), number) for line, number in family]
+    return round(float(np.median([(b[0] - a[0]) / (b[1] - a[1]) for a, b in zip(at, at[1:])])), 1)
 
 
 def survey_one(task):
@@ -314,13 +403,19 @@ def survey_one(task):
         if entry.get("limits_from"):
             nominal = (f"  index ({entry['limits_from']}): W {entry['west']:g}  S {entry['south']:g}"
                        f"  E {entry['east']:g}  N {entry['north']:g}")
-        cell, parallel_end, meridian_end = draw_cell(
-            rgb, found, f"{entry.get('title', stem)}  [{stem}]{nominal}")
+        cell, shown = draw_cell(rgb, found, f"{entry.get('title', stem)}  [{stem}]{nominal}")
         return stem, {
-            "parallel_end": parallel_end, "parallel": None,
-            "meridian_end": meridian_end, "meridian": None,
+            "column": round(shown.at[0], 1), "row": round(shown.at[1], 1),
+            "parallel": None, "meridian": None,
+            # For whoever compares a reading with the index: which lines these
+            # are, as the survey counted them. Nothing downstream relies on it.
+            "parallel_from": [shown.ends[0], shown.steps[0]],
+            "meridian_from": [shown.ends[1], shown.steps[1]],
             "parallels": len(found.parallels), "meridians": len(found.meridians),
-            "neatline": {side: round(value, 2) for side, value in found.neatline.items()},
+            "spacing": [_spacing(found.parallels, found.along_x),
+                        _spacing(found.meridians, found.along_y)],
+            "ink": [round(float(np.median([line.ink for line, _ in family])))
+                    for family in (found.parallels, found.meridians)],
         }, cell
     except Exception as exc:
         return stem, {"failed": f"{type(exc).__name__}: {exc}"}, None
@@ -341,10 +436,11 @@ def review(chart_series, index, scans, out_dir: Path, workers: int) -> int:
                       f"{(time.monotonic() - started) / 60:.1f} min", flush=True)
     across, down = PAGE
     per_page = across * down
+    tall = CELL[1] + CAPTION
     for page in range(0, len(cells), per_page):
-        sheet = Image.new("RGB", (across * CELL[0], down * CELL[1]), "white")
+        sheet = Image.new("RGB", (across * CELL[0], down * tall), "white")
         for i, (stem, cell) in enumerate(cells[page:page + per_page]):
-            sheet.paste(cell, ((i % across) * CELL[0], (i // across) * CELL[1]))
+            sheet.paste(cell, ((i % across) * CELL[0], (i // across) * tall))
             readings[stem]["page"] = page // per_page
         sheet.save(out_dir / f"corners-{page // per_page:03d}.jpg", quality=88)
     (out_dir / "readings.json").write_text(json.dumps(readings, indent=1) + "\n",
@@ -366,8 +462,9 @@ def apply_readings(chart_series, index, path: Path) -> int:
         if read.get("parallel") is None or read.get("meridian") is None:
             continue
         entry = index["sheets"][stem]
-        entry["read"] = {"parallel_end": read["parallel_end"], "parallel": float(read["parallel"]),
-                         "meridian_end": read["meridian_end"], "meridian": float(read["meridian"])}
+        entry["read"] = {"column": float(read["column"]), "row": float(read["row"]),
+                         "parallel": float(read["parallel"]),
+                         "meridian": float(read["meridian"])}
         if "crown" in read:
             entry["crown"] = bool(read["crown"])
         applied += 1

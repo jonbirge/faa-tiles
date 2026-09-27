@@ -23,14 +23,13 @@ from test_graticule import CRS, INTERVAL, PIXEL, SOUTH, WEST, Scan  # noqa: E402
 
 gdal.UseExceptions()
 
-READING = graticule.Reading("south", SOUTH, "west", WEST)
 
 
 def _rectified(tmp_path, scan):
     """A drawn scan, registered and rectified: ``(raster, limits, registration)``."""
     jpeg = tmp_path / "drawn.jpg"
     Image.fromarray(scan.rgb).save(jpeg, quality=95)
-    registration = graticule.register(scan.rgb, scan.sheet(), READING)
+    registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
     limits = rectify.limits_of(registration)
     out = tmp_path / "drawn.tif"
     done = rectify.rectify(jpeg, out, registration, limits)
@@ -105,7 +104,7 @@ def test_the_map_area_is_the_graticules(tmp_path):
 
 def test_crossings_measured_on_the_wrong_line_are_left_out():
     scan = Scan(seed=8, clutter=False)
-    registration = graticule.register(scan.rgb, scan.sheet(), READING)
+    registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
     control = registration.control.copy()
     wrong = [5, 40, 77]
     control[wrong, 0] += (14.0, -22.0, 9.0)
@@ -117,7 +116,7 @@ def test_crossings_measured_on_the_wrong_line_are_left_out():
 def test_a_stretched_scan_keeps_its_crossings():
     """What a scanner does is smooth, and smooth is not an outlier."""
     scan = Scan(stretch=0.03, seed=9, clutter=False)
-    registration = graticule.register(scan.rgb, scan.sheet(), READING)
+    registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
     kept = rectify.consistent(registration.control, graticule.Projector(CRS))
     assert kept.mean() > 0.95
 
@@ -155,9 +154,9 @@ def test_what_is_known_of_a_sheet_before_its_scan_is_looked_at():
 
 
 def test_a_reading_outranks_the_index():
-    entry = dict(INDEX["sheets"]["e-2a"], read={"parallel_end": "south", "parallel": 52.0,
-                                                 "meridian_end": "west", "meridian": -1.0})
-    assert rectify.reading_of(entry) == graticule.Reading("south", 52.0, "west", -1.0)
+    entry = dict(INDEX["sheets"]["e-2a"], read={"column": 110, "row": 8574, "parallel": 52.0,
+                                                 "meridian": -1.0})
+    assert rectify.reading_of(entry) == graticule.Reading(110.0, 8574.0, 52.0, -1.0)
     assert rectify.reading_of(INDEX["sheets"]["e-2a"]) is None
     assert rectify.sheet_for("e-2a", entry, INDEX).middle == (-1.0, 52.0)
 
@@ -169,22 +168,20 @@ def test_readings_are_written_into_the_sheet_index(tmp_path, monkeypatch):
     monkeypatch.setattr(chart_series.Series, "sheet_index", property(lambda self: path))
     readings = tmp_path / "readings.json"
     readings.write_text(json.dumps({
-        "e-2a": {"parallel_end": "south", "parallel": 52, "meridian_end": "west", "meridian": -1,
-                 "crown": True, "page": 0},
+        "e-2a": {"column": 110.2, "row": 8574, "parallel": 52, "meridian": -1, "crown": True,
+                 "page": 0},
         # Surveyed but not yet read: left alone.
-        "m-26b": {"parallel_end": "south", "parallel": None, "meridian_end": "west",
-                  "meridian": None},
+        "m-26b": {"column": 767, "row": 6041, "parallel": None, "meridian": None},
     }), encoding="utf-8")
     index = rectify.load_index(chart_series.series("tpc"))
     assert rectify.apply_readings(chart_series.series("tpc"), index, readings) == 0
     written = json.loads(path.read_text(encoding="utf-8"))["sheets"]
-    assert written["e-2a"]["read"] == {"parallel_end": "south", "parallel": 52.0,
-                                       "meridian_end": "west", "meridian": -1.0}
+    assert written["e-2a"]["read"] == {"column": 110.2, "row": 8574.0, "parallel": 52.0,
+                                       "meridian": -1.0}
     assert "read" not in written["m-26b"]
 
-    readings.write_text(json.dumps({"z-99z": {"parallel_end": "south", "parallel": 1,
-                                              "meridian_end": "west", "meridian": 1}}),
-                        encoding="utf-8")
+    readings.write_text(json.dumps({"z-99z": {"column": 1, "row": 1, "parallel": 1,
+                                              "meridian": 1}}), encoding="utf-8")
     with pytest.raises(SystemExit, match="not a sheet"):
         rectify.apply_readings(chart_series.series("tpc"), index, readings)
 
@@ -198,13 +195,76 @@ def test_a_sheet_with_no_reading_is_not_rectified_on_the_indexs_word(tmp_path):
     assert "skipped" in outcome and not (tmp_path / "e-2a.tif").exists()
 
 
-def test_the_corner_shown_for_reading_is_one_with_paper_beside_it():
+def test_each_line_is_shown_where_it_meets_the_edge_of_the_map():
+    """Which is where its label is printed."""
     scan = Scan(seed=11)
     found = graticule.survey(scan.rgb, scan.sheet())
-    parallel_end, meridian_end, window = rectify.corner(found)
-    assert (parallel_end, meridian_end) == ("south", "west")
-    left, top, right, bottom = window
-    assert (right - left, bottom - top) == rectify.CELL
-    # The corner itself is in the window, with margin to its left and below.
+    shown = rectify.corner(found)
+    assert shown.ends == ("south", "west") and shown.steps == (0, 0)
+    # The end lines meet the edge at the corner, and cross there.
     column, row = scan.pixel([(WEST, SOUTH)])[0]
-    assert left + 100 < column < right - 300 and top + 100 < row < bottom - 100
+    assert shown.at == pytest.approx((column, row), abs=3)
+    for window, meets in zip(shown.windows, shown.meets):
+        left, top, right, bottom = window
+        assert (right - left, bottom - top) == rectify.PANEL
+        assert meets == pytest.approx((column, row), abs=20)
+        # With margin on the one side of it and map on the other.
+        assert left + 150 < column < right - 150 and top + 150 < row < bottom - 150
+
+
+def test_a_line_not_traced_to_the_edge_gives_way_to_the_next():
+    """A line is shown where it stops. One that stops well short of where its
+    neighbours do was not traced to the edge of the map, and its label is not
+    where it stops."""
+    scan = Scan(seed=11)
+    found = graticule.survey(scan.rgb, scan.sheet())
+    south = found.parallels[-1][0]
+    kept = south.along > south.along[0] + 2.5 * rectify._spacing(found.meridians, found.along_y)
+    south.along, south.across = south.along[kept], south.across[kept]
+    shown = rectify.corner(found)
+    assert shown.steps == (1, 0)
+    # The next parallel north, where it meets the west edge.
+    column, row = scan.pixel([(WEST, SOUTH + INTERVAL)])[0]
+    # To within a strip: where a line stops is known no better than that.
+    assert shown.meets[0] == pytest.approx((column, row), abs=20)
+    assert shown.at == pytest.approx((column, row), abs=4)
+
+
+def test_a_line_followed_out_into_the_margin_gives_way_too():
+    scan = Scan(seed=11)
+    found = graticule.survey(scan.rgb, scan.sheet())
+    south = found.parallels[-1][0]
+    beyond = np.arange(south.along[0] - 200, south.along[0], found.coarse)
+    south.along = np.r_[beyond, south.along]
+    south.across = np.r_[np.full(len(beyond), south.across[0]), south.across]
+    assert rectify.corner(found).steps == (1, 0)
+
+
+def test_the_caption_is_above_the_scan_and_not_over_it():
+    """A caption drawn on the cell covered the labels along its top edge."""
+    scan = Scan(seed=12)
+    found = graticule.survey(scan.rgb, scan.sheet())
+    cell, shown = rectify.draw_cell(scan.rgb, found, "TPC X-1A  [x-1a]")
+    assert cell.size == (rectify.CELL[0], rectify.CELL[1] + rectify.CAPTION)
+    left, top, right, bottom = shown.windows[0]
+    drawn = np.asarray(cell)[rectify.CAPTION:, :rectify.PANEL[0] - 6, :].astype(int)
+    original = scan.rgb[top:bottom, left:right - 6]
+    # The top of the view is all there, marks aside.
+    assert (np.abs(drawn[:30] - original[:30]).max(axis=2) < 40).mean() > 0.95
+
+
+def test_a_line_is_not_marked_across_the_margin_where_its_label_is():
+    scan = Scan(seed=12)
+    found = graticule.survey(scan.rgb, scan.sheet())
+    shown = rectify.corner(found)
+    left, top, right, bottom = shown.windows[0]
+    panel = np.asarray(rectify.draw_panel(scan.rgb, found, shown,
+                                          shown.windows[0])).astype(int)
+    changed = np.abs(panel - scan.rgb[top:bottom, left:right]).max(axis=2) > 40
+    column, row = (int(v) for v in shown.meets[0])
+    # Marked inside the map, and not in the paper west and south of the corner.
+    assert changed[:, column - left + 20:].any()
+    assert not changed[:, :column - left - 12].any()
+    # (Below the corner, that is: a parallel drawn on a cone does not stay on
+    # one row of a scan.)
+    assert not changed[row - top + 12:, :column - left + 60].any()

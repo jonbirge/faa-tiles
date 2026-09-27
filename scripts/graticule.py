@@ -37,8 +37,9 @@ the scan is tied down at every place two of them cross:
 Steps 1 and 2 and the measuring in 3 need nothing but the scan, its scale and
 its projection: that is :func:`survey`. Putting values to the lines needs to be
 told one thing the scan cannot say for itself, and there are two ways to tell
-it. A :class:`Reading` is the label printed beside the end line of each family,
-read off the sheet by someone looking at it, and is to be relied on. Failing
+it. A :class:`Reading` is the labels printed beside one meridian and one
+parallel, read off the sheet by someone looking at it, with the place in the
+scan where those two lines cross; it is to be relied on. Failing
 that the sheet's nominal limits will do, *if* they are right to within half an
 interval -- and the indexes they come from are not always: one gives TPC E-2A
 as beginning at 1 52' W, and the sheet says 1. ``rectify_charts.py`` draws the
@@ -104,6 +105,25 @@ ON_THE_LINE = 0.15
 # Further out than that the neatline is a ruled line of its own, which must
 # have been traced within this many intervals of where the lines stop.
 RULE_REACH = 0.12
+# A line is printed in black if it is this dark, as a share of how dark the
+# darkest lines of the scan are, and the black lines are the graticule if they
+# make up this much of what all the lines together would. Measured on ONC M-16,
+# which is all ocean: its graticule is 190-243 dark and the military grid drawn
+# across the same sea 88-100, and the grid, being 100 km squares against
+# parallels 111 km apart, is the commoner rhythm of the two.
+BLACK = 0.6
+BLACK_SHARE = 0.6
+# How far from square a scan's pixels may be. The projection is conformal, so
+# what the parallels say of the scale and what the meridians say are the same
+# but for the scanner, and the worst scanner met stretched a sheet 3.5%. More
+# than this and one family is not the graticule -- the military grid is a
+# tenth closer than the parallels -- or is labelled well out. It does not catch
+# a label one line out: a degree of latitude is 3% of the meridians' scale at
+# 60 degrees and less nearer the equator, which a scanner can do by itself.
+OUT_OF_SQUARE = 0.06
+# How far the crossing a reading names may be from the nearest surveyed line,
+# in intervals, and still be that line.
+READING_REACH = 0.3
 # How far a neatline may be measured from the sheet's nominal limit, in
 # intervals. The limits in the index are not the sheet's to the minute -- ONC
 # J-24's southern limit is given as 15 40' for a corner of the sheet that dips
@@ -151,14 +171,19 @@ class Sheet:
 
 @dataclass(frozen=True)
 class Reading:
-    """What was read off a sheet: the value printed beside the end line of each
-    family, and which end that was. ``parallel_end`` is ``"south"`` or
-    ``"north"``, ``meridian_end`` is ``"west"`` or ``"east"``; the values are
-    degrees, west and south negative."""
+    """What was read off a sheet: the values printed beside one parallel and
+    one meridian, in degrees with west and south negative, and the pixel of the
+    scan where the two cross.
 
-    parallel_end: str
+    The lines are named by where they are and not by which they are -- "the
+    first meridian", "the last parallel" -- so that a reading goes on meaning
+    the same printed lines if a later survey of the scan picks up one more line
+    at an end, or one fewer.
+    """
+
+    column: float
+    row: float
     parallel: float
-    meridian_end: str
     meridian: float
 
 
@@ -171,6 +196,8 @@ class Line:
     across: np.ndarray
     # Degrees, once the line is labelled.
     value: float | None = None
+    # How dark the line is printed, 0..255 of :func:`darkness`.
+    ink: float = 0.0
 
     def at(self, along: float) -> float:
         """Where the line is at ``along``: between its marks by interpolation,
@@ -475,12 +502,24 @@ def smooth_part(line: Line, coarse: int, extent: int) -> Line | None:
     return Line(along[chosen], across[chosen])
 
 
+def inked(dark: np.ndarray, line: Line) -> float:
+    """How dark a line is printed: the darkest pixel within two of each of its
+    marks, and the middle one of those."""
+    rows = np.clip(np.round(line.across).astype(int), 2, dark.shape[0] - 3)
+    columns = np.clip(np.round(line.along).astype(int), 0, dark.shape[1] - 1)
+    return float(np.median([dark[row - 2:row + 3, column].max()
+                            for row, column in zip(rows, columns)]))
+
+
 def trace(dark: np.ndarray, coarse: int) -> list[Line]:
     """The long near-horizontal printed lines of a scan."""
     extent = dark.shape[1]
     lines = chains(marks(dark, thin(dark), coarse), coarse, extent)
-    return [kept for kept in (smooth_part(line, coarse, extent) for line in lines)
-            if kept is not None]
+    kept = [part for part in (smooth_part(line, coarse, extent) for line in lines)
+            if part is not None]
+    for line in kept:
+        line.ink = inked(dark, line)
+    return kept
 
 
 # -- picking the graticule --------------------------------------------------
@@ -561,9 +600,34 @@ def commonest_spacing(positions, step: float) -> float:
     return float(np.median(gaps[np.abs(gaps / best - 1) <= 0.04]))
 
 
+def black(lines: list[Line]) -> list[Line]:
+    """The lines printed in black: as dark, nearly, as the darkest are."""
+    if not lines:
+        return []
+    darkest = np.percentile([line.ink for line in lines], 80)
+    return [line for line in lines if line.ink >= BLACK * darkest]
+
+
 def pick(lines: list[Line], step: float, extent: int):
     """The graticule among the traced lines: ``[(line, interval number)]`` in
-    order across the scan, and the reference they were compared along."""
+    order across the scan, and the reference they were compared along.
+
+    Among the black lines first. A military chart carries a grid as well as a
+    graticule, ruled in blue, evenly, and not far off the graticule's spacing;
+    over open sea there is little else on the sheet, and nothing but its colour
+    to say the grid is not what is being looked for. All the lines are gone
+    back to only if the black ones make much less of a graticule than they do.
+    """
+    chosen, reference = _pick(lines, step, extent)
+    printed = black(lines)
+    if len(printed) < len(lines):
+        of_black, along = _pick(printed, step, extent)
+        if len(of_black) >= 2 and len(of_black) >= BLACK_SHARE * len(chosen):
+            return of_black, along
+    return chosen, reference
+
+
+def _pick(lines: list[Line], step: float, extent: int):
     if not lines:
         return [], 0.0
     # Compare the lines where the most of them are.
@@ -682,13 +746,22 @@ def put_values(survey: "Survey", sheet: Sheet, reading: Reading | None):
         numbers = [number for _, number in lines]
         origins = {}
         if reading is not None:
-            side = reading.parallel_end if family == "parallel" else reading.meridian_end
-            value = reading.parallel if family == "parallel" else reading.meridian
-            if side not in (start_side, end_side):
-                raise ValueError(f"a {family} is read at the {start_side} or {end_side} end, "
-                                 f"not the {side}")
-            number = numbers[0 if side == start_side else -1]
-            origins["read"] = value - _signed(number, ascending) * interval
+            # A parallel is where it is at the reading's column; a meridian at
+            # its row.
+            along, across, value = ((reading.column, reading.row, reading.parallel)
+                                    if family == "parallel"
+                                    else (reading.row, reading.column, reading.meridian))
+            positions = [line.at(along) for line, _ in lines]
+            nearest = int(np.argmin([abs(p - across) for p in positions]))
+            other = nearest + 1 if nearest + 1 < len(lines) else nearest - 1
+            step = abs((positions[other] - positions[nearest])
+                       / (numbers[other] - numbers[nearest]))
+            if abs(positions[nearest] - across) > READING_REACH * step:
+                raise ValueError(
+                    f"the reading is of a {family} at "
+                    f"{'row' if family == 'parallel' else 'column'} {across:.0f}, and the "
+                    f"nearest one surveyed is at {positions[nearest]:.0f}")
+            origins["read"] = value - _signed(numbers[nearest], ascending) * interval
         else:
             for side in (start_side, end_side):
                 if side not in survey.neatline:
@@ -846,11 +919,18 @@ def register(rgb: np.ndarray, sheet: Sheet, reading: Reading | None = None,
     say(f"{len(control)} control points; from the nearest affine they are "
         f"{_rms(residual):.1f} px rms, {residual.max() if len(residual) else 0:.1f} px at most")
 
-    return Registration(
+    registration = Registration(
         sheet=sheet, survey=found, control=control, meridians=meridians, parallels=parallels,
         labelled_by=labelled_by, neatlines=measured, affine=affine,
         distortion_rms=_rms(residual),
         distortion_max=float(residual.max()) if len(residual) else 0.0,
         problems=problems,
     )
+    if len(control) >= 9:
+        across, down = registration.pixel_size
+        if abs(across / down - 1) > OUT_OF_SQUARE:
+            problems.append(
+                f"the meridians put a pixel at {across:.1f} m and the parallels at {down:.1f}: "
+                f"one of them is not the graticule, or is labelled well out")
+    return registration
 
