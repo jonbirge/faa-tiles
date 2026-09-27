@@ -50,6 +50,54 @@ FAA_LICENCE = Licence(
 )
 
 
+OFM_LICENCE = Licence(
+    name="OFMA General Users' License",
+    url="http://web.archive.org/web/20250406184228/https://www.openflightmaps.org/"
+        "live/downloads/20150306-GUL.pdf",
+    redistributable=True,
+    attribution="Contains information from the open flightmaps database "
+                "(openflightmaps.org); base map (c) OpenStreetMap contributors",
+    note="Modelled on the ODbL: distribution and commercial use are granted, with "
+         "attribution. The text is dated 2015 and is no longer on the live site; it was "
+         "read from an archived copy, and no licence specific to the tiles was found.",
+)
+
+SWISSTOPO_LICENCE = Licence(
+    name="swisstopo terms of use for free geodata (OGD)",
+    url="https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices",
+    redistributable=True,
+    attribution="(c) swisstopo",
+    note="Use, processing, distribution and commercial use are allowed; a source "
+         "reference is mandatory.",
+)
+
+NAVIAIR_LICENCE = Licence(
+    name="No terms stated (Naviair)",
+    url="https://aim.naviair.dk/charts/",
+    attribution="Naviair",
+    note="Free download, but no licence was found on the charts page, the AIM home "
+         "page or AIP GEN 3.2, and paper copies are sold. Unclear is not permission.",
+)
+
+ENAIRE_LICENCE = Licence(
+    name="ENAIRE legal notice (all rights reserved)",
+    url="https://www.enaire.es/aviso_legal",
+    attribution="ENAIRE",
+    note="Section 6 prohibits reproduction and communication to the public without "
+         "ENAIRE's prior written authorisation.",
+)
+
+DECEA_LICENCE = Licence(
+    name="DECEA usage policy; AISWEB footer shows CC BY 4.0",
+    url="https://ajuda.decea.mil.br/app/uploads/2019/04/Pol%C3%ADtica-de-Uso-POR.pdf",
+    attribution="DECEA (Departamento de Controle do Espaco Aereo), Brazil",
+    note="The two statements disagree. The policy allows non-commercial distribution "
+         "and forbids what it does not authorise; the site footer carries a CC BY 4.0 "
+         "badge. Leaning permitted for a non-commercial site with attribution, but not "
+         "settled, so not marked redistributable.",
+)
+
+
 @dataclass(frozen=True)
 class Series:
     name: str
@@ -62,6 +110,27 @@ class Series:
     # sheets filling regions where nothing current is published free. Never
     # something to navigate by, and the metadata says so.
     historical: bool = False
+    # How the series is downloaded. ``faa`` lists an edition folder of zips, as
+    # below; the others are in fetchers.py:
+    #   links  every link on ``index_url`` matching ``link_pattern`` -- a file,
+    #          or a zip holding one. The pattern names a ``sheet`` group and may
+    #          name a ``date`` (or ``year``) group; the latest of each sheet is
+    #          kept, under the sheet's name, so a new edition replaces the old
+    #          file and the reviewed manifest still names it.
+    #   urls   the files in ``urls``, as they are
+    #   ofm    open flightmaps tile zips for ``regions``, assembled into one
+    #          raster a region
+    fetcher: str = "faa"
+    link_pattern: str = ""
+    urls: tuple[str, ...] = ()
+    regions: tuple[str, ...] = ()
+    # Seconds to wait between downloads, for a publisher whose terms or whose
+    # servers ask for a light touch. Such a series is fetched one file at a time.
+    fetch_delay: float = 0.0
+    # The whole raster is map: no collar, no legend, nothing to detect. Such a
+    # series has no detector and no manifest. A raster's own alpha band, if it
+    # has one, is honoured either way.
+    whole_image: bool = False
     # Directory listing holding one MM-DD-YYYY folder per edition. The FAA
     # posts the next edition's folder early, so the current one is the latest
     # that is not in the future.
@@ -118,6 +187,11 @@ class Series:
     # (mosaic.plan_detail_tiles) -- so it costs a fraction of a full level.
     detail_layers: tuple[str, ...] = ()
     detail_zoom: int = 0
+    # A composite whose members are drawn at very different scales: each earns
+    # tiles only as deep as its own ``max_zoom``, and every level past the
+    # shallowest is sparse (mosaic.plan_stepped). ``detail_layers`` is the
+    # one-step case of this and is not used with it.
+    stepped: bool = False
 
     @property
     def is_composite(self) -> bool:
@@ -126,8 +200,11 @@ class Series:
     @property
     def members(self) -> tuple["Series", ...]:
         """The series this one paints, in paint order; itself if it is not a
-        composite, so a caller can loop either way."""
-        return tuple(SERIES[name] for name in self.layers) if self.layers else (self,)
+        composite, so a caller can loop either way. A composite's layer may be
+        a composite itself, and is taken apart into its own members here."""
+        if not self.layers:
+            return (self,)
+        return tuple(member for name in self.layers for member in SERIES[name].members)
 
     def _own(self, what: str) -> None:
         if self.is_composite:
@@ -412,6 +489,146 @@ SERIES = {
             detail_layers=("tac",),
             max_zoom=12,
             detail_zoom=13,
+        ),
+        # -- beyond the FAA's own series: the layers of worldwide-vfr --------
+        #
+        # Researched in docs/worldwide-vfr-research. Each is free to download;
+        # whether it may be republished is its ``licence``.
+        Series(
+            name="faa-caribbean",
+            title="FAA Caribbean VFR Aeronautical Charts",
+            index_url="https://aeronav.faa.gov/visual/",
+            # A sibling of sectional-files/, which is why the sectionals never
+            # picked these two sheets up.
+            files_path="Caribbean/",
+            zip_pattern=r"Caribbean_\d_VFR\.zip",
+            tif_pattern=r"Caribbean \d VFR Chart\.tif",
+            # A map in a paper collar, drawn by the same office as a sectional.
+            detector="detect_sectional_areas.py",
+            upsample_model="realcugan-up2x-denoise3x.pth",
+            upsample_scale=2,
+            # 1:1,000,000 at 84.67 m/px is native z10.8 at these latitudes and
+            # z11.8 upsampled, so z11 minifies it 0.6x -- the regime the
+            # sectionals are tiled in. z12 would magnify.
+            max_zoom=11,
+        ),
+        Series(
+            name="ofm",
+            title="open flightmaps VFR charts (Europe)",
+            publisher="open flightmaps association",
+            licence=OFM_LICENCE,
+            fetcher="ofm",
+            index_url="https://snapshots.openflightmaps.org/",
+            # Every region that publishes tile zips. Malta, South Africa and
+            # Namibia publish PDFs only and are not here.
+            regions=("ebbu", "ed", "efin", "ehaa", "ekdk", "epww", "esaa", "ldzo", "lf",
+                     "lggg", "lhcc", "li", "ljla", "lkaa", "lovv", "lrbb", "lsas", "lzbb"),
+            tif_pattern=r"[a-z]+\.tif",
+            # Clipped to each region's rectangle by the publisher, with alpha
+            # outside it; regions overlap and draw the same chart twice, so
+            # paint order between them barely shows.
+            whole_image=True,
+            # Rendered from vector by the publisher at 512 px a z11 tile, which
+            # is pixel for pixel a 256 px z12 tile. Nothing to upsample.
+            max_zoom=12,
+        ),
+        Series(
+            name="ch-icao",
+            title="Aeronautical Chart ICAO Switzerland 1:500,000",
+            publisher="Federal Office of Topography swisstopo",
+            licence=SWISSTOPO_LICENCE,
+            fetcher="urls",
+            urls=("https://data.geo.admin.ch/ch.bazl.luftfahrtkarten-icao/luftfahrtkarten-icao/"
+                  "luftfahrtkarten-icao_total_50_2056.tif",),
+            tif_pattern=r"luftfahrtkarten-icao_total_50_2056\.tif",
+            detector="detect_sectional_areas.py",
+            upsample_model="realcugan-up2x-denoise3x.pth",
+            upsample_scale=2,
+            # 50 m/px at 47 N is native z11.06; upsampled it is z12.06.
+            max_zoom=12,
+        ),
+        Series(
+            name="dk-icao",
+            title="ICAO Aeronautical Chart 1:500,000 Denmark",
+            publisher="Naviair",
+            licence=NAVIAIR_LICENCE,
+            fetcher="links",
+            index_url="https://aim.naviair.dk/charts/",
+            # The digital issue, re-made before each AIRAC date with the hand
+            # amendments applied; the "printed-version" is the paper edition as
+            # first issued and is passed over.
+            link_pattern=r".*/edition-\d+_(?P<date>\d{8})-icao-anc-1-500000-"
+                         r"(?P<sheet>denmark)-geo-tiff\.tif",
+            tif_pattern=r"denmark\.tif",
+            detector="detect_sectional_areas.py",
+            upsample_model="realcugan-up2x-denoise3x.pth",
+            upsample_scale=2,
+            # 31.75 m/px at 56 N is native z11.4; upsampled, z12.4.
+            max_zoom=12,
+        ),
+        Series(
+            name="dk-250",
+            title="ICAO Aeronautical Charts 1:250,000 Copenhagen Area and Faroe Islands",
+            publisher="Naviair",
+            licence=NAVIAIR_LICENCE,
+            fetcher="links",
+            index_url="https://aim.naviair.dk/charts/",
+            link_pattern=r".*/edition-\d+_(?P<date>\d{8})-icao-anc-1-250000-"
+                         r"(?P<sheet>copenhagen-area|faroe-islands)-geo-tiff\.tif",
+            tif_pattern=r"(copenhagen-area|faroe-islands)\.tif",
+            detector="detect_sectional_areas.py",
+            # 10.58 m/px is native z13 at Copenhagen and z12.8 in the Faroes,
+            # so these reach z13 as downloaded.
+            max_zoom=13,
+        ),
+        Series(
+            name="es-vfr500",
+            title="ENAIRE VFR500 (Spain 1:500,000)",
+            publisher="ENAIRE",
+            licence=ENAIRE_LICENCE,
+            fetcher="links",
+            index_url="https://aip.enaire.es/AIP/CartasInsigniaImpresas-es.html",
+            # Sheets are re-issued one at a time, so the year differs between
+            # them; each zip holds the sheet's TIFF and a world file.
+            link_pattern=r".*/VFR500/(?P<year>\d{4})_(?P<sheet>[A-Z0-9_]+)\.zip",
+            tif_pattern=r"[A-Z0-9_]+\.tif",
+            detector="detect_sectional_areas.py",
+            upsample_model="realcugan-up2x-denoise3x.pth",
+            upsample_scale=2,
+            # 42.33 m/px, a sectional's pitch: native z11.5 at 40 N.
+            max_zoom=12,
+        ),
+        Series(
+            name="br-wac",
+            title="Brazil World Aeronautical Charts 1:1,000,000",
+            publisher="DECEA",
+            licence=DECEA_LICENCE,
+            fetcher="links",
+            index_url="https://geoaisweb.decea.mil.br/",
+            link_pattern=r".*src/geotiffs/(?P<sheet>WAC_\d+_[A-Z0-9_]+)\.tif",
+            tif_pattern=r"WAC_\d+_[A-Z0-9_]+\.tif",
+            # The usage policy names crawlers as a violation. 46 files, one at
+            # a time, only when the server's copy is newer than ours.
+            fetch_delay=5.0,
+            # Published already cropped to the 6 x 4 degree neatline.
+            whole_image=True,
+            upsample_model="realcugan-up2x-denoise3x.pth",
+            upsample_scale=2,
+            # 0.000762 degrees a pixel is native z10.85; upsampled, z11.85.
+            max_zoom=11,
+        ),
+        Series(
+            name="worldwide-vfr",
+            title="World-wide VFR charts",
+            publisher="various",
+            # Bottom to top. Coarse under fine; a community chart under the
+            # official one where both are free (the user's call); and the FAA's
+            # own sectionals and terminal area charts over everything they
+            # reach, since they are what the rest is laid around.
+            layers=("br-wac", "faa-caribbean", "ofm", "es-vfr500", "dk-icao", "ch-icao",
+                    "dk-250", "sectionals", "tac"),
+            stepped=True,
+            max_zoom=13,
         ),
     )
 }

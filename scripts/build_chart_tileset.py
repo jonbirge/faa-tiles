@@ -27,14 +27,21 @@ paints in reverse, putting the earliest name on top; each series sets its own
 default (on for the IFR series), and ``--no-reverse-order`` overrides it. Either way
 it is a placeholder for a smarter rule, not a considered choice.
 
-A **composite** series (``sectionals-tac``) paints several series into one
-tileset. Its members keep their own downloads, stages and reviewed manifests,
+A **composite** series (``sectionals-tac``, ``worldwide-vfr``) paints several
+series into one tileset. Its members keep their own downloads, stages and reviewed manifests,
 so nothing is fetched or prepared twice; the composite only says which order
 they paint in -- every sheet of one layer is below every sheet of the next --
 and which of them earn the detail level. That level is one zoom past
 ``--max-zoom``, holding only the tiles the finer sheets reach: it gives the
 terminal area charts their own resolution without quadrupling the mosaic that
 surrounds them. ``--no-detail`` builds a plain uniform pyramid instead.
+
+``worldwide-vfr`` is a **stepped** composite, which takes that one step further:
+its layers run from charts at 1:1,000,000 to charts at 1:250,000, so each is
+tiled only as deep as its own ``max_zoom`` and every level past the shallowest
+holds just the tiles a layer that earns it reaches. Its layers come from many
+publishers on different terms, recorded per layer in ``metadata.json``;
+``--redistributable-only`` leaves out the ones that may not be republished.
 
 Tiles are lossy WebP q90 unless the series sets ``lossless`` (both IFR series do);
 ``--[no-]lossless`` overrides it.
@@ -97,13 +104,18 @@ def check_stages(chart_series) -> None:
         previous = {n: after / n for n in names}
 
 
-def sources(chart_series, directory: Path, manifest: dict, detail: bool = False) -> list[MosaicSource]:
+def sources(chart_series, directory: Path, manifest: dict, detail: bool = False,
+            zoom: int | None = None) -> list[MosaicSource]:
     # The series' patterns and exclusions apply here too: they are not normally
     # downloaded, but an older download may have left unwanted sheets behind.
     charts = sorted(p for p in directory.glob("*.tif") if chart_series.wants_tif(p.name))
     if not charts:
         raise SystemExit(
             f"no GeoTIFFs in {directory}; run scripts/fetch_charts.py {chart_series.name} first")
+    if chart_series.whole_image:
+        # Nothing to mask: the publisher's raster is map from edge to edge, or
+        # carries its own alpha where it is not.
+        return [MosaicSource(p, detail=detail, zoom=zoom) for p in charts]
     missing = [p.name for p in charts if p.name not in manifest]
     if missing:
         raise SystemExit(
@@ -113,7 +125,7 @@ def sources(chart_series, directory: Path, manifest: dict, detail: bool = False)
     # Map areas are recorded against the downloaded GeoTIFFs, so their pixel
     # polygons scale with a series that tiles renders drawn at a multiple of it.
     return [MosaicSource(p, MapArea.from_dict(manifest[p.name], chart_series.pixel_scale),
-                         detail=detail)
+                         detail=detail, zoom=zoom)
             for p in charts]
 
 
@@ -177,14 +189,18 @@ def layers(chart_series, args, members=None, sheets_by_layer=None) -> list[Mosai
     """
     chosen: list[MosaicSource] = []
     for member in (chart_series.members if members is None else members):
-        manifest = json.loads(member.manifest.read_text(encoding="utf-8"))
+        manifest = ({} if member.whole_image
+                    else json.loads(member.manifest.read_text(encoding="utf-8")))
         if args.charts:
             directory = args.charts
         else:
             directory = member.build_directory
             check_stages(member)
+        # In a stepped composite each layer earns tiles as deep as its own
+        # max_zoom and no deeper.
         sheets = sources(member, directory, manifest,
-                         detail=member.name in chart_series.detail_layers)
+                         detail=member.name in chart_series.detail_layers,
+                         zoom=member.max_zoom if chart_series.stepped else None)
         if args.only:
             sheets = [s for s in sheets if any(Path(s.path).name.startswith(n) for n in args.only)]
         reverse = member.reverse_order if args.reverse_order is None else args.reverse_order
@@ -193,7 +209,8 @@ def layers(chart_series, args, members=None, sheets_by_layer=None) -> list[Mosai
         if sheets:
             print(f"layer {member.name}: {len(sheets)} sheet{'s' if len(sheets) != 1 else ''} in "
                   f"{'reverse ' if reverse else ''}file-name order, "
-                  f"{Path(sheets[-1].path).name} on top", flush=True)
+                  f"{Path(sheets[-1].path).name} on top"
+                  + (f", to z{member.max_zoom}" if chart_series.stepped else ""), flush=True)
         chosen.extend(sheets)
         if sheets_by_layer is not None:
             sheets_by_layer[member.name] = [Path(s.path).name for s in sheets]
@@ -275,6 +292,15 @@ def main(argv=None) -> int:
 
     max_zoom = args.max_zoom if args.max_zoom is not None else chart_series.max_zoom
     detail_zoom = args.detail_zoom if args.detail_zoom is not None else chart_series.detail_zoom
+    if chart_series.stepped:
+        if args.warp != "cpu":
+            raise SystemExit(f"{chart_series.name} is a stepped mosaic, which only the cpu "
+                             "backend builds")
+        if args.min_zoom > min(s.zoom for s in chosen):
+            raise SystemExit("--min-zoom is past the shallowest layer's zoom")
+        detail_zoom = 0
+        print("stepped: each layer is tiled to its own zoom, and levels past the "
+              f"shallowest (z{min(min(s.zoom, max_zoom) for s in chosen)}) are sparse", flush=True)
     if not args.detail or not any(s.detail for s in chosen):
         detail_zoom = 0
     elif detail_zoom and detail_zoom <= max_zoom:

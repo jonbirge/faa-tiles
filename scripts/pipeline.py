@@ -36,7 +36,7 @@ def chart_series_main(series: str, description: str, argv=None) -> int:
     together. A layer already on disk from its own tileset costs nothing again.
     """
     this = chart_series(series)
-    detectors = ", ".join(sorted({m.detector for m in this.members}))
+    detectors = ", ".join(sorted({m.detector for m in this.members if m.detector}))
     ap = argparse.ArgumentParser(
         description=description,
         epilog="Any other options are passed to build_chart_tileset.py, "
@@ -56,7 +56,7 @@ def chart_series_main(series: str, description: str, argv=None) -> int:
         # Detection reads the GeoTIFFs; a routine build of a PDF series does not.
         run("fetch_charts.py", series, *(["--tifs"] if args.detect else []))
     for member in this.members:
-        if args.detect:
+        if args.detect and member.detector:
             run(member.detector, member.name)
             if member.pdf_scale:
                 run("detect_pdf_windows.py", member.name)

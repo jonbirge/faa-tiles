@@ -1,12 +1,15 @@
-"""Download every current chart file in an FAA chart series.
+"""Download every current chart file in a chart series.
 
     python scripts/fetch_charts.py SERIES [--workers N] [--out DIR] [--list]
 
 SERIES is a name from chart_series.py (``sectionals``, ``tac``, ``ifr-low``,
-``ifr-high``).
+``ifr-high``, and the series of other publishers that ``worldwide-vfr`` paints).
 A composite series (``sectionals-tac``) downloads nothing of its own: it fetches
 each of its members in turn, into their own directories, so the sheets a member
 already has on disk are shared rather than downloaded twice.
+
+What follows is how the FAA's series are fetched. A series from another
+publisher names its own ``fetcher`` and is handed to ``fetchers.py``.
 
 Finds the current edition by listing the series' index and taking the latest
 ``MM-DD-YYYY`` directory that is not in the future -- the FAA posts the next
@@ -92,6 +95,11 @@ def main(argv: list[str] | None = None) -> int:
                 return code
         return 0
     out = args.out or chart_series.directory
+    if chart_series.fetcher != "faa":
+        # Not the FAA's edition folders: each other way of publishing is a
+        # function in fetchers.py.
+        import fetchers
+        return fetchers.run(chart_series, out, args.list)
     want_tifs = chart_series.fetches_tifs if args.tifs is None else args.tifs
 
     date, edition_url = current_edition(chart_series.index_url, dt.date.today())

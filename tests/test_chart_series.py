@@ -1,4 +1,4 @@
-"""How each FAA chart series is described, and where its stages read and write.
+"""How each chart series is described, and where its stages read and write.
 
 ``scripts/`` is not a package, so it goes on the path the way the scripts do.
 """
@@ -215,11 +215,14 @@ def test_every_series_has_its_own_directories():
 
 
 def test_every_series_names_a_detector_or_is_a_composite():
-    """A composite detects nothing itself; every layer it paints must."""
+    """A composite detects nothing itself; every layer it paints must, unless
+    its publisher's raster is already map from edge to edge."""
     for s in SERIES.values():
-        assert bool(s.detector) is not s.is_composite
         if s.is_composite:
-            assert all(m.detector for m in s.members)
+            assert not s.detector and not s.whole_image
+            assert all(m.detector or m.whole_image for m in s.members)
+        else:
+            assert bool(s.detector) is not s.whole_image
 
 
 def test_terminal_area_charts_keep_only_the_chart_itself():
@@ -264,3 +267,92 @@ def test_only_the_finer_layer_earns_the_detail_level():
 def test_a_plain_series_has_no_detail_level():
     for name in ("sectionals", "ifr-low", "ifr-high", "tac"):
         assert series(name).detail_zoom == 0 and not series(name).detail_layers
+
+
+# -- series from other publishers, and the world-wide composite ------------
+
+WORLD = "worldwide-vfr"
+
+
+def test_the_worldwide_composite_is_stepped_and_paints_the_faa_last():
+    world = series(WORLD)
+    assert world.is_composite and world.stepped
+    names = [m.name for m in world.members]
+    # The FAA's own charts are what the rest is laid around, so they are on top.
+    assert names[-2:] == ["sectionals", "tac"]
+    # A community chart sits under an official one of the same country.
+    assert names.index("ofm") < names.index("ch-icao")
+    assert names.index("ofm") < names.index("dk-icao")
+    # Coarse under fine.
+    assert names.index("dk-icao") < names.index("dk-250")
+    assert world.max_zoom == max(m.max_zoom for m in world.members)
+
+
+def test_a_composite_of_a_composite_is_taken_apart_into_its_sheets_series():
+    import dataclasses
+    import chart_series
+    nested = dataclasses.replace(series(WORLD), name="nested",
+                                 layers=("faa-caribbean", "sectionals-tac"))
+    chart_series.SERIES["nested"] = nested
+    try:
+        assert [m.name for m in nested.members] == ["faa-caribbean", "sectionals", "tac"]
+    finally:
+        del chart_series.SERIES["nested"]
+
+
+@pytest.mark.parametrize("name", [m.name for m in series(WORLD).members])
+def test_every_layer_says_who_published_it_and_on_what_terms(name):
+    s = series(name)
+    assert s.publisher and s.licence.name and s.licence.url
+    # Attribution is what a viewer shows; a layer without one cannot be credited.
+    assert s.licence.attribution
+    # A licence that is not plainly open says why, for whoever reviews it.
+    if not s.licence.redistributable:
+        assert s.licence.note
+
+
+def test_only_terms_that_were_read_and_allow_it_are_redistributable():
+    allowed = {m.name for m in series(WORLD).members if m.licence.redistributable}
+    assert allowed == {"faa-caribbean", "ofm", "ch-icao", "sectionals", "tac"}
+
+
+@pytest.mark.parametrize("name", [m.name for m in series(WORLD).members])
+def test_a_layer_has_a_detector_or_is_map_from_edge_to_edge(name):
+    s = series(name)
+    assert bool(s.detector) != s.whole_image
+
+
+@pytest.mark.parametrize("name", ["ofm", "ch-icao", "dk-icao", "dk-250", "es-vfr500", "br-wac"])
+def test_other_publishers_series_name_a_fetcher_and_what_it_needs(name):
+    s = series(name)
+    assert s.fetcher in ("links", "urls", "ofm")
+    if s.fetcher == "links":
+        assert s.index_url and "(?P<sheet>" in s.link_pattern
+    if s.fetcher == "urls":
+        assert s.urls and all(s.wants_tif(u.rsplit("/", 1)[-1]) for u in s.urls)
+    if s.fetcher == "ofm":
+        assert s.regions and all(s.wants_tif(f"{r}.tif") for r in s.regions)
+
+
+def test_the_faa_caribbean_charts_are_a_sibling_of_the_sectionals():
+    s = series("faa-caribbean")
+    assert s.fetcher == "faa" and s.files_path == "Caribbean/"
+    assert s.wants_zip("Caribbean_1_VFR.zip") and not s.wants_zip("Caribbean.zip")
+    assert s.wants_tif("Caribbean 2 VFR Chart.tif")
+
+
+@pytest.mark.parametrize("name, zoom", [
+    ("faa-caribbean", 11), ("br-wac", 11), ("ofm", 12), ("ch-icao", 12),
+    ("dk-icao", 12), ("es-vfr500", 12), ("dk-250", 13),
+])
+def test_other_publishers_max_zoom(name, zoom):
+    """Each matches where its prepared sheets stop holding detail: 1:1,000,000
+    sheets upsampled reach z11.8, 1:500,000 ones z12.4, 1:250,000 ones z13 as
+    downloaded, and open flightmaps' tiles are z12 exactly."""
+    assert series(name).max_zoom == zoom
+
+
+def test_a_public_build_never_lands_on_the_full_tileset():
+    world = series(WORLD)
+    assert world.public_tileset != world.tileset
+    assert world.public_tileset.name == "tileset-worldwide-vfr-public"
