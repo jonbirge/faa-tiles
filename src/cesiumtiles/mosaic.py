@@ -23,10 +23,16 @@ This module renders that directly, tile by tile:
 Sources that straddle the antimeridian are handled by unwrapping each footprint
 around its own centre meridian and warping with a whole-world x offset, so a tile
 on either side of 180 degrees draws from the same sheet.
+
+A mosaic of sources drawn at very different scales is built **stepped**: each
+source says how deep it earns tiles (``MosaicSource.zoom``), and every level
+past the coarsest of them is sparse, holding only the tiles a source that earns
+that level reaches. See :func:`plan_stepped`.
 """
 
 from __future__ import annotations
 
+import bisect
 import json
 import math
 import multiprocessing as mp
@@ -53,7 +59,8 @@ osr.UseExceptions()
 
 __all__ = [
     "Limits", "MapArea", "MosaicSource", "Polygon", "PreparedSource",
-    "build_mosaic", "covering_arc", "plan_detail_tiles", "plan_tiles", "prepare_sources",
+    "build_mosaic", "covering_arc", "plan_detail_tiles", "plan_stepped", "plan_tiles",
+    "prepare_sources",
 ]
 
 EARTH_RADIUS = 6378137.0
@@ -298,6 +305,10 @@ class MosaicSource:
     # level. Only a detail source puts a tile on that level; every source then
     # paints into the tiles it plans (see ``detail_zoom``).
     detail: bool = False
+    # The deepest level this source earns tiles at. Setting it on any source
+    # makes the build stepped (see ``plan_stepped``); a source that leaves it
+    # unset in a stepped build earns the deepest level there is.
+    zoom: int | None = None
 
 
 @dataclass
@@ -313,6 +324,7 @@ class PreparedSource:
     native_zoom: int
     mask_path: str | None = None
     detail: bool = False
+    zoom: int | None = None
 
 
 def _wgs84_based(wkt: str) -> str:
@@ -434,6 +446,7 @@ def _prepare(source: MosaicSource) -> PreparedSource | None:
         lat_range=(y_to_lat(min_y), y_to_lat(max_y)),
         native_zoom=native,
         detail=source.detail,
+        zoom=source.zoom,
     )
 
 
@@ -451,6 +464,31 @@ def prepare_sources(sources: Sequence[MosaicSource]) -> list[PreparedSource]:
     return prepared
 
 
+def _row_spans(source: PreparedSource, z: int):
+    """A source's reach at zoom ``z`` as ``(row, first column, last column)``.
+
+    The footprint is cut into tile-row strips and each strip's x extent gives
+    its columns, which are unwrapped: they run past the grid where the
+    footprint runs past the antimeridian.
+    """
+    n = 1 << z
+    span = 2 * MERCATOR_HALF_WORLD / n
+    eps = 1e-9
+    footprint = ogr.CreateGeometryFromWkt(source.footprint_wkt)
+    min_x, max_x, min_y, max_y = footprint.GetEnvelope()
+    row_first = max(0, math.floor((MERCATOR_HALF_WORLD - max_y) / span + eps))
+    row_last = min(n - 1, math.ceil((MERCATOR_HALF_WORLD - min_y) / span - eps) - 1)
+    for ty in range(row_first, row_last + 1):
+        north = MERCATOR_HALF_WORLD - ty * span
+        strip = footprint.Intersection(_box(min_x - span, north - span, max_x + span, north))
+        if strip.IsEmpty() or strip.GetArea() <= 0:
+            continue
+        sx0, sx1, _, _ = strip.GetEnvelope()
+        col_first = math.floor((sx0 + MERCATOR_HALF_WORLD) / span + eps)
+        col_last = math.ceil((sx1 + MERCATOR_HALF_WORLD) / span - eps) - 1
+        yield ty, col_first, col_last
+
+
 def plan_tiles(prepared: Sequence[PreparedSource], z: int) -> dict[tuple[int, int], list[tuple[int, int]]]:
     """Map each tile ``(x, y)`` at zoom ``z`` to its contributors.
 
@@ -461,25 +499,68 @@ def plan_tiles(prepared: Sequence[PreparedSource], z: int) -> dict[tuple[int, in
     renders empty and is not written; it never misses one.
     """
     n = 1 << z
-    span = 2 * MERCATOR_HALF_WORLD / n
-    eps = 1e-9
     plan: dict[tuple[int, int], list[tuple[int, int]]] = {}
     for index, source in enumerate(prepared):
-        footprint = ogr.CreateGeometryFromWkt(source.footprint_wkt)
-        min_x, max_x, min_y, max_y = footprint.GetEnvelope()
-        row_first = max(0, math.floor((MERCATOR_HALF_WORLD - max_y) / span + eps))
-        row_last = min(n - 1, math.ceil((MERCATOR_HALF_WORLD - min_y) / span - eps) - 1)
-        for ty in range(row_first, row_last + 1):
-            north = MERCATOR_HALF_WORLD - ty * span
-            strip = footprint.Intersection(_box(min_x - span, north - span, max_x + span, north))
-            if strip.IsEmpty() or strip.GetArea() <= 0:
-                continue
-            sx0, sx1, _, _ = strip.GetEnvelope()
-            col_first = math.floor((sx0 + MERCATOR_HALF_WORLD) / span + eps)
-            col_last = math.ceil((sx1 + MERCATOR_HALF_WORLD) / span - eps) - 1
+        for ty, col_first, col_last in _row_spans(source, z):
             for tx in range(col_first, col_last + 1):
                 wrap = tx // n
                 plan.setdefault((tx - wrap * n, ty), []).append((index, wrap))
+    return plan
+
+
+def plan_stepped(prepared: Sequence[PreparedSource], z: int,
+                 zooms: Sequence[int]) -> dict[tuple[int, int], list[tuple[int, int]]]:
+    """The plan at zoom ``z`` of a stepped mosaic: only tiles a source that
+    earns this level reaches, each with *every* source that reaches it.
+
+    ``zooms[i]`` is the deepest level source ``i`` earns. A mosaic of the world
+    mixes charts drawn at 1:1,000,000 with charts at 1:250,000; tiling all of
+    it at the finest sheets' zoom would magnify the coarse ones sixteenfold
+    over most of the planet. So each level holds the tiles its own sources and
+    finer ones reach, and nothing else -- the generalisation of
+    :func:`plan_detail_tiles` from one sparse level to a staircase of them. A
+    viewer asking for a tile a level does not have falls back to the stretched
+    parent, as it does over ocean.
+
+    Coarser sources still paint into the tiles that are kept, for the reason
+    the detail level gives: a fine sheet's edge then sits on the magnified
+    sheet beneath it rather than on a transparent boundary a tile wide. They
+    are looked up against the kept tiles rather than planned in full, because a
+    coarse sheet reaches tens of thousands of tiles at a level it does not earn.
+    """
+    n = 1 << z
+    plan: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for index, source in enumerate(prepared):
+        if zooms[index] >= z:
+            for ty, col_first, col_last in _row_spans(source, z):
+                for tx in range(col_first, col_last + 1):
+                    wrap = tx // n
+                    plan.setdefault((tx - wrap * n, ty), []).append((index, wrap))
+    if not plan or all(zoom >= z for zoom in zooms):
+        return plan
+
+    # The kept columns of each row, sorted, so a coarse source's span of a row
+    # is a bisection rather than a walk along it.
+    rows: dict[int, list[int]] = {}
+    for x, y in plan:
+        rows.setdefault(y, []).append(x)
+    for columns in rows.values():
+        columns.sort()
+    for index, source in enumerate(prepared):
+        if zooms[index] >= z:
+            continue
+        for ty, col_first, col_last in _row_spans(source, z):
+            columns = rows.get(ty)
+            if not columns:
+                continue
+            # Unwrapped columns cover one world per value of ``wrap``.
+            for wrap in range(col_first // n, col_last // n + 1):
+                lo = max(col_first, wrap * n) - wrap * n
+                hi = min(col_last, wrap * n + n - 1) - wrap * n
+                for k in range(bisect.bisect_left(columns, lo), bisect.bisect_right(columns, hi)):
+                    plan[(columns[k], ty)].append((index, wrap))
+    for contributors in plan.values():
+        contributors.sort()
     return plan
 
 
@@ -665,11 +746,6 @@ def _render_top(task):
     Returns ``(tiles planned in this block, list of (x, y) written)``.
     """
     z, block_x, block_y, cells = task
-    span = 2 * MERCATOR_HALF_WORLD / (1 << z)
-    side = BLOCK_TILES
-    west = -MERCATOR_HALF_WORLD + block_x * span
-    north = MERCATOR_HALF_WORLD - block_y * span
-    pixels_across = side * TILE_SIZE
 
     if _worker["resume"] and all(_tile_path(z, x, y).exists() for x, y in cells):
         return len(cells), list(cells)
@@ -677,6 +753,31 @@ def _render_top(task):
     # A source can reach a block in more than one copy of the world near the
     # antimeridian, so the warp is keyed on (source, wrap), not source alone.
     layers = sorted({pair for contributors in cells.values() for pair in contributors})
+    color, alpha = _composite_block(z, block_x, block_y, layers)
+
+    written = []
+    for (x, y) in cells:
+        r0, c0 = (y - block_y) * TILE_SIZE, (x - block_x) * TILE_SIZE
+        tile_alpha = alpha[r0:r0 + TILE_SIZE, c0:c0 + TILE_SIZE]
+        if tile_alpha.max() <= 0.5 / 255.0:
+            continue
+        tile_color = color[:, r0:r0 + TILE_SIZE, c0:c0 + TILE_SIZE]
+        _write_tile(_tile_path(z, x, y), *_finish(tile_color, tile_alpha))
+        written.append((x, y))
+    return len(cells), written
+
+
+def _composite_block(z, block_x, block_y, layers):
+    """Warp ``layers`` over one block of tiles and composite them in order.
+
+    ``layers`` are ``(source_index, wrap)``, bottom first. Returns premultiplied
+    colour ``(3, N, N)`` in 0..255 and alpha ``(N, N)`` in 0..1.
+    """
+    span = 2 * MERCATOR_HALF_WORLD / (1 << z)
+    side = BLOCK_TILES
+    west = -MERCATOR_HALF_WORLD + block_x * span
+    north = MERCATOR_HALF_WORLD - block_y * span
+    pixels_across = side * TILE_SIZE
 
     color = np.zeros((3, pixels_across, pixels_across), np.float32)
     alpha = np.zeros((pixels_across, pixels_across), np.float32)
@@ -696,14 +797,76 @@ def _render_top(task):
         alpha += remaining * layer_alpha
         if alpha.min() >= 1.0 - 1e-6:
             break
+    return color, alpha
 
+
+def _child_quarter(z, x, y):
+    """Tile ``(z, x, y)`` box-filtered to half size, premultiplied, as
+    ``(4, 128, 128)`` with colour in 0..255 and alpha in 0..1; None if the tile
+    was never written."""
+    child = _tile_path(z, x, y)
+    if not child.exists():
+        return None
+    pixels = gdal.Open(str(child)).ReadAsArray().astype(np.float32)
+    a = pixels[3] / 255.0 if pixels.shape[0] == 4 else np.ones(pixels.shape[1:], np.float32)
+    full = np.empty((4, TILE_SIZE, TILE_SIZE), np.float32)
+    full[:3] = pixels[:3] * a
+    full[3] = a
+    half = TILE_SIZE // 2
+    return full.reshape(4, half, 2, half, 2).mean(axis=(2, 4))
+
+
+def _render_stepped(task):
+    """One block of a stepped level: warp what this level's own sources draw,
+    and take from the level below whatever it already holds.
+
+    ``task`` is ``(z, block_x, block_y, cells)``; ``cells`` maps each planned
+    ``(x, y)`` to ``(contributors, quadrants)``, where ``quadrants`` is a
+    4-bit mask of the children planned a level down (bit ``2 * dy + dx``).
+
+    A planned child is a complete picture of its quarter, because every source
+    paints into every kept tile. So its quarter of the parent is its box-filtered
+    pixels -- the same average the overview cascade takes -- and only the
+    quarters with no child are warped. Those hold nothing finer than this
+    level: a finer source would have planned the child. ``contributors`` are
+    therefore only the sources that earn this level or less, so a fine sheet is
+    never minified fourfold to fill a tile its own level already drew.
+
+    Returns ``(tiles planned in this block, list of (x, y) written)``.
+    """
+    z, block_x, block_y, cells = task
+    if _worker["resume"] and all(_tile_path(z, x, y).exists() for x, y in cells):
+        return len(cells), list(cells)
+
+    # Cells whose four children are all planned need no warp at all.
+    layers = sorted({pair for contributors, quadrants in cells.values()
+                     if quadrants != 0b1111 for pair in contributors})
+    if layers:
+        color, alpha = _composite_block(z, block_x, block_y, layers)
+    else:
+        side = BLOCK_TILES * TILE_SIZE
+        color = np.zeros((3, side, side), np.float32)
+        alpha = np.zeros((side, side), np.float32)
+
+    half = TILE_SIZE // 2
     written = []
-    for (x, y) in cells:
+    for (x, y), (_contributors, quadrants) in cells.items():
         r0, c0 = (y - block_y) * TILE_SIZE, (x - block_x) * TILE_SIZE
+        tile_color = color[:, r0:r0 + TILE_SIZE, c0:c0 + TILE_SIZE]
         tile_alpha = alpha[r0:r0 + TILE_SIZE, c0:c0 + TILE_SIZE]
+        for dy in (0, 1):
+            for dx in (0, 1):
+                if not quadrants & (1 << (2 * dy + dx)):
+                    continue
+                quarter = _child_quarter(z + 1, 2 * x + dx, 2 * y + dy)
+                rows = slice(dy * half, dy * half + half)
+                columns = slice(dx * half, dx * half + half)
+                # A planned child that was never written drew nothing, and
+                # that is what its quarter holds.
+                tile_color[:, rows, columns] = 0.0 if quarter is None else quarter[:3]
+                tile_alpha[rows, columns] = 0.0 if quarter is None else quarter[3]
         if tile_alpha.max() <= 0.5 / 255.0:
             continue
-        tile_color = color[:, r0:r0 + TILE_SIZE, c0:c0 + TILE_SIZE]
         _write_tile(_tile_path(z, x, y), *_finish(tile_color, tile_alpha))
         written.append((x, y))
     return len(cells), written
@@ -754,6 +917,46 @@ def _build_cpu(prepared, plan, top, min_zoom, workers, initargs, quiet,
             _render_top_cpu(pool, detail_plan, detail_zoom, quiet)
         written = _render_top_cpu(pool, plan, top, quiet)
         for z in range(top - 1, min_zoom - 1, -1):
+            parents = sorted({(x >> 1, y >> 1) for x, y in written})
+            progress = _Progress(f"z{z}", len(parents), quiet)
+            written = set()
+            for x, y, ok in pool.imap_unordered(_render_parent, [(z, x, y) for x, y in parents], chunksize=16):
+                if ok:
+                    written.add((x, y))
+                progress.step()
+
+
+def _build_stepped_cpu(prepared, zooms, full, top, min_zoom, workers, initargs, quiet, say):
+    """The CPU backend for a stepped mosaic: one sparse level at a time from
+    the deepest, each taking what it can from the one below, then the ordinary
+    overview cascade beneath the level every source earns."""
+    with mp.get_context("spawn").Pool(workers, _init_worker, initargs) as pool:
+        below: set[tuple[int, int]] = set()
+        written: set[tuple[int, int]] = set()
+        for z in range(top, full - 1, -1):
+            plan = plan_stepped(prepared, z, zooms)
+            grouped: dict[tuple[int, int], dict] = {}
+            warped = 0
+            for (x, y), contributors in sorted(plan.items()):
+                quadrants = 0
+                for dy in (0, 1):
+                    for dx in (0, 1):
+                        if (2 * x + dx, 2 * y + dy) in below:
+                            quadrants |= 1 << (2 * dy + dx)
+                own = [pair for pair in contributors if zooms[pair[0]] <= z]
+                warped += quadrants != 0b1111
+                key = (x - x % BLOCK_TILES, y - y % BLOCK_TILES)
+                grouped.setdefault(key, {})[(x, y)] = (own, quadrants)
+            say(f"z{z}: {len(plan):,} tiles planned, {warped:,} of them warped and "
+                f"{len(plan) - warped:,} taken from z{z + 1}")
+            tasks = [(z, bx, by, cells) for (bx, by), cells in sorted(grouped.items())]
+            progress = _Progress(f"z{z}", len(plan), quiet)
+            written = set()
+            for planned, done in pool.imap_unordered(_render_stepped, tasks, chunksize=1):
+                written.update(done)
+                progress.step(planned)
+            below = set(plan)
+        for z in range(full - 1, min_zoom - 1, -1):
             parents = sorted({(x >> 1, y >> 1) for x, y in written})
             progress = _Progress(f"z{z}", len(parents), quiet)
             written = set()
@@ -834,6 +1037,12 @@ def build_mosaic(
     ``tolerance`` is how far the warp may cut the projection's corner, in source
     pixels, on either backend: 0 evaluates it exactly (see ERROR_THRESHOLD).
 
+    If any source sets ``zoom`` the mosaic is **stepped**: ``max_zoom`` caps
+    the deepest level, every source earns tiles down to its own ``zoom``, and
+    the pyramid is full only to the shallowest of those (``fullzoom`` in the
+    metadata). ``detail_zoom`` is the one-level special case and cannot be
+    combined with it. The CPU backend only.
+
     ``extra_metadata`` is merged into ``metadata.json`` for what only the caller
     knows -- who published each layer and on what terms. It cannot replace a key
     the build measures.
@@ -856,15 +1065,37 @@ def build_mosaic(
     say = (lambda *a: None) if quiet else (lambda *a: print(*a, flush=True))
     started = time.monotonic()
 
+    stepped = any(source.zoom is not None for source in sources)
+    if stepped and detail_zoom is not None:
+        raise ValueError("detail_zoom cannot be combined with per-source zooms; "
+                         "give the detail sources a deeper zoom instead")
+    if stepped and backend != "cpu":
+        raise ValueError("a stepped mosaic (per-source zooms) is built on the cpu backend only")
+
     prepared = prepare_sources(sources)
     native = max(p.native_zoom for p in prepared)
-    top = native if max_zoom is None else max_zoom
+    zooms: list[int] = []
+    full = None
+    if stepped:
+        deepest = max(p.zoom for p in prepared if p.zoom is not None)
+        top = deepest if max_zoom is None else min(max_zoom, deepest)
+        zooms = [top if p.zoom is None else min(p.zoom, top) for p in prepared]
+        full = min(zooms)
+        if min_zoom > full:
+            raise ValueError(f"min_zoom ({min_zoom}) exceeds the shallowest source zoom ({full})")
+    else:
+        top = native if max_zoom is None else max_zoom
     if min_zoom > top:
         raise ValueError(f"min_zoom ({min_zoom}) exceeds max_zoom ({top})")
 
-    plan = plan_tiles(prepared, top)
-    say(f"{len(prepared)} sources, native zoom z{native}, building z{min_zoom}-z{top}; "
-        f"{len(plan):,} tiles planned at z{top}")
+    if stepped:
+        plan = {}
+        say(f"{len(prepared)} sources, native zoom z{native}, building z{min_zoom}-z{top} "
+            f"stepped: full to z{full}, sparse past it")
+    else:
+        plan = plan_tiles(prepared, top)
+        say(f"{len(prepared)} sources, native zoom z{native}, building z{min_zoom}-z{top}; "
+            f"{len(plan):,} tiles planned at z{top}")
 
     detail_plan = None
     if detail_zoom is not None:
@@ -926,6 +1157,9 @@ def build_mosaic(
             # not the codecs, was 60% of a parent's cost in numpy.
             gpumosaic.render_overviews(tile_dir, written, top, min_zoom, options,
                                        resume=resume, say=say, quiet=quiet)
+        elif stepped:
+            _build_stepped_cpu(prepared, zooms, full, top, min_zoom, workers, initargs,
+                               quiet, say)
         else:
             _build_cpu(prepared, plan, top, min_zoom, workers, initargs, quiet,
                        detail_plan, detail_zoom)
@@ -941,7 +1175,9 @@ def build_mosaic(
     # off max(per_zoom). A detail level is sparse by design, so its columns and
     # rows describe the handful of terminal areas it holds; read as the
     # tileset's bounds they would put the extent around one city.
-    full_top = max(z for z in per_zoom if detail_zoom is None or z < detail_zoom)
+    # A stepped mosaic is full only as far as the level every source earns.
+    full_top = max(z for z in per_zoom
+                   if (detail_zoom is None or z < detail_zoom) and (full is None or z <= full))
     n = 1 << full_top
     columns = {int(p.name) for p in (tile_dir / str(full_top)).iterdir() if p.name.isdigit()}
     _, _, y_min, y_max = extent_by_zoom[full_top]

@@ -18,6 +18,7 @@ from cesiumtiles.mosaic import (
     Polygon,
     build_mosaic,
     covering_arc,
+    plan_stepped,
     plan_tiles,
     prepare_sources,
 )
@@ -432,3 +433,147 @@ def test_a_detail_level_must_be_past_max_zoom_and_have_a_source(tmp_path):
     with pytest.raises(ValueError, match="no source is marked detail"):
         build_mosaic([MosaicSource(wide), MosaicSource(fine)], tmp_path / "b",
                      max_zoom=DETAIL_TOP, detail_zoom=DETAIL_LEVEL, workers=1, quiet=True)
+
+
+# -- stepped mosaics --------------------------------------------------------
+#
+# A mosaic of the world mixes charts at 1:1,000,000 with charts at 1:250,000.
+# Each source says how deep it earns tiles, and every level past the coarsest
+# is sparse: the detail level, generalised from one step to a staircase.
+
+GREEN = (30, 170, 60)
+STEP_FULL = 7
+STEP_MID = 8
+STEP_TOP = 9
+MID = (-108.0, 37.0, -106.0, 39.0)
+
+
+def _stepped_sources(root):
+    root.mkdir(parents=True, exist_ok=True)
+    return [
+        MosaicSource(_solid(root / "a_wide.tif", WIDE, RED), zoom=STEP_FULL),
+        MosaicSource(_solid(root / "b_mid.tif", MID, GREEN), zoom=STEP_MID),
+        MosaicSource(_solid(root / "c_fine.tif", FINE, BLUE), zoom=STEP_TOP),
+    ]
+
+
+@pytest.fixture(scope="module")
+def stepped_scene(tmp_path_factory):
+    """A wide coarse sheet, a middling one and a small fine one, each earning
+    one level more than the last."""
+    root = tmp_path_factory.mktemp("stepped")
+    out = root / "out"
+    result = build_mosaic(_stepped_sources(root), out, min_zoom=5, lossless=True,
+                          workers=2, quiet=True)
+    return out, result
+
+
+def test_each_level_exists_only_where_a_source_earns_it(stepped_scene):
+    out, result = stepped_scene
+    assert result.max_zoom == STEP_TOP
+    # The fine sheet earns every level.
+    for z in (STEP_FULL, STEP_MID, STEP_TOP):
+        assert _close(_pixel(out, -104.75, 39.75, z=z), BLUE)
+    # The middling sheet stops a level short of the top.
+    assert _close(_pixel(out, -107.0, 38.0, z=STEP_MID), GREEN)
+    assert _pixel(out, -107.0, 38.0, z=STEP_TOP) is None
+    # The wide sheet alone earns only the full level.
+    assert _close(_pixel(out, -102.0, 43.0, z=STEP_FULL), RED)
+    assert _pixel(out, -102.0, 43.0, z=STEP_MID) is None
+    assert _pixel(out, -102.0, 43.0, z=STEP_TOP) is None
+    # Sparse means sparse: a full level would quadruple each time.
+    assert result.per_zoom[STEP_TOP] < result.per_zoom[STEP_MID] < result.per_zoom[STEP_FULL]
+
+
+def test_a_stepped_level_paints_the_coarser_sheets_into_its_tiles(stepped_scene):
+    """Every source paints into a kept tile, so a fine sheet's edge sits on the
+    magnified sheet beneath it, not on a transparent boundary."""
+    out, _ = stepped_scene
+    assert _close(_pixel(out, -105.05, 39.75, z=STEP_TOP), RED)
+    assert _close(_pixel(out, -108.05, 38.0, z=STEP_MID), RED)
+
+
+def test_a_stepped_level_takes_what_the_level_below_already_drew(stepped_scene):
+    """The z8 tile over the fine sheet is its z9 children box-filtered, with
+    the quarters no child covers warped from the coarser sheets."""
+    out, _ = stepped_scene
+    assert _close(_pixel(out, -104.75, 39.75, z=STEP_MID), BLUE)
+    # Same z8 tile, a quarter the fine sheet's z9 tiles do not reach.
+    assert _close(_pixel(out, -105.3, 39.3, z=STEP_MID), RED)
+
+
+def test_stepped_tiles_only_the_coarse_sheet_reaches_match_a_plain_build(tmp_path, stepped_scene):
+    """Where nothing finer reaches, the full level is warped from the same
+    sources as a plain build of that level, so the tiles are byte for byte the
+    same."""
+    out, _ = stepped_scene
+    plain = tmp_path / "plain"
+    sources = [MosaicSource(s.path, s.area) for s in _stepped_sources(tmp_path / "src")]
+    build_mosaic(sources, plain, min_zoom=STEP_FULL, max_zoom=STEP_FULL, lossless=True,
+                 workers=2, quiet=True)
+    n = 2 ** STEP_FULL
+    x = int((-102.0 + 180.0) / 360.0 * n)
+    y = int((1 - math.asinh(math.tan(math.radians(43.0))) / math.pi) / 2 * n)
+    name = f"tiles/{STEP_FULL}/{x}/{y}.webp"
+    assert (out / name).read_bytes() == (plain / name).read_bytes()
+    # And the same tiles exist: stepping changes what is drawn, not where.
+    listing = lambda root: sorted(p.relative_to(root) for p in
+                                  (root / "tiles" / str(STEP_FULL)).rglob("*.webp"))
+    assert listing(out) == listing(plain)
+
+
+def test_metadata_reports_how_far_a_stepped_mosaic_is_full(stepped_scene):
+    out, _ = stepped_scene
+    metadata = json.loads((out / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["maxzoom"] == STEP_TOP
+    assert metadata["fullzoom"] == STEP_FULL
+    west, south, east, north = metadata["bounds"]
+    assert west <= WIDE[0] and south <= WIDE[1] and east >= WIDE[2] and north >= WIDE[3]
+
+
+def test_max_zoom_caps_a_stepped_mosaic(tmp_path):
+    out = tmp_path / "out"
+    result = build_mosaic(_stepped_sources(tmp_path / "src"), out, min_zoom=6,
+                          max_zoom=STEP_MID, lossless=True, workers=2, quiet=True)
+    assert result.max_zoom == STEP_MID
+    # The fine sheet is held to the cap, and still drawn there.
+    assert _close(_pixel(out, -104.75, 39.75, z=STEP_MID), BLUE)
+
+
+def test_plan_stepped_keeps_only_earned_tiles_and_every_source_in_them(tmp_path):
+    prepared = prepare_sources(_stepped_sources(tmp_path))
+    zooms = [STEP_FULL, STEP_MID, STEP_TOP]
+    top = plan_stepped(prepared, STEP_TOP, zooms)
+    everything = plan_tiles(prepared, STEP_TOP)
+    # Only tiles the fine sheet reaches, each listing the wide sheet too.
+    assert top and set(top) < set(everything)
+    assert all(2 in {index for index, _ in tile} for tile in top.values())
+    assert all(top[tile] == everything[tile] for tile in top)
+    # At the level every source earns, it is the ordinary plan.
+    assert plan_stepped(prepared, STEP_FULL, zooms) == plan_tiles(prepared, STEP_FULL)
+
+
+def test_a_stepped_mosaic_refuses_what_it_cannot_do(tmp_path):
+    sources = _stepped_sources(tmp_path / "src")
+    with pytest.raises(ValueError, match="detail_zoom cannot be combined"):
+        build_mosaic(sources, tmp_path / "a", detail_zoom=STEP_TOP + 1, workers=1, quiet=True)
+    with pytest.raises(ValueError, match="cpu backend only"):
+        build_mosaic(sources, tmp_path / "b", backend="gpu", workers=1, quiet=True)
+    with pytest.raises(ValueError, match="shallowest source zoom"):
+        build_mosaic(sources, tmp_path / "c", min_zoom=STEP_MID, workers=1, quiet=True)
+
+
+def test_extra_metadata_is_added_and_cannot_replace_what_was_measured(tmp_path):
+    red = _solid(tmp_path / "a_red.tif", (-106.0, 39.0, -104.0, 41.0), RED)
+    out = tmp_path / "out"
+    build_mosaic([MosaicSource(red)], out, min_zoom=6, max_zoom=7, lossless=True, workers=1,
+                 quiet=True, extra_metadata={"attribution": "Someone", "layers": [{"name": "x"}]})
+    metadata = json.loads((out / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["attribution"] == "Someone"
+    assert metadata["layers"] == [{"name": "x"}]
+    assert metadata["maxzoom"] == 7
+    # Refused before anything is built, not after the whole mosaic.
+    with pytest.raises(ValueError, match="measured keys: tiles"):
+        build_mosaic([MosaicSource(red)], tmp_path / "never", max_zoom=7, workers=1, quiet=True,
+                     extra_metadata={"tiles": 0})
+    assert not (tmp_path / "never").exists()
