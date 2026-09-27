@@ -244,11 +244,16 @@ def fetch_files(chart_series, out: Path, wanted: dict[str, tuple[str, str]],
 def fetch_links(chart_series, out: Path, list_only: bool) -> int:
     links = page_links(chart_series.index_url, read_text(chart_series.index_url))
     found = latest_by_sheet(links, chart_series.link_pattern)
-    # A scan is kept as the scan it is; it becomes <sheet>.tif when it is
-    # registered. Either way the series' pattern is for that name.
-    suffix = chart_series.scan_suffix or ".tif"
-    wanted = {f"{sheet}{suffix}": item for sheet, item in found.items()
-              if chart_series.wants_tif(f"{sheet}.tif")}
+    # A scan is kept as the scan it is, and a PDF as the PDF it is, in the
+    # directory render_pdfs.py reads; each becomes <sheet>.tif later. Either
+    # way the series' pattern is for that name.
+    if chart_series.geopdf:
+        out = chart_series.pdf_directory if out == chart_series.directory else out / "pdf"
+        wanted = {f"{sheet}.pdf": item for sheet, item in found.items()}
+    else:
+        suffix = chart_series.scan_suffix or ".tif"
+        wanted = {f"{sheet}{suffix}": item for sheet, item in found.items()
+                  if chart_series.wants_tif(f"{sheet}.tif")}
     if not wanted:
         print(f"no link on {chart_series.index_url} matches the series' pattern; "
               "the publisher may have changed its page", file=sys.stderr)

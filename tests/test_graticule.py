@@ -292,3 +292,23 @@ def test_what_is_expected_of_a_graticule_follows_from_the_sheet(scan):
     # a scan that is not square. A wider scan reaches further from the middle.
     assert 0.06 < want["lean"] < 0.15
     assert g.expected(scan.sheet(), 4 * scan.width)["lean"] > 2 * want["lean"]
+
+
+def test_the_spacing_is_measured_on_the_scan_not_taken_from_the_sheet():
+    """Scans of one series were made at more than one resolution. The lines
+    themselves say how far apart they are."""
+    lines = [40, 300, 388, 476, 565, 653, 741, 1000]       # 88 apart, among others
+    assert g.commonest_spacing(lines, 100.0) == pytest.approx(88.2, abs=0.5)
+    # Nothing near what was expected: the guess stands.
+    assert g.commonest_spacing([0, 300, 600, 900], 100.0) == 100.0
+    assert g.commonest_spacing([10], 100.0) == 100.0
+
+
+def test_a_scan_at_another_resolution_is_still_registered(scan):
+    """The sheet says 250 m a pixel; this scan is told 290, as if it were one of
+    a series scanned finer than the rest."""
+    import dataclasses
+    coarse = dataclasses.replace(scan.sheet(), pixel_size=290.0)
+    registered = g.register(scan.rgb, coarse, g.Reading("south", SOUTH, "west", WEST))
+    assert len(registered.control) >= 0.9 * _drawn(scan)
+    assert registered.pixel_size[0] == pytest.approx(PIXEL, rel=0.003)

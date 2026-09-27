@@ -10,9 +10,11 @@ dpi. That is *rendering*, not upsampling: every pixel is drawn from the vector
 geometry, so the type and line work antialias properly. Nothing is upscaled and
 no model is involved.
 
-The PDFs carry no georeferencing of their own, so each sheet's affine, CRS and
-window into the page come from the reviewed manifest that
-``detect_pdf_windows.py`` writes. The affine's four scale and rotation terms are
+The FAA's PDFs carry no georeferencing of their own, so each sheet's affine, CRS
+and window into the page come from the reviewed manifest that
+``detect_pdf_windows.py`` writes. Other publishers' PDFs do carry it, and for
+those (``geopdf`` in the series) the same record is read out of the PDF itself
+by ``pdf_georef.py``. The affine's four scale and rotation terms are
 divided by the scale, leaving the sheet on exactly the same ground at twice the
 resolution.
 
@@ -132,11 +134,11 @@ def main(argv=None) -> int:
     chart_series = series(args.series)
     if not chart_series.pdf_scale:
         raise SystemExit(f"{chart_series.name} does not render PDFs")
-    if not chart_series.pdf_manifest.is_file():
+    if not chart_series.geopdf and not chart_series.pdf_manifest.is_file():
         raise SystemExit(f"no {chart_series.pdf_manifest}; run "
                          f"scripts/detect_pdf_windows.py {chart_series.name} first")
 
-    manifest = json.loads(chart_series.pdf_manifest.read_text(encoding="utf-8"))
+    manifest = chart_series.pdf_entries()
     names = args.charts or sorted(n for n in manifest if chart_series.wants_tif(n))
     missing = [n for n in names if n not in manifest]
     if missing:
@@ -145,7 +147,9 @@ def main(argv=None) -> int:
 
     out_dir = chart_series.render_directory
     out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = chart_series.pdf_manifest.stat().st_mtime
+    # A series that carries its own georeferencing has no manifest to be newer
+    # than: what it is drawn from is the PDF, which is checked below.
+    stamp = 0.0 if chart_series.geopdf else chart_series.pdf_manifest.stat().st_mtime
     todo = []
     for name in names:
         entry = manifest[name]

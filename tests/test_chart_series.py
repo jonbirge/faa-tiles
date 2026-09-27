@@ -224,6 +224,24 @@ def test_every_series_names_a_detector_or_is_a_composite():
             assert _ways_to_a_map_area(s) == 1, s.name
 
 
+@pytest.mark.parametrize("name", ["ro-icao", "tw-vfr"])
+def test_charts_that_carry_their_own_georeferencing_are_drawn_from_it(name):
+    s = series(name)
+    assert s.geopdf and s.fetcher == "links"
+    # 300 dpi twice over: 21 m a pixel at 1:500,000, which z12 minifies.
+    assert (s.pdf_dpi, s.pdf_scale, s.pixel_scale, s.max_zoom) == (300, 2, 2, 12)
+    # Nothing to register them against and nothing to upsample: they are
+    # rendered, and the build tiles the renders.
+    assert [script for script, _ in s.stages] == ["render_pdfs.py"]
+    assert s.build_directory == s.render_directory
+    assert not s.upsample_scale and not s.scan_suffix
+
+
+def test_the_key_map_on_a_page_is_not_a_sheet():
+    assert "world" not in series("tw-vfr").pdf_viewports
+    assert series("ro-icao").pdf_viewports == ("Layers",)
+
+
 def _ways_to_a_map_area(s) -> int:
     """A series' map areas are detected in its sheets, or are the whole of
     them, or -- for scans -- are their graticules'. One of the three."""
@@ -320,7 +338,8 @@ def test_every_layer_says_who_published_it_and_on_what_terms(name):
 
 def test_only_terms_that_were_read_and_allow_it_are_redistributable():
     allowed = {m.name for m in series(WORLD).members if m.licence.redistributable}
-    assert allowed == {"onc", "tpc", "faa-caribbean", "ofm", "ch-icao", "sectionals", "tac"}
+    assert allowed == {"onc", "tpc", "faa-caribbean", "ofm", "tw-vfr", "ch-icao", "sectionals",
+                       "tac"}
 
 
 @pytest.mark.parametrize("name", [m.name for m in series(WORLD).members])
@@ -329,7 +348,7 @@ def test_a_layer_has_one_way_to_its_map_areas(name):
 
 
 @pytest.mark.parametrize("name", ["ofm", "ch-icao", "dk-icao", "dk-250", "es-vfr500", "br-wac",
-                                  "onc", "tpc"])
+                                  "onc", "tpc", "ro-icao", "tw-vfr"])
 def test_other_publishers_series_name_a_fetcher_and_what_it_needs(name):
     s = series(name)
     assert s.fetcher in ("links", "urls", "ofm")
@@ -351,6 +370,7 @@ def test_the_faa_caribbean_charts_are_a_sibling_of_the_sectionals():
 @pytest.mark.parametrize("name, zoom", [
     ("faa-caribbean", 11), ("br-wac", 11), ("ofm", 12), ("ch-icao", 12),
     ("dk-icao", 12), ("es-vfr500", 12), ("dk-250", 13), ("onc", 10), ("tpc", 11),
+    ("ro-icao", 12), ("tw-vfr", 12),
 ])
 def test_other_publishers_max_zoom(name, zoom):
     """Each matches where its prepared sheets stop holding detail: 1:1,000,000

@@ -97,7 +97,7 @@ def check_stages(chart_series) -> None:
     elif chart_series.pdf_scale:
         # Nothing but PDFs is downloaded, so the sheet list comes from the
         # reviewed registration rather than from a directory of GeoTIFFs.
-        manifest = json.loads(chart_series.pdf_manifest.read_text(encoding="utf-8"))
+        manifest = chart_series.pdf_entries()
         names = sorted(n for n in manifest if chart_series.wants_tif(n))
         previous = {n: chart_series.pdf_directory / manifest[n]["pdf"] for n in names}
     else:

@@ -85,10 +85,16 @@ MAX_LEAN = 0.30
 MIN_SPAN = 0.35
 MIN_FILL = 0.5
 
-# How far the spacing between graticule lines may be from what the sheet's
-# stated scale gives, and how far it may change from one interval to the next.
+# How far the spacing between graticule lines may be from the spacing the
+# scan's own lines most often have, and how far it may change from one interval
+# to the next.
 SPACING_TOLERANCE = 0.10
 SPACING_DRIFT = 0.045
+# How far that commonest spacing may be from what the sheet's stated scale and
+# middle latitude give. Wide: scans of one series were made at more than one
+# resolution, and near the poles the meridians' spacing changes by a quarter
+# from the top of a sheet to the bottom.
+SPACING_SEARCH = 0.40
 # Lines that stop this far short of the edge of the scan, in pixels, may stop
 # at a neatline; lines that run closer run off the scan.
 MARGIN = 90.0
@@ -534,6 +540,27 @@ def rhythm(positions, step: float):
     return out
 
 
+def commonest_spacing(positions, step: float) -> float:
+    """The spacing the lines at ``positions`` most often have, among spacings
+    within SPACING_SEARCH of ``step``; ``step`` itself if none is.
+
+    What the sheet's stated scale gives is a guess: the scans of a series are
+    not all at one resolution. What the scan's own lines are spaced at is a
+    measurement. Every pair of lines votes for the gap between them, and the
+    gap with the most others within 4% of it is taken.
+    """
+    positions = np.sort(np.asarray(positions, float))
+    gaps = (positions[None, :] - positions[:, None])[np.triu_indices(len(positions), 1)]
+    gaps = gaps[np.abs(gaps / step - 1) <= SPACING_SEARCH]
+    if len(gaps) < 2:
+        return step
+    votes = [(np.abs(gaps / gap - 1) <= 0.04).sum() for gap in gaps]
+    if max(votes) < 3:
+        return step
+    best = gaps[int(np.argmax(votes))]
+    return float(np.median(gaps[np.abs(gaps / best - 1) <= 0.04]))
+
+
 def pick(lines: list[Line], step: float, extent: int):
     """The graticule among the traced lines: ``[(line, interval number)]`` in
     order across the scan, and the reference they were compared along."""
@@ -544,6 +571,7 @@ def pick(lines: list[Line], step: float, extent: int):
     reference = max(candidates, key=lambda a: sum(line.covers(a) for line in lines))
     crossing_at = sorted((line.at(reference), i) for i, line in enumerate(lines)
                          if line.covers(reference))
+    step = commonest_spacing([p for p, _ in crossing_at], step)
     chosen = rhythm([p for p, _ in crossing_at], step)
     return [(lines[crossing_at[index][1]], number) for index, number in chosen], float(reference)
 

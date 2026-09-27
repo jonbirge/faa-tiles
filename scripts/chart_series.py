@@ -108,6 +108,37 @@ CROWN_LICENCE = Licence(
          "Not redistributable until cleared sheet by sheet.",
 )
 
+ROMATSA_LICENCE = Licence(
+    name="ROMATSA AIP copyright (all rights reserved)",
+    url="https://www.aisro.ro/",
+    attribution="ROMATSA",
+    note="Reproduction needs ROMATSA's permission.",
+)
+
+TAIWAN_LICENCE = Licence(
+    name="Open Government Data License, Taiwan, version 1.0",
+    url="https://data.gov.tw/license",
+    redistributable=True,
+    attribution="Civil Aviation Administration, MOTC (Taiwan)",
+    note="Declared on the CAA's main site; the chart is on a domain of its own with no "
+         "licence text. Read as covered, not confirmed.",
+)
+
+EANS_LICENCE = Licence(
+    name="EANS terms (no reproduction without written consent)",
+    url="https://aim.eans.ee/en/vfr-chart",
+    attribution="Estonian Air Navigation Services",
+    note="Reproduction needs written consent.",
+)
+
+LGS_LICENCE = Licence(
+    name="No policy stated (Latvijas gaisa satiksme)",
+    url="https://ais.lgs.lv/page/VFR_Suport",
+    attribution="Latvijas gaisa satiksme",
+    note="The AIP says its copyright policy is not applicable; the sheet carries "
+         "copyright marks. Unclear is not permission.",
+)
+
 DECEA_LICENCE = Licence(
     name="DECEA usage policy; AISWEB footer shows CC BY 4.0",
     url="https://ajuda.decea.mil.br/app/uploads/2019/04/Pol%C3%ADtica-de-Uso-POR.pdf",
@@ -185,6 +216,15 @@ class Series:
     # those instead (0: tile the GeoTIFFs as downloaded). This is rendering,
     # not upsampling -- every pixel is drawn from the vector geometry.
     pdf_scale: int = 0
+    # The PDFs carry their own georeferencing (pdf_georef.py), so there is no
+    # GeoTIFF to register them against and no reviewed registration: each
+    # sheet's window and affine are read from its PDF. ``pdf_dpi`` is the
+    # resolution ``pdf_scale`` multiplies -- 300 dpi is 42.3 m a pixel at
+    # 1:500,000, a sectional's pitch -- and ``pdf_viewports`` names the
+    # viewports of a page that are sheets (the largest, if none is named).
+    geopdf: bool = False
+    pdf_dpi: int = 300
+    pdf_viewports: tuple[str, ...] = ()
     # Super-resolve the sheets before tiling (0: do not). Weights are a file
     # name under source/models. Only for series whose sheets are rasters at
     # source; a series that renders vector PDFs has nothing to recover.
@@ -312,6 +352,16 @@ class Series:
     def build_directory(self) -> Path:
         """The rasters a build tiles: the last preparation stage's output."""
         return self.stages[-1][1] if self.stages else self.directory
+
+    def pdf_entries(self) -> dict:
+        """What render_pdfs.py draws each sheet from: read out of the PDFs for a
+        series that carries its own georeferencing, and out of the reviewed
+        registration for one that was registered against its GeoTIFFs."""
+        if self.geopdf:
+            import pdf_georef
+            return pdf_georef.manifest(self)
+        import json
+        return json.loads(self.pdf_manifest.read_text(encoding="utf-8"))
 
     @property
     def fetches_tifs(self) -> bool:
@@ -630,6 +680,47 @@ SERIES = {
             # so these reach z13 as downloaded.
             max_zoom=13,
         ),
+        # -- charts that are georeferenced vector PDFs -----------------------
+        #
+        # Drawn from the vector geometry, as the FAA's IFR charts are, with the
+        # registration read out of the PDF itself (pdf_georef.py). 300 dpi
+        # twice over is 21 m a pixel at 1:500,000, which z12 minifies 0.7x.
+        Series(
+            name="ro-icao",
+            title="Romania VFR Chart ICAO 1:500,000",
+            publisher="ROMATSA",
+            licence=ROMATSA_LICENCE,
+            fetcher="links",
+            index_url="https://www.aisro.ro/publications/hartivfrv02.php",
+            link_pattern=r".*/(?P<date>\d{4}_\d{2}_\d{2})_(?P<sheet>LR[A-Z]{2})_ED[\d.]+\.pdf",
+            tif_pattern=r"LR[A-Z]{2}\.tif",
+            geopdf=True,
+            pdf_scale=2,
+            # The page's other viewport is the key map in the legend.
+            pdf_viewports=("Layers",),
+            # The viewport is the map's frame, and nothing is printed over it.
+            whole_image=True,
+            max_zoom=12,
+        ),
+        Series(
+            name="tw-vfr",
+            title="Taiwan VFR Chart 1:500,000",
+            publisher="Civil Aviation Administration, MOTC",
+            licence=TAIWAN_LICENCE,
+            fetcher="links",
+            index_url="https://www.eaipvfr.tw/",
+            link_pattern=r".*/PDF/(?P<sheet>Taiwan_Eng_Map)_(?P<date>\d{8})_print\.pdf",
+            tif_pattern=r"Taiwan_Eng_Map(-[a-z0-9-]+)?\.tif",
+            geopdf=True,
+            pdf_scale=2,
+            # The island, and the four panels beside it: Kinmen, Matsu, the
+            # north of the island enlarged, and the restricted VFR routes. Not
+            # "world", which is the key map. Painted in name order, so the
+            # island is on top of the panels that overlap it.
+            pdf_viewports=("kinmen", "Matsu", "Taiwan"),
+            whole_image=True,
+            max_zoom=12,
+        ),
         Series(
             name="es-vfr500",
             title="ENAIRE VFR500 (Spain 1:500,000)",
@@ -722,8 +813,8 @@ SERIES = {
             # official one where both are free (the user's call); and the FAA's
             # own sectionals and terminal area charts over everything they
             # reach, since they are what the rest is laid around.
-            layers=("onc", "tpc", "br-wac", "faa-caribbean", "ofm", "es-vfr500", "dk-icao",
-                    "ch-icao", "dk-250", "sectionals", "tac"),
+            layers=("onc", "tpc", "br-wac", "faa-caribbean", "ofm", "ro-icao", "tw-vfr",
+                    "es-vfr500", "dk-icao", "ch-icao", "dk-250", "sectionals", "tac"),
             stepped=True,
             max_zoom=13,
         ),
