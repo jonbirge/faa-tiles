@@ -95,6 +95,10 @@ PANEL = (CELL[0] // 2, CELL[1])
 # and R-8, whose titles are 1,500 px wide with the imprint in the 500 px below.
 IMPRINT = (1500, 750)
 IMPRINT_FROM = (-200, 40)
+# Looked for in the corners of the paper instead: this much of the foot of the
+# sheet, from this far in from its sides as a share of its width.
+PAPER_FOOT = 1000
+PAPER_INSET = 0.04
 
 
 def load_index(chart_series) -> dict:
@@ -104,12 +108,27 @@ def load_index(chart_series) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+# Bands reaching past this latitude are drawn on a polar stereographic
+# projection, true to scale at the latitude their sheets give.
+POLAR = 84.0
+POLAR_TRUE_SCALE = 81 + 2 / 60
+
+
 def crs_for(band, longitude: float) -> str:
     """The projection of a sheet in the latitude band ``band``: Lambert
     conformal conic with its standard parallels 1 degree 20 minutes inside the
-    band, which is printed on the sheets. The central meridian is the sheet's
-    own; any would do, and this one keeps north up."""
+    band, which is printed on the sheets ("Standard Parallels 73 20 and 78 40"
+    on the row from 72 to 80). The central meridian is the sheet's own; any
+    would do, and this one keeps north up.
+
+    The row nearest a pole is not a cone: its sheets say "Polar Stereographic
+    Projection, Scale 1:1,000,000 at 81 02".
+    """
     south, north = band
+    if max(abs(south), abs(north)) > POLAR:
+        pole = 90 if north > 0 else -90
+        return (f"+proj=stere +lat_0={pole} +lat_ts={math.copysign(POLAR_TRUE_SCALE, pole):.6f} "
+                f"+lon_0={longitude:.6f} +datum=WGS84 +units=m +no_defs")
     return (f"+proj=lcc +lat_1={south + 4 / 3:.6f} +lat_2={north - 4 / 3:.6f} "
             f"+lat_0={(south + north) / 2:.6f} +lon_0={longitude:.6f} +datum=WGS84 +units=m "
             "+no_defs")
@@ -381,6 +400,40 @@ def imprint_window(found: graticule.Survey):
     return left, top, left + width, top + height
 
 
+def paper_windows(width: int, height: int):
+    """The bottom corners of the paper, left and right: where to look for a
+    title and imprint that are not under the corner of the map. The sheets of
+    the polar rows have theirs at the foot of the legend, well clear of a map
+    whose corner is half way up the sheet, and the oldest have it on the
+    right."""
+    wide, tall = min(IMPRINT[0], width // 2), min(PAPER_FOOT, height)
+    top = height - tall
+    inset = min(int(PAPER_INSET * width), width // 2 - wide)
+    return ((inset, top, inset + wide, height),
+            (width - inset - wide, top, width - inset, height))
+
+
+def imprint_view(rgb: np.ndarray, found: graticule.Survey, where: str):
+    """The part of a scan to read its imprint off, or None if there is none to
+    show: under the corner of the map, or the bottom corners of the paper side
+    by side."""
+    if where == "paper":
+        windows = paper_windows(found.width, found.height)
+    else:
+        windows = [w for w in (imprint_window(found),) if w is not None]
+    if not windows:
+        return None
+    views = [Image.fromarray(np.ascontiguousarray(rgb[top:bottom, left:right]))
+             for left, top, right, bottom in windows]
+    view = Image.new("RGB", (sum(v.width for v in views), max(v.height for v in views)),
+                     (255, 255, 160))
+    across = 0
+    for v in views:
+        view.paste(v, (across, 0))
+        across += v.width
+    return view
+
+
 def captioned(view: Image.Image, caption: str) -> Image.Image:
     """A view of a scan under a strip that says which sheet it is of. Under,
     not over: a caption drawn on the view covered what was to be read."""
@@ -443,11 +496,9 @@ def survey_one(task):
         sheet = sheet_for(stem, entry, index)
         rgb = read_scan(Path(scan))
         found = graticule.survey(rgb, sheet)
-        imprint = imprint_window(found) if imprints else None
+        imprint = imprint_view(rgb, found, imprints) if imprints else None
         if imprint is not None:
-            left, top, right, bottom = imprint
-            captioned(Image.fromarray(np.ascontiguousarray(rgb[top:bottom, left:right])),
-                      f"{entry.get('title', stem)}  [{stem}]").save(
+            captioned(imprint, f"{entry.get('title', stem)}  [{stem}]").save(
                 out_dir / "imprints" / f"{stem}.jpg", quality=95)
         nominal = ""
         if entry.get("limits_from"):
@@ -500,7 +551,7 @@ def pages(cells, out_dir: Path, name: str, readings: dict, key: str) -> int:
 
 
 def review(chart_series, index, scans, out_dir: Path, workers: int,
-           imprints: bool = False, force: bool = False) -> int:
+           imprints: str = "", force: bool = False) -> int:
     for directory in (out_dir, out_dir / "cells", out_dir / "imprints", out_dir / "surveyed"):
         directory.mkdir(parents=True, exist_ok=True)
 
@@ -562,6 +613,11 @@ def apply_readings(chart_series, index, path: Path) -> int:
                          "meridian": float(read["meridian"])}
         if "crown" in read:
             entry["crown"] = bool(read["crown"])
+        # Who the sheet says produced it, where that was read too: what the
+        # flag rests on.
+        for key in ("producer", "imprint"):
+            if read.get(key):
+                entry[key] = read[key]
         applied += 1
     chart_series.sheet_index.write_text(json.dumps(index, indent=1) + "\n", encoding="utf-8",
                                         newline="\n")
@@ -582,9 +638,13 @@ def main(argv=None) -> int:
                     help="redo sheets that are up to date, or with --review, already surveyed")
     ap.add_argument("--review", type=Path, metavar="DIR",
                     help="draw every sheet's corner into DIR for its labels to be read")
-    ap.add_argument("--imprints", action="store_true",
+    ap.add_argument("--imprints", nargs="?", const="corner", default="",
+                    choices=("corner", "paper"),
                     help="with --review, draw the part of every sheet that says who produced "
-                         "it as well: a sheet produced outside the US is under other terms")
+                         "it as well: a sheet produced outside the US is under other terms. "
+                         "It is looked for under the south-west corner of the map, or with "
+                         "'paper' in the bottom corners of the sheet, which is where it is on "
+                         "the sheets the first does not find it on")
     ap.add_argument("--apply", type=Path, metavar="READINGS",
                     help="write the readings in this file into the sheet index")
     ap.add_argument("--trust-index", action="store_true",

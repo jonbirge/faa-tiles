@@ -140,6 +140,10 @@ def test_a_sheets_projection_follows_from_its_band():
     assert "+lon_0=2.500000" in crs
     # South of the equator the band is negative, and so are its parallels.
     assert "+lat_1=-6.666667" in rectify.crs_for([-8, 0], -61)
+    # The row next to the pole is not on a cone, and says so on its sheets.
+    polar = rectify.crs_for([80, 88], -20)
+    assert "+proj=stere" in polar and "+lat_0=90" in polar and "+lat_ts=81.033333" in polar
+    assert "+proj=lcc" in rectify.crs_for([72, 80], -20)
 
 
 def test_what_is_known_of_a_sheet_before_its_scan_is_looked_at():
@@ -169,7 +173,8 @@ def test_readings_are_written_into_the_sheet_index(tmp_path, monkeypatch):
     readings = tmp_path / "readings.json"
     readings.write_text(json.dumps({
         "e-2a": {"column": 110.2, "row": 8574, "parallel": 52, "meridian": -1, "crown": True,
-                 "page": 0},
+                 "producer": "UK", "imprint": "Produced under the direction of the Director "
+                 "General of Military Survey", "page": 0},
         # Surveyed but not yet read: left alone.
         "m-26b": {"column": 767, "row": 6041, "parallel": None, "meridian": None},
     }), encoding="utf-8")
@@ -178,7 +183,9 @@ def test_readings_are_written_into_the_sheet_index(tmp_path, monkeypatch):
     written = json.loads(path.read_text(encoding="utf-8"))["sheets"]
     assert written["e-2a"]["read"] == {"column": 110.2, "row": 8574.0, "parallel": 52.0,
                                        "meridian": -1.0}
-    assert "read" not in written["m-26b"]
+    assert written["e-2a"]["crown"] is True and written["e-2a"]["producer"] == "UK"
+    assert written["e-2a"]["imprint"].startswith("Produced under the direction")
+    assert "read" not in written["m-26b"] and "producer" not in written["m-26b"]
 
     readings.write_text(json.dumps({"z-99z": {"column": 1, "row": 1, "parallel": 1,
                                               "meridian": 1}}), encoding="utf-8")
@@ -251,6 +258,20 @@ def test_the_imprint_is_looked_for_under_the_south_west_corner():
     assert row + 20 < top < row + 80
 
 
+def test_the_imprint_can_be_looked_for_in_the_corners_of_the_paper():
+    left, right = rectify.paper_windows(9254, 6742)
+    assert left == (370, 5742, 1870, 6742) and right == (7384, 5742, 8884, 6742)
+    # A scan too small for two of them has them side by side, not overlapping.
+    left, right = rectify.paper_windows(2300, 900)
+    assert left[2] <= right[0] and left[1] == 0 and right[3] == 900
+
+    scan = Scan(seed=13)
+    found = graticule.survey(scan.rgb, scan.sheet())
+    view = rectify.imprint_view(scan.rgb, found, "paper")
+    assert view.size == (2 * 1150, 1000)
+    assert rectify.imprint_view(scan.rgb, found, "corner").size == rectify.IMPRINT
+
+
 def test_a_map_that_runs_off_the_scan_has_no_imprint_to_show():
     scan = Scan(seed=13, margin_south=-300)
     found = graticule.survey(scan.rgb, scan.sheet())
@@ -315,11 +336,11 @@ def test_a_review_that_was_stopped_takes_up_where_it_left_off(tmp_path, monkeypa
     out = tmp_path / "review"
     tpc = chart_series.series("tpc")
 
-    assert rectify.review(tpc, drawn, scans[:1], out, workers=1, imprints=True) == 0
+    assert rectify.review(tpc, drawn, scans[:1], out, workers=1, imprints="corner") == 0
     assert "1 of 1 sheet(s) to survey" in capsys.readouterr().out
     first = (out / "surveyed" / "e-2a.json").stat().st_mtime_ns
 
-    assert rectify.review(tpc, drawn, scans, out, workers=1, imprints=True) == 0
+    assert rectify.review(tpc, drawn, scans, out, workers=1, imprints="corner") == 0
     assert "1 of 2 sheet(s) to survey" in capsys.readouterr().out
     assert (out / "surveyed" / "e-2a.json").stat().st_mtime_ns == first
     readings = json.loads((out / "readings.json").read_text(encoding="utf-8"))
