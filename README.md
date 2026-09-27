@@ -643,7 +643,7 @@ Model weights for the upsampler download on first use, into `source/models/`.
 ## Tests
 
 ```bash
-.venv/Scripts/python -m pytest      # 235 tests, ~70 s
+.venv/Scripts/python -m pytest      # 257 tests, ~40 s
 ```
 
 Everything runs against small synthetic rasters built in a temp directory; none
@@ -763,7 +763,7 @@ src/cesiumtiles/
 www/
     index.html              the public site: one button per tileset
     update_tilesets.sh      writes tilesets.json beside it
-tests/                      235 tests, all on synthetic rasters
+tests/                      257 tests, all on synthetic rasters
 CLAUDE.md                   orientation notes, gotchas and measurements
 ```
 
