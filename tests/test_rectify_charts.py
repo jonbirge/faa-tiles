@@ -258,7 +258,10 @@ def test_a_map_that_runs_off_the_scan_has_no_imprint_to_show():
 
 
 def test_review_pages_hold_six_sheets_and_say_which(tmp_path):
-    cells = [(f"s{i}", Image.new("RGB", (100, 60), "white")) for i in range(8)]
+    cells = []
+    for i in range(8):
+        Image.new("RGB", (100, 60), "white").save(tmp_path / f"s{i}.jpg")
+        cells.append((f"s{i}", tmp_path / f"s{i}.jpg"))
     readings = {stem: {} for stem, _ in cells}
     assert rectify.pages(cells, tmp_path, "corners", readings, "page") == 2
     assert Image.open(tmp_path / "corners-000.jpg").size == (200, 180)
@@ -293,3 +296,35 @@ def test_a_line_is_not_marked_across_the_margin_where_its_label_is():
     # (Below the corner, that is: a parallel drawn on a cone does not stay on
     # one row of a scan.)
     assert not changed[row - top + 12:, :column - left + 60].any()
+
+
+def test_a_review_that_was_stopped_takes_up_where_it_left_off(tmp_path, monkeypatch, capsys):
+    """Each sheet is kept as it is surveyed. The first full survey of the ONC
+    scans was stopped for want of memory at 140 of 270, with nothing written."""
+    import chart_series
+    scans = []
+    for stem, seed in (("e-2a", 14), ("m-26b", 15)):
+        Image.fromarray(Scan(seed=seed, margin_south=900).rgb).save(
+            tmp_path / f"{stem}.jpg", quality=95)
+        scans.append((stem, tmp_path / f"{stem}.jpg"))
+    drawn = dict(INDEX, pixel_size=PIXEL, sheets={
+        stem: dict(entry, band=[48, 56], west=WEST, south=SOUTH, east=WEST + 9, north=SOUTH + 6,
+                   limits_from="nyu")
+        for stem, entry in INDEX["sheets"].items()})
+    monkeypatch.setattr(rectify, "crs_for", lambda band, longitude: CRS)
+    out = tmp_path / "review"
+    tpc = chart_series.series("tpc")
+
+    assert rectify.review(tpc, drawn, scans[:1], out, workers=1, imprints=True) == 0
+    assert "1 of 1 sheet(s) to survey" in capsys.readouterr().out
+    first = (out / "surveyed" / "e-2a.json").stat().st_mtime_ns
+
+    assert rectify.review(tpc, drawn, scans, out, workers=1, imprints=True) == 0
+    assert "1 of 2 sheet(s) to survey" in capsys.readouterr().out
+    assert (out / "surveyed" / "e-2a.json").stat().st_mtime_ns == first
+    readings = json.loads((out / "readings.json").read_text(encoding="utf-8"))
+    assert sorted(readings) == ["e-2a", "m-26b"]
+    assert all(r["page"] == 0 and r["imprint_page"] == 0 for r in readings.values())
+    assert Image.open(out / "corners-000.jpg").size == (2 * rectify.CELL[0],
+                                                        3 * (rectify.CELL[1] + rectify.CAPTION))
+    assert (out / "imprint-000.jpg").is_file()

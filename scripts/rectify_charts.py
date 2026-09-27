@@ -430,7 +430,13 @@ def _spacing(family, reference):
 
 
 def survey_one(task):
-    stem, scan, entry, index, imprints = task
+    """Survey one scan for the review and keep what was found beside the
+    pages: its views as images, and what was measured as ``surveyed/STEM.json``.
+    Kept sheet by sheet, by the process that did the work, so that a review
+    that is stopped -- 270 scans at 2 GB apiece is a long time for nothing else
+    on the machine to want the memory -- has lost only the sheets in hand."""
+    stem, scan, entry, index, imprints, out_dir = task
+    out_dir = Path(out_dir)
     try:
         sheet = sheet_for(stem, entry, index)
         rgb = read_scan(Path(scan))
@@ -438,15 +444,16 @@ def survey_one(task):
         imprint = imprint_window(found) if imprints else None
         if imprint is not None:
             left, top, right, bottom = imprint
-            imprint = captioned(
-                Image.fromarray(np.ascontiguousarray(rgb[top:bottom, left:right])),
-                f"{entry.get('title', stem)}  [{stem}]")
+            captioned(Image.fromarray(np.ascontiguousarray(rgb[top:bottom, left:right])),
+                      f"{entry.get('title', stem)}  [{stem}]").save(
+                out_dir / "imprints" / f"{stem}.jpg", quality=95)
         nominal = ""
         if entry.get("limits_from"):
             nominal = (f"  index ({entry['limits_from']}): W {entry['west']:g}  S {entry['south']:g}"
                        f"  E {entry['east']:g}  N {entry['north']:g}")
         cell, shown = draw_cell(rgb, found, f"{entry.get('title', stem)}  [{stem}]{nominal}")
-        return stem, {
+        cell.save(out_dir / "cells" / f"{stem}.jpg", quality=95)
+        outcome = {
             "column": round(shown.at[0], 1), "row": round(shown.at[1], 1),
             "parallel": None, "meridian": None,
             # For whoever compares a reading with the index: which lines these
@@ -458,19 +465,29 @@ def survey_one(task):
                         _spacing(found.meridians, found.along_y)],
             "ink": [round(float(np.median([line.ink for line, _ in family])))
                     for family in (found.parallels, found.meridians)],
-        }, cell, imprint
+            "imprint": imprint is not None,
+        }
     except Exception as exc:
-        return stem, {"failed": f"{type(exc).__name__}: {exc}"}, None, None
+        outcome = {"failed": f"{type(exc).__name__}: {exc}"}
+    # Last, and whole or not at all: this file is what says the sheet is done.
+    kept = out_dir / "surveyed" / f"{stem}.json"
+    partial = kept.with_suffix(".part")
+    partial.write_text(json.dumps(outcome) + "\n", encoding="utf-8", newline="\n")
+    partial.replace(kept)
+    return stem, outcome
 
 
 def pages(cells, out_dir: Path, name: str, readings: dict, key: str) -> int:
     """Lay cells out six to a page and write the pages; note in ``readings``
-    which page each sheet is on. Returns how many pages there were."""
+    which page each sheet is on. ``cells`` is ``(stem, image file)``. Returns
+    how many pages there were."""
     across, down = PAGE
     per_page = across * down
+    for stale in out_dir.glob(f"{name}-*.jpg"):
+        stale.unlink()
     for first in range(0, len(cells), per_page):
         number = first // per_page
-        here = cells[first:first + per_page]
+        here = [(stem, Image.open(path)) for stem, path in cells[first:first + per_page]]
         wide, tall = here[0][1].size
         page = Image.new("RGB", (across * wide, down * tall), "white")
         for i, (stem, cell) in enumerate(here):
@@ -481,22 +498,41 @@ def pages(cells, out_dir: Path, name: str, readings: dict, key: str) -> int:
 
 
 def review(chart_series, index, scans, out_dir: Path, workers: int,
-           imprints: bool = False) -> int:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    tasks = [(stem, str(path), index["sheets"][stem], index, imprints) for stem, path in scans]
-    readings, cells, imprinted = {}, [], []
+           imprints: bool = False, force: bool = False) -> int:
+    for directory in (out_dir, out_dir / "cells", out_dir / "imprints", out_dir / "surveyed"):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    def kept(stem, scan):
+        """What an earlier run found of a sheet, if its scan has not changed
+        since and it looked for what this run is looking for."""
+        path = out_dir / "surveyed" / f"{stem}.json"
+        if force or not path.is_file() or path.stat().st_mtime < scan.stat().st_mtime:
+            return None
+        outcome = json.loads(path.read_text(encoding="utf-8"))
+        if "failed" in outcome:
+            return outcome
+        if imprints and "imprint" not in outcome:
+            return None
+        return outcome if (out_dir / "cells" / f"{stem}.jpg").is_file() else None
+
+    readings = {stem: kept(stem, scan) for stem, scan in scans}
+    tasks = [(stem, str(scan), index["sheets"][stem], index, imprints, str(out_dir))
+             for stem, scan in scans if readings[stem] is None]
+    print(f"{len(tasks)} of {len(scans)} sheet(s) to survey", flush=True)
     started = time.monotonic()
-    with mp.get_context("spawn").Pool(workers) as pool:
-        for done, (stem, outcome, cell, imprint) in enumerate(pool.imap(survey_one, tasks), 1):
-            readings[stem] = outcome
-            if cell is not None:
-                cells.append((stem, cell))
-            if imprint is not None:
-                imprinted.append((stem, imprint))
-            if done % 20 == 0 or done == len(tasks):
-                print(f"  surveyed {done}/{len(tasks)}, "
-                      f"{(time.monotonic() - started) / 60:.1f} min", flush=True)
-    written = pages(cells, out_dir, "corners", readings, "page")
+    if tasks:
+        with mp.get_context("spawn").Pool(max(1, min(workers, len(tasks)))) as pool:
+            for done, (stem, outcome) in enumerate(pool.imap_unordered(survey_one, tasks), 1):
+                readings[stem] = outcome
+                if done % 20 == 0 or done == len(tasks):
+                    print(f"  surveyed {done}/{len(tasks)}, "
+                          f"{(time.monotonic() - started) / 60:.1f} min", flush=True)
+
+    surveyed = [stem for stem, _ in scans if "failed" not in readings[stem]]
+    written = pages([(stem, out_dir / "cells" / f"{stem}.jpg") for stem in surveyed],
+                    out_dir, "corners", readings, "page")
+    imprinted = [(stem, out_dir / "imprints" / f"{stem}.jpg") for stem in surveyed
+                 if imprints and readings[stem].get("imprint")]
     if imprinted:
         print(f"wrote {pages(imprinted, out_dir, 'imprint', readings, 'imprint_page')} pages of "
               f"imprints")
@@ -540,7 +576,8 @@ def main(argv=None) -> int:
     ap.add_argument("--workers", type=int, default=8,
                     help="scans worked on at once; each holds its scan several times over "
                          "in memory, about 2 GB (default: %(default)s)")
-    ap.add_argument("--force", action="store_true", help="redo sheets that are up to date")
+    ap.add_argument("--force", action="store_true",
+                    help="redo sheets that are up to date, or with --review, already surveyed")
     ap.add_argument("--review", type=Path, metavar="DIR",
                     help="draw every sheet's corner into DIR for its labels to be read")
     ap.add_argument("--imprints", action="store_true",
@@ -571,7 +608,8 @@ def main(argv=None) -> int:
         raise SystemExit(f"no scans in {in_dir}; run scripts/fetch_charts.py "
                          f"{chart_series.name} first")
     if args.review:
-        return review(chart_series, index, scans, args.review, args.workers, args.imprints)
+        return review(chart_series, index, scans, args.review, args.workers, args.imprints,
+                      args.force)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path, areas_path = out_dir / REPORT, out_dir / AREAS
