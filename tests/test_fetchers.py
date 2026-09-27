@@ -33,10 +33,12 @@ def test_links_are_found_in_attributes_and_in_scripts_and_made_absolute():
       <a href='two.zip'>two</a>
       <script>var files = ["src/geotiffs/WAC_1_A.tif", "https:\\/\\/other.example\\/three.pdf"];</script>
       <a href="/media/abc/one.tif">again</a>
+      <a href="/uploads/VFR charts/four.pdf">a folder with a space in its name</a>
     '''
     assert fetchers.page_links("https://example.org/charts/", html) == [
         "https://example.org/media/abc/one.tif",
         "https://example.org/charts/two.zip",
+        "https://example.org/uploads/VFR%20charts/four.pdf",
         "https://example.org/charts/src/geotiffs/WAC_1_A.tif",
         "https://other.example/three.pdf",
     ]
@@ -52,9 +54,10 @@ def test_the_latest_edition_of_each_sheet_is_kept_under_the_sheets_name():
         "https://aim.naviair.dk/media/ddd/edition-46_20260903-icao-anc-1-500000-denmark-pdf.pdf",
         "https://aim.naviair.dk/media/eee/edition-45_20260416-icao-anc-1-250000-copenhagen-area-geo-tiff.tif",
     ]
-    found = fetchers.latest_by_sheet(links, series("dk-icao").link_pattern)
+    today = dt.date(2026, 9, 27)
+    found = fetchers.latest_by_sheet(links, series("dk-icao").link_pattern, today)
     assert found == {"denmark": ("20260903", links[1])}
-    small = fetchers.latest_by_sheet(links, series("dk-250").link_pattern)
+    small = fetchers.latest_by_sheet(links, series("dk-250").link_pattern, today)
     assert small == {"copenhagen-area": ("20260416", links[4])}
 
 
@@ -62,8 +65,39 @@ def test_spanish_sheets_are_reissued_one_at_a_time():
     links = [f"https://aip.enaire.es/recursos/descargas/VFR500/{name}" for name in (
         "2025_GC_CANARIAS.zip", "2026_LE6_SUR.zip", "2025_LE6_SUR.zip",
         "2026_LE6_SUR.pdf", "VFR500_Index_Map.pdf")]
-    found = fetchers.latest_by_sheet(links, series("es-vfr500").link_pattern)
+    found = fetchers.latest_by_sheet(links, series("es-vfr500").link_pattern,
+                                     dt.date(2026, 9, 27))
     assert found == {"GC_CANARIAS": ("2025", links[0]), "LE6_SUR": ("2026", links[1])}
+
+
+@pytest.mark.parametrize("text, date", [
+    ("20260903", dt.date(2026, 9, 3)),
+    ("2026_06_11", dt.date(2026, 6, 11)),
+    ("03SEP2026", dt.date(2026, 9, 3)),
+    ("29oct2026", dt.date(2026, 10, 29)),
+    ("2025", dt.date(2025, 1, 1)),
+    ("20261345", None),          # no such month
+    ("edition", None),
+])
+def test_edition_dates_as_publishers_write_them(text, date):
+    assert fetchers.edition_date(text) == date
+
+
+def test_the_current_edition_is_the_latest_that_is_not_in_the_future():
+    """Latvia's page carries the chart effective 29 October beside the one in
+    effect now, as the FAA posts its next edition early."""
+    base = "https://ais.lgs.lv/uploads/fck/file/VFR%20charts/"
+    links = [base + "VFR_Chart_15th_edition_29OCT2026.pdf",
+             base + "VFR_Chart_15th_edition_03SEP2026.pdf",
+             base + "VFR_Chart_14th_edition_11JUN2026.pdf"]
+    pattern = series("lv-icao").link_pattern
+    on = lambda day: fetchers.latest_by_sheet(links, pattern, today=day)["VFR_Chart"]
+    assert on(dt.date(2026, 9, 27)) == ("03SEP2026", links[1])
+    assert on(dt.date(2026, 10, 29)) == ("29OCT2026", links[0])
+    # Ordered as dates, not as text: 11JUN sorts after 03SEP and 29OCT.
+    assert on(dt.date(2026, 8, 1)) == ("11JUN2026", links[2])
+    # Before any of them takes effect, the first to.
+    assert on(dt.date(2026, 1, 1)) == ("11JUN2026", links[2])
 
 
 def test_a_link_pattern_must_say_which_sheet_a_link_is():

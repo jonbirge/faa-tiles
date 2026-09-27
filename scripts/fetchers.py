@@ -43,7 +43,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import quote, unquote, urljoin, urlparse
 
 # Honest about what is asking. Some hosts serve a bot challenge to anything
 # that claims to be a browser and the real file to anything that does not.
@@ -143,33 +143,74 @@ def page_links(url: str, html: str) -> list[str]:
     """Every link on a page, absolute, in the order first seen."""
     seen, out = set(), []
     for found in HREF.findall(html) + QUOTED.findall(html):
-        absolute = urljoin(url, found.replace("\\/", "/"))
+        # Percent-encoded, where the page wrote a space or an accent plainly:
+        # Latvia's charts are in a folder called "VFR charts".
+        absolute = quote(urljoin(url, found.replace("\\/", "/")), safe=":/?&=%#+,;@~!$'()*")
         if absolute not in seen:
             seen.add(absolute)
             out.append(absolute)
     return out
 
 
-def latest_by_sheet(links: list[str], pattern: str) -> dict[str, tuple[str, str]]:
-    """``{sheet: (edition, url)}``: the latest matching link for each sheet.
+MONTHS = {name: number for number, name in enumerate(
+    ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"), 1)}
+
+
+def edition_date(text: str) -> dt.date | None:
+    """The date an edition is named for, as publishers write them: 20260903,
+    2026_06_11, 03SEP2026, or a bare year. None if it is none of those."""
+    digits = re.sub(r"[-_./ ]", "", text)
+    try:
+        if re.fullmatch(r"\d{8}", digits):
+            return dt.date(int(digits[:4]), int(digits[4:6]), int(digits[6:]))
+        named = re.fullmatch(r"(\d{1,2})([A-Za-z]{3})(\d{4})", digits)
+        if named and named.group(2).upper() in MONTHS:
+            return dt.date(int(named.group(3)), MONTHS[named.group(2).upper()],
+                           int(named.group(1)))
+        if re.fullmatch(r"\d{4}", digits):
+            return dt.date(int(digits), 1, 1)
+    except ValueError:
+        pass
+    return None
+
+
+def latest_by_sheet(links: list[str], pattern: str,
+                    today: dt.date | None = None) -> dict[str, tuple[str, str]]:
+    """``{sheet: (edition, url)}``: the current matching link for each sheet.
 
     ``pattern`` is matched against the whole URL, percent-decoded. Its ``sheet``
     group names the sheet; a ``date`` or ``year`` group, if it has one, orders
     the editions, and without one the last link on the page wins.
+
+    The current edition is the latest that is not in the future. Publishers
+    post the next one before it takes effect, as the FAA does: Latvia's page
+    carries the chart effective 29 October beside the one effective now. If
+    every edition of a sheet is in the future, the earliest is taken.
     """
     compiled = re.compile(pattern, re.IGNORECASE)
     if "sheet" not in compiled.groupindex:
         raise ValueError("a link pattern must name a 'sheet' group")
     ordered = next((g for g in ("date", "year") if g in compiled.groupindex), None)
-    best: dict[str, tuple[str, str]] = {}
-    for link in links:
+    today = today or dt.date.today()
+    found: dict[str, list] = {}
+    for position, link in enumerate(links):
         match = compiled.fullmatch(unquote(link))
         if not match:
             continue
-        sheet = match.group("sheet")
         edition = match.group(ordered) if ordered else ""
-        if sheet not in best or edition >= best[sheet][0]:
-            best[sheet] = (edition, link)
+        when = edition_date(edition) if edition else None
+        found.setdefault(match.group("sheet"), []).append((when, position, edition, link))
+    best = {}
+    for sheet, editions in found.items():
+        dated = [e for e in editions if e[0] is not None]
+        current = [e for e in dated if e[0] <= today]
+        if current:
+            chosen = max(current, key=lambda e: (e[0], e[1]))
+        elif dated:
+            chosen = min(dated, key=lambda e: (e[0], e[1]))
+        else:
+            chosen = max(editions, key=lambda e: (e[2], e[1]))
+        best[sheet] = (chosen[2], chosen[3])
     return best
 
 

@@ -703,6 +703,41 @@ SERIES = {
             max_zoom=12,
         ),
         Series(
+            name="ee-icao",
+            title="Estonia Aeronautical Chart ICAO 1:500,000",
+            publisher="Estonian Air Navigation Services",
+            licence=EANS_LICENCE,
+            fetcher="links",
+            index_url="https://aim.eans.ee/en/vfr-chart",
+            link_pattern=r".*/(?P<sheet>VFR)_(?P<year>\d{4})_chart_map_\d{4}_web\.pdf",
+            tif_pattern=r"VFR\.tif",
+            geopdf=True,
+            pdf_scale=2,
+            # The viewport is the map's frame, with a title block and a legend
+            # printed inside it: hand-traced.
+            detector="detect_sectional_areas.py",
+            max_zoom=12,
+        ),
+        Series(
+            name="lv-icao",
+            title="Latvia VFR Aeronautical Chart ICAO 1:500,000",
+            publisher="Latvijas gaisa satiksme",
+            licence=LGS_LICENCE,
+            fetcher="links",
+            index_url="https://ais.lgs.lv/page/VFR_Suport",
+            link_pattern=r".*/(?P<sheet>VFR_Chart)_\d+\w+_edition_(?P<date>\d{2}[A-Z]{3}\d{4})\.pdf",
+            tif_pattern=r"VFR_Chart\.tif",
+            geopdf=True,
+            pdf_scale=2,
+            # The viewport named for the chart is the whole page; the others
+            # are the cover's key map and an inset.
+            pdf_viewports=("vfr500",),
+            # The map's frame follows the border of the FIR, not a rectangle,
+            # and the legend runs beneath it: hand-traced.
+            detector="detect_sectional_areas.py",
+            max_zoom=12,
+        ),
+        Series(
             name="tw-vfr",
             title="Taiwan VFR Chart 1:500,000",
             publisher="Civil Aviation Administration, MOTC",
@@ -813,8 +848,9 @@ SERIES = {
             # official one where both are free (the user's call); and the FAA's
             # own sectionals and terminal area charts over everything they
             # reach, since they are what the rest is laid around.
-            layers=("onc", "tpc", "br-wac", "faa-caribbean", "ofm", "ro-icao", "tw-vfr",
-                    "es-vfr500", "dk-icao", "ch-icao", "dk-250", "sectionals", "tac"),
+            layers=("onc", "tpc", "br-wac", "faa-caribbean", "ofm", "ro-icao", "ee-icao",
+                    "lv-icao", "tw-vfr", "es-vfr500", "dk-icao", "ch-icao", "dk-250",
+                    "sectionals", "tac"),
             stepped=True,
             max_zoom=13,
         ),

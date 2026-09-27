@@ -224,7 +224,7 @@ def test_every_series_names_a_detector_or_is_a_composite():
             assert _ways_to_a_map_area(s) == 1, s.name
 
 
-@pytest.mark.parametrize("name", ["ro-icao", "tw-vfr"])
+@pytest.mark.parametrize("name", ["ro-icao", "tw-vfr", "ee-icao", "lv-icao"])
 def test_charts_that_carry_their_own_georeferencing_are_drawn_from_it(name):
     s = series(name)
     assert s.geopdf and s.fetcher == "links"
@@ -348,7 +348,7 @@ def test_a_layer_has_one_way_to_its_map_areas(name):
 
 
 @pytest.mark.parametrize("name", ["ofm", "ch-icao", "dk-icao", "dk-250", "es-vfr500", "br-wac",
-                                  "onc", "tpc", "ro-icao", "tw-vfr"])
+                                  "onc", "tpc", "ro-icao", "tw-vfr", "ee-icao", "lv-icao"])
 def test_other_publishers_series_name_a_fetcher_and_what_it_needs(name):
     s = series(name)
     assert s.fetcher in ("links", "urls", "ofm")
@@ -370,7 +370,7 @@ def test_the_faa_caribbean_charts_are_a_sibling_of_the_sectionals():
 @pytest.mark.parametrize("name, zoom", [
     ("faa-caribbean", 11), ("br-wac", 11), ("ofm", 12), ("ch-icao", 12),
     ("dk-icao", 12), ("es-vfr500", 12), ("dk-250", 13), ("onc", 10), ("tpc", 11),
-    ("ro-icao", 12), ("tw-vfr", 12),
+    ("ro-icao", 12), ("tw-vfr", 12), ("ee-icao", 12), ("lv-icao", 12),
 ])
 def test_other_publishers_max_zoom(name, zoom):
     """Each matches where its prepared sheets stop holding detail: 1:1,000,000
