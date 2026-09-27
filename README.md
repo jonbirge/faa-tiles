@@ -32,8 +32,8 @@ python scripts/setup_repo.py
 ```
 
 That creates `.venv`, installs everything — including GDAL and PyTorch, which
-come from their own package indexes — checks the imports load, and makes
-`source/`. Then build whichever products you want and open the tester:
+come from their own package indexes — checks the imports load, makes
+`source/`, and points git at the hooks in `.githooks/`. Then build whichever products you want and open the tester:
 
 ```bash
 .venv/Scripts/python scripts/build_sectionals.py       # VFR sectionals            z12
@@ -643,7 +643,7 @@ Model weights for the upsampler download on first use, into `source/models/`.
 ## Tests
 
 ```bash
-.venv/Scripts/python -m pytest      # 257 tests, ~40 s
+.venv/Scripts/python -m pytest      # 261 tests, ~40 s
 ```
 
 Everything runs against small synthetic rasters built in a temp directory; none
@@ -727,7 +727,7 @@ pyproject.toml              packaging + pytest config
 requirements.txt            runtime deps (GDAL and PyTorch indexes)
 requirements-dev.txt        runtime + test deps
 scripts/
-    setup_repo.py           fresh clone -> working venv
+    setup_repo.py           fresh clone -> working venv, git hooks switched on
     build_sectionals.py     one wrapper per product: fetch, prepare, tile
     build_sectionals_tac.py
     build_ifr_low.py
@@ -763,7 +763,9 @@ src/cesiumtiles/
 www/
     index.html              the public site: one button per tileset
     update_tilesets.sh      writes tilesets.json beside it
-tests/                      257 tests, all on synthetic rasters
+.githooks/
+    post-merge              after a pull, delete local branches of merged PRs
+tests/                      261 tests, all on synthetic rasters
 CLAUDE.md                   orientation notes, gotchas and measurements
 ```
 

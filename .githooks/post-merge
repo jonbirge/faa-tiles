@@ -1,0 +1,25 @@
+#!/bin/sh
+# After a pull onto master, delete local branches whose remote branch is gone
+# (GitHub deletes a PR's branch on merge) and whose commits are all in master.
+# A rebase merge rewrites hashes, so "in master" is judged by patch (git
+# cherry), not by ancestry. A branch holding any commit master lacks is kept,
+# which includes one that was squash-merged from several commits.
+#
+# Git runs this only once a clone points at the directory:
+#     git config core.hooksPath .githooks
+# scripts/setup_repo.py does that, and sets fetch.prune, which is what marks a
+# branch's remote as gone.
+
+[ "$(git symbolic-ref --short -q HEAD)" = master ] || exit 0
+
+git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads |
+while read -r branch track; do
+    [ "$track" = "[gone]" ] || continue
+    [ "$branch" = master ] && continue
+    if git cherry master "$branch" | grep -q '^+'; then
+        echo "post-merge: kept $branch (remote is gone, but it has commits master lacks)"
+    else
+        git branch -D "$branch"
+    fi
+done
+exit 0

@@ -16,6 +16,8 @@ Steps, each skipped when already done:
      as an editable install
   3. check the key imports actually load
   4. create source/, where every download lands
+  5. point git at the tracked hooks in .githooks/ and prune on fetch -- git
+     config is per clone and cannot be committed, so a clone has to be told
 
 It downloads no charts; the build_*.py wrappers do that. It prints them at the end.
 """
@@ -53,6 +55,22 @@ def call(*command) -> None:
         raise SystemExit(f"failed (exit {code}): {' '.join(str(c) for c in command)}")
 
 
+#: Local git settings a clone needs. ``.githooks/post-merge`` deletes a merged
+#: PR's local branch, and only sees its remote as gone once fetches prune.
+GIT_CONFIG = {"core.hooksPath": ".githooks", "fetch.prune": "true"}
+
+
+def configure_git(repo: Path = REPO) -> bool:
+    """Apply GIT_CONFIG to the clone at *repo*; False where there is none."""
+    if not (repo / ".git").exists() or shutil.which("git") is None:
+        return False
+    for key, value in GIT_CONFIG.items():
+        code = subprocess.run(["git", "config", "--local", key, value], cwd=repo).returncode
+        if code != 0:
+            raise SystemExit(f"failed (exit {code}): git config --local {key} {value}")
+    return True
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--recreate", action="store_true", help="delete and rebuild .venv")
@@ -84,6 +102,13 @@ def main(argv=None) -> int:
     step("source directory")
     SOURCE.mkdir(exist_ok=True)
     print(f"  {SOURCE}")
+
+    step("git settings")
+    if configure_git():
+        for key, value in GIT_CONFIG.items():
+            print(f"  {key} = {value}")
+    else:
+        print("  not a git clone, or git is not installed; skipped")
 
     shown = python.relative_to(REPO).as_posix()
     print(f"""

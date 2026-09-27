@@ -101,7 +101,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 257 tests, ~40s
+.venv/Scripts/python -m pytest                        # 261 tests, ~40s
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -800,9 +800,23 @@ were checked against the real tilesets.
 
 ## Repo hygiene
 
-- Git repo on `master`, pushed to the **public** GitHub repo `jonbirge/faa-tiles` (`origin`); anything committed is published once pushed. The user commits to `master` directly; there
-  is no PR workflow here. `.gitignore` excludes `.venv/`, `*.tif`, `*.psd`,
+- Git repo on `master`, pushed to the **public** GitHub repo `jonbirge/faa-tiles` (`origin`); anything committed is published once pushed. The user commits to `master` directly; PRs
+  are occasional (#2 and #3, from `claude/...` session branches), not a
+  required workflow. `.gitignore` excludes `.venv/`, `*.tif`, `*.psd`,
   `source/`, `tileset/`, `tileset-*/`, which keeps `.git` at ~130 KB.
+- **A merged PR's branch deletes itself, on origin and locally** (the user asked
+  for both). Origin is GitHub's `delete_branch_on_merge` repo setting. Local is
+  `.githooks/post-merge`: after a pull onto `master` it deletes each branch
+  whose remote is gone and whose commits are all in `master`, judged by patch
+  (`git cherry`) because a rebase merge changes the hashes -- PR #3 landed that
+  way, and `git branch -d` refused its branch for it. A branch with a commit
+  `master` lacks is kept and named, which includes a multi-commit squash merge.
+  **Hooks are tracked in `.githooks/`, not `.git/hooks`**, and a clone only
+  runs them once `core.hooksPath` points there; that and `fetch.prune` (which
+  is what marks a remote as gone) are per-clone config git will not let a repo
+  commit, so `setup_repo.py:configure_git()` sets both. On Windows the
+  executable bit is invisible: a new hook needs `git add --chmod=+x`, or Linux
+  and macOS skip it silently. `tests/test_githooks.py` guards the bit and LF.
 - **Line endings are LF everywhere**, enforced by `.gitattributes`
   (`* text=auto eol=lf`), which overrides the user's global `core.autocrlf=true`.
   When writing files from Python, use `write_text(..., newline="\n")` or the
