@@ -84,7 +84,17 @@ def check_stages(chart_series) -> None:
     The chain starts at whatever the series downloads: the GeoTIFFs, or the PDFs
     for a series that draws its own rasters from them.
     """
-    if chart_series.pdf_scale:
+    if chart_series.scan_suffix:
+        # The downloads are scans, and not every scan registers. The sheets are
+        # the ones that did: those with a map area beside their rasters.
+        if not chart_series.manifest.is_file():
+            raise SystemExit(f"no sheet of {chart_series.name} has been rectified; run "
+                             f"scripts/rectify_charts.py {chart_series.name} first")
+        areas = json.loads(chart_series.manifest.read_text(encoding="utf-8"))
+        names = sorted(n for n in areas if chart_series.wants_tif(n))
+        previous = {n: chart_series.directory / (Path(n).stem + chart_series.scan_suffix)
+                    for n in names}
+    elif chart_series.pdf_scale:
         # Nothing but PDFs is downloaded, so the sheet list comes from the
         # reviewed registration rather than from a directory of GeoTIFFs.
         manifest = json.loads(chart_series.pdf_manifest.read_text(encoding="utf-8"))
@@ -129,14 +139,22 @@ def sources(chart_series, directory: Path, manifest: dict, detail: bool = False,
             for p in charts]
 
 
-def painted_members(chart_series, redistributable_only: bool = False):
+def painted_members(chart_series, redistributable_only: bool = False, only_layers=None):
     """The series a build paints, in paint order, as ``(kept, left out)``.
 
     ``redistributable_only`` leaves out every member whose licence does not
     allow publishing tiles derived from it, which is how a tileset meant for a
     public site is built from the same downloads as the full one.
+    ``only_layers`` names the layers to paint and drops the rest unremarked:
+    it is for a trial, or for building while a layer is still downloading.
     """
     members = chart_series.members
+    if only_layers:
+        unknown = sorted(set(only_layers) - {m.name for m in members})
+        if unknown:
+            raise SystemExit(f"{chart_series.name} has no layer named {', '.join(unknown)}; "
+                             f"its layers are {', '.join(m.name for m in members)}")
+        members = tuple(m for m in members if m.name in only_layers)
     if not redistributable_only:
         return members, ()
     kept = tuple(m for m in members if m.licence.redistributable)
@@ -266,6 +284,9 @@ def main(argv=None) -> int:
     ap.add_argument("--reverse-order", action=argparse.BooleanOptionalAction, default=None,
                     help="paint sheets in reverse file-name order, so the earliest name is on "
                          "top where sheets overlap (default: the series' setting)")
+    ap.add_argument("--layers", nargs="+", metavar="LAYER",
+                    help="paint only these layers of a composite, in the composite's own "
+                         "order: for a trial, or while another layer is still downloading")
     ap.add_argument("--redistributable-only", action="store_true",
                     help="leave out every layer whose licence does not allow publishing "
                          "tiles derived from it (chart_series.py records which), for a "
@@ -281,7 +302,7 @@ def main(argv=None) -> int:
     if args.charts and chart_series.is_composite:
         raise SystemExit(f"--charts cannot stand in for {chart_series.name}'s layers "
                          f"({', '.join(chart_series.layers)}), which read separate directories")
-    members, left_out = painted_members(chart_series, args.redistributable_only)
+    members, left_out = painted_members(chart_series, args.redistributable_only, args.layers)
     if left_out:
         print("redistributable only; leaving out: "
               + ", ".join(f"{m.name} ({m.licence.name})" for m in left_out), flush=True)

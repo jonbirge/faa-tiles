@@ -93,6 +93,16 @@ def test_redistributable_only_leaves_out_what_may_not_be_republished(world):
     assert [m.name for m in everything] == ["t-coarse", "t-fine"] and not nothing
 
 
+def test_a_build_can_be_held_to_some_of_its_layers(world):
+    kept, _ = build.painted_members(world, only_layers=["t-fine"])
+    assert [m.name for m in kept] == ["t-fine"]
+    # In the composite's order, whatever order they were asked for in.
+    kept, _ = build.painted_members(world, only_layers=["t-fine", "t-coarse"])
+    assert [m.name for m in kept] == ["t-coarse", "t-fine"]
+    with pytest.raises(SystemExit, match="no layer named t-missing"):
+        build.painted_members(world, only_layers=["t-missing"])
+
+
 def test_metadata_credits_every_layer_that_painted(world):
     members, _ = build.painted_members(world)
     metadata = build.layer_metadata(world, members, {"t-coarse": ["a.tif"], "t-fine": ["b.tif"]})

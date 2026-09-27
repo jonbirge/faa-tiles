@@ -87,6 +87,27 @@ ENAIRE_LICENCE = Licence(
          "ENAIRE's prior written authorisation.",
 )
 
+US_MILITARY_LICENCE = Licence(
+    name="Public domain (US Government work)",
+    url="https://maps.lib.utexas.edu/maps/faq.html",
+    redistributable=True,
+    attribution="U.S. Defense Mapping Agency / National Imagery and Mapping Agency; "
+                "scans courtesy of the University of Texas Libraries",
+    note="17 USC 105 for sheets with a US imprint. The University of Texas, which hosts "
+         "the scans, warns that the US Government may claim copyright outside the US. "
+         "Sheets produced by the UK or Australia are Crown copyright and are a series of "
+         "their own.",
+)
+
+CROWN_LICENCE = Licence(
+    name="Crown copyright (UK Ministry of Defence, Australian Department of Defence)",
+    url="https://maps.lib.utexas.edu/maps/faq.html",
+    attribution="UK Ministry of Defence / Australian Department of Defence; scans courtesy "
+                "of the University of Texas Libraries",
+    note="TPC E-2A, for one, carries a 1996 Crown copyright notice, which runs 50 years. "
+         "Not redistributable until cleared sheet by sheet.",
+)
+
 DECEA_LICENCE = Licence(
     name="DECEA usage policy; AISWEB footer shows CC BY 4.0",
     url="https://ajuda.decea.mil.br/app/uploads/2019/04/Pol%C3%ADtica-de-Uso-POR.pdf",
@@ -122,6 +143,11 @@ class Series:
     #          raster a region
     fetcher: str = "faa"
     link_pattern: str = ""
+    # The downloads are scans of paper, with no georeferencing in them: kept as
+    # they come (``scan_suffix``) and registered by the graticule printed on
+    # them, from the reviewed sheet index (rectify_charts.py). Everything after
+    # that names a sheet's raster ``<sheet>.tif``, as for any other series.
+    scan_suffix: str = ""
     urls: tuple[str, ...] = ()
     regions: tuple[str, ...] = ()
     # Seconds to wait between downloads, for a publisher whose terms or whose
@@ -173,6 +199,10 @@ class Series:
     heal_frames: bool = False
     # Lossless WebP tiles instead of lossy q90.
     lossless: bool = False
+    # Write the prepared rasters JPEG-compressed. For a series that began as
+    # JPEG scans and has hundreds of sheets: a tenth the size of lossless
+    # copies, of pixels that were never lossless to begin with.
+    lossy_intermediates: bool = False
     # Deepest zoom level tiled; see each series' note (sectionals z12, IFR z13).
     # Keep this in step with any stage that changes resolution (pdf_scale,
     # upsample_scale) -- they determine whether the warp magnifies or minifies.
@@ -239,6 +269,18 @@ class Series:
         return self.directory / "healed"
 
     @property
+    def sheet_index(self) -> Path:
+        """The reviewed index of a scanned series' sheets: each one's limits,
+        projection and graticule (rectify_charts.py)."""
+        return SCRIPTS / f"{self.name.replace('-', '_')}_sheets.json"
+
+    @property
+    def rectified_directory(self) -> Path:
+        """Where rectify_charts.py writes the georeferenced rasters it makes
+        from a scanned series' downloads."""
+        return self.directory / "rectified"
+
+    @property
     def stages(self) -> tuple[tuple[str, Path], ...]:
         """Each preparation stage as ``(script, output directory)``, in order.
 
@@ -247,6 +289,8 @@ class Series:
         tiled straight from its download.
         """
         out = []
+        if self.scan_suffix:
+            out.append(("rectify_charts.py", self.rectified_directory))
         if self.pdf_scale:
             out.append(("render_pdfs.py", self.render_directory))
         if self.upsample_scale:
@@ -293,8 +337,13 @@ class Series:
 
     @property
     def manifest(self) -> Path:
-        """The reviewed map-area manifest for the series."""
+        """The map-area manifest for the series: reviewed and committed, except
+        for a scanned series, whose map areas are its graticules' and are
+        written beside the rasters they were measured on. What is reviewed of
+        a scanned series is its sheet index."""
         self._own("map-area manifest")
+        if self.scan_suffix:
+            return self.rectified_directory / "areas.json"
         return SCRIPTS / f"{self.name.replace('-', '_')}_areas.json"
 
     @property
@@ -592,7 +641,9 @@ SERIES = {
             # them; each zip holds the sheet's TIFF and a world file.
             link_pattern=r".*/VFR500/(?P<year>\d{4})_(?P<sheet>[A-Z0-9_]+)\.zip",
             tif_pattern=r"[A-Z0-9_]+\.tif",
-            detector="detect_sectional_areas.py",
+            # Each TIFF is the map half of its sheet alone, from edge to edge
+            # and wholly opaque; the legend is on the PDF only.
+            whole_image=True,
             upsample_model="realcugan-up2x-denoise3x.pth",
             upsample_scale=2,
             # 42.33 m/px, a sectional's pitch: native z11.5 at 40 N.
@@ -617,6 +668,52 @@ SERIES = {
             # 0.000762 degrees a pixel is native z10.85; upsampled, z11.85.
             max_zoom=11,
         ),
+        # -- the US military's world series, as a gap filler ------------------
+        #
+        # Decades old and never to be navigated by, but they cover the planet,
+        # and most of it has no current chart that is free. Scans of library
+        # copies, unregistered; see rectify_charts.py and graticule.py.
+        Series(
+            name="onc",
+            title="Operational Navigation Charts 1:1,000,000 (historical)",
+            publisher="U.S. Defense Mapping Agency",
+            licence=US_MILITARY_LICENCE,
+            historical=True,
+            fetcher="links",
+            index_url="https://maps.lib.utexas.edu/maps/onc/",
+            link_pattern=r".*/maps/onc/txu-pclmaps-oclc-8322829_(?P<sheet>[a-z]_\d+[a-z]?)\.jpg",
+            scan_suffix=".jpg",
+            lossy_intermediates=True,
+            tif_pattern=r"[a-z]_\d+[a-z]?\.tif",
+            # The library asks little of its visitors and gets a great deal of
+            # automated traffic. One file at a time, with a pause.
+            fetch_delay=1.0,
+            upsample_model="realcugan-up2x-denoise3x.pth",
+            upsample_scale=2,
+            # Scanned at about 160 dpi: 158 m/px, native z10 at the equator and
+            # z9.3 at 50 degrees. Upsampled that is z11 and z10.3, so z10 is
+            # where every sheet is still being minified.
+            max_zoom=10,
+        ),
+        Series(
+            name="tpc",
+            title="Tactical Pilotage Charts 1:500,000 (historical)",
+            publisher="U.S. Defense Mapping Agency",
+            licence=US_MILITARY_LICENCE,
+            historical=True,
+            fetcher="links",
+            index_url="https://maps.lib.utexas.edu/maps/tpc/",
+            link_pattern=r".*/maps/tpc/txu-pclmaps-oclc-22834566_(?P<sheet>[a-z]-\d+-?[a-z]r?)\.jpg",
+            scan_suffix=".jpg",
+            lossy_intermediates=True,
+            tif_pattern=r"[a-z]-\d+-?[a-z]r?\.tif",
+            fetch_delay=1.0,
+            upsample_model="realcugan-up2x-denoise3x.pth",
+            upsample_scale=2,
+            # About 80 m/px: native z10.9 at the equator, z10.3 at 50 degrees;
+            # upsampled, a level more.
+            max_zoom=11,
+        ),
         Series(
             name="worldwide-vfr",
             title="World-wide VFR charts",
@@ -625,8 +722,8 @@ SERIES = {
             # official one where both are free (the user's call); and the FAA's
             # own sectionals and terminal area charts over everything they
             # reach, since they are what the rest is laid around.
-            layers=("br-wac", "faa-caribbean", "ofm", "es-vfr500", "dk-icao", "ch-icao",
-                    "dk-250", "sectionals", "tac"),
+            layers=("onc", "tpc", "br-wac", "faa-caribbean", "ofm", "es-vfr500", "dk-icao",
+                    "ch-icao", "dk-250", "sectionals", "tac"),
             stepped=True,
             max_zoom=13,
         ),

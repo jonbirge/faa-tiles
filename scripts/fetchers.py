@@ -244,7 +244,10 @@ def fetch_files(chart_series, out: Path, wanted: dict[str, tuple[str, str]],
 def fetch_links(chart_series, out: Path, list_only: bool) -> int:
     links = page_links(chart_series.index_url, read_text(chart_series.index_url))
     found = latest_by_sheet(links, chart_series.link_pattern)
-    wanted = {f"{sheet}.tif": item for sheet, item in found.items()
+    # A scan is kept as the scan it is; it becomes <sheet>.tif when it is
+    # registered. Either way the series' pattern is for that name.
+    suffix = chart_series.scan_suffix or ".tif"
+    wanted = {f"{sheet}{suffix}": item for sheet, item in found.items()
               if chart_series.wants_tif(f"{sheet}.tif")}
     if not wanted:
         print(f"no link on {chart_series.index_url} matches the series' pattern; "

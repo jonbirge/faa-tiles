@@ -78,8 +78,17 @@ def _paper(path: Path) -> np.ndarray:
     # grey, which reads as map and stops the walk halfway through the collar.
     ds = gdal.Open(str(path))
     small = gdal.Translate("", ds, format="MEM", width=ds.RasterXSize // DECIMATE,
-                           height=ds.RasterYSize // DECIMATE, rgbExpand="rgb", resampleAlg="near")
-    return small.ReadAsArray().min(axis=0) >= PAPER
+                           height=ds.RasterYSize // DECIMATE, resampleAlg="near",
+                           **_as_rgb(ds))
+    return small.ReadAsArray()[:3].min(axis=0) >= PAPER
+
+
+def _as_rgb(ds) -> dict:
+    """The gdal.Translate options that make any sheet three bands of colour.
+    The FAA's are palette-indexed; other publishers' are RGB, some with alpha."""
+    if ds.RasterCount == 1 and ds.GetRasterBand(1).GetColorTable() is not None:
+        return {"rgbExpand": "rgb"}
+    return {"bandList": [1, 2, 3]} if ds.RasterCount > 3 else {}
 
 
 def paper_inside_edges(path: Path, area: MapArea, depth: int = 120) -> dict[str, float]:
@@ -264,7 +273,8 @@ def contact_sheets(charts: Path, manifest: dict, out_dir: Path,
             path = charts / name
             ds = gdal.Open(str(path))
             scale = width / ds.RasterXSize
-            small = gdal.Translate("", ds, format="MEM", width=width, rgbExpand="rgb", resampleAlg="average")
+            small = gdal.Translate("", ds, format="MEM", width=width, resampleAlg="average",
+                                   **_as_rgb(ds))
             im = Image.fromarray(small.ReadAsArray().transpose(1, 2, 0))
             draw = ImageDraw.Draw(im)
             [p] = prepare_sources([MosaicSource(path, MapArea.from_dict(manifest[name]))])

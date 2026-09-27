@@ -97,7 +97,8 @@ def main(argv=None) -> int:
             read_from = vrt
 
         part = out_dir / (name + ".part.tif")
-        upsample_raster(read_from, part, model, quiet=True)
+        upsample_raster(read_from, part, model, quiet=True,
+                        lossy=chart_series.lossy_intermediates)
         part.replace(target)
         vrt.unlink(missing_ok=True)
         elapsed = time.monotonic() - started

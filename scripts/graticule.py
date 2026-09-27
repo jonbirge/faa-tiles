@@ -34,12 +34,15 @@ the scan is tied down at every place two of them cross:
 4. **Tie.** Every crossing of a labelled meridian and a labelled parallel is a
    control point: a place in the scan with a known longitude and latitude.
 
-What is known about a sheet beforehand is a :class:`Sheet`: its projection, its
-nominal neatline, the graticule spacing, and its pixel size to within several
-percent. Nothing here reads a label off the sheet, so a nominal neatline that
-is wrong by a whole interval gives a confident, wrong registration. The index
-the bounds come from has to be right; ``georeference_charts.py`` cross-checks
-it between neighbouring sheets.
+Steps 1 and 2 and the measuring in 3 need nothing but the scan, its scale and
+its projection: that is :func:`survey`. Putting values to the lines needs to be
+told one thing the scan cannot say for itself, and there are two ways to tell
+it. A :class:`Reading` is the label printed beside the end line of each family,
+read off the sheet by someone looking at it, and is to be relied on. Failing
+that the sheet's nominal limits will do, *if* they are right to within half an
+interval -- and the indexes they come from are not always: one gives TPC E-2A
+as beginning at 1 52' W, and the sheet says 1. ``rectify_charts.py`` draws the
+corner of every sheet for reading for that reason.
 
 numpy and GDAL only.
 """
@@ -106,6 +109,10 @@ NEATLINE_TOLERANCE = 0.45
 STRAY = 5.0
 # A crossing is kept if both lines have marks within this many pixels of it.
 CROSSING_SUPPORT = 260.0
+# A line is traced from the middle of the first strip it fills to the middle of
+# the last, and it meets the neatline a little past that. A crossing this far
+# past a line's last mark, in pixels, is still a crossing of that line.
+CROSSING_SLACK = 56.0
 
 
 def _wgs84() -> osr.SpatialReference:
@@ -122,15 +129,31 @@ class Sheet:
     name: str
     # The chart's projection, as PROJ or WKT. Its false origin is immaterial.
     crs: str
-    # The nominal neatline, degrees.
-    west: float
-    south: float
-    east: float
-    north: float
     # Graticule spacing, degrees.
     interval: float
     # Metres per pixel, right to within SPACING_TOLERANCE.
     pixel_size: float
+    # About where the sheet is, ``(longitude, latitude)``: near enough for how
+    # far apart its meridians are, which depends on the latitude.
+    middle: tuple[float, float]
+    # The nominal neatline, degrees, where an index gives one.
+    west: float | None = None
+    south: float | None = None
+    east: float | None = None
+    north: float | None = None
+
+
+@dataclass(frozen=True)
+class Reading:
+    """What was read off a sheet: the value printed beside the end line of each
+    family, and which end that was. ``parallel_end`` is ``"south"`` or
+    ``"north"``, ``meridian_end`` is ``"west"`` or ``"east"``; the values are
+    degrees, west and south negative."""
+
+    parallel_end: str
+    parallel: float
+    meridian_end: str
+    meridian: float
 
 
 @dataclass
@@ -153,8 +176,8 @@ class Line:
                 return float(slope * along + offset)
         return float(np.interp(along, self.along, self.across))
 
-    def covers(self, along: float) -> bool:
-        return self.along[0] <= along <= self.along[-1]
+    def covers(self, along: float, slack: float = 0.0) -> bool:
+        return self.along[0] - slack <= along <= self.along[-1] + slack
 
     def support(self, along: float) -> float:
         """Distance from ``along`` to the nearest mark."""
@@ -162,21 +185,52 @@ class Line:
 
 
 @dataclass
+class Survey:
+    """A scan's graticule, found and measured but not yet labelled.
+
+    ``parallels`` and ``meridians`` are ``(line, interval number)`` in order of
+    position: parallels from the top of the scan, meridians from the left.
+    ``neatline`` holds, for each side of the map that ends at a neatline, how
+    many intervals that neatline lies outside the end line of the graticule;
+    0 where the end line is the neatline. A side the map runs off the paper on
+    is not in it.
+    """
+
+    width: int
+    height: int
+    coarse: int
+    parallels: list
+    meridians: list
+    along_x: float
+    along_y: float
+    neatline: dict
+    # As measured, before deciding: side -> (intervals past the end line,
+    # pixels short of the edge of the scan).
+    stops: dict
+
+    def end_line(self, side: str) -> Line:
+        """The graticule line nearest a side of the map."""
+        lines = self.parallels if side in ("north", "south") else self.meridians
+        return lines[0 if side in ("north", "west") else -1][0]
+
+
+@dataclass
 class Registration:
-    """A sheet with its graticule found.
+    """A sheet with its graticule found and labelled.
 
     ``control`` is rows of ``(column, row, longitude, latitude)``, one for each
     place a labelled meridian crosses a labelled parallel.
     """
 
     sheet: Sheet
+    survey: Survey
     control: np.ndarray
     meridians: list
     parallels: list
-    # The sides whose margin settled the labels, e.g. ("west", "south"), and
-    # where each of those neatlines was measured to be, degrees. Coarse -- a
-    # line's end is known to a strip -- but independent of the sheet's index.
+    # What settled the labels: ``("read",)``, or the sides whose neatline was
+    # matched to the sheet's nominal limits, e.g. ``("south", "west")``.
     labelled_by: tuple[str, ...]
+    # Where each neatline is, degrees, measured against the labelled graticule.
     neatlines: dict
     # The affine nearest the control points, projected metres to pixels, and
     # how far the control points are from it: what the scanner did.
@@ -216,21 +270,24 @@ class Projector:
         return np.array(self.transform.TransformPoints(points.tolist()))[:, :2]
 
 
-def expected(sheet: Sheet) -> dict:
+def expected(sheet: Sheet, width: int = 9600) -> dict:
     """What the sheet's projection and stated scale say of its graticule:
     the spacing of its parallels and of its meridians in pixels, at the middle
-    of the sheet, and the furthest its lines lean from the scan's axes."""
+    of the sheet, and the furthest its lines lean from the axes of a scan
+    ``width`` pixels across."""
     project = Projector(sheet.crs)
-    lon = (sheet.west + sheet.east) / 2
-    lat = (sheet.south + sheet.north) / 2
+    lon, lat = sheet.middle
     step = sheet.interval
     centre, north, east = project([(lon, lat), (lon, lat + step), (lon + step, lat)])
     rows = float(np.hypot(*(north - centre))) / sheet.pixel_size
     columns = float(np.hypot(*(east - centre))) / sheet.pixel_size
     # A parallel leans most at the sheet's east and west edges, by the
-    # convergence there; a meridian by the same angle. A scan may be a degree
-    # or two out of square on top of that.
-    corner, along = project([(sheet.east, lat), (sheet.east, lat + step)])
+    # convergence there, and a meridian by the same angle. Half a scan's width
+    # from the middle is as far as an edge can be. A scan may be a degree or
+    # two out of square on top of that.
+    half_width = width / 2 * sheet.pixel_size
+    degrees_out = half_width / max(1.0, float(np.hypot(*(east - centre))) / step)
+    corner, along = project([(lon + degrees_out, lat), (lon + degrees_out, lat + step)])
     lean = abs(math.atan2(along[0] - corner[0], along[1] - corner[1]))
     return {"parallel": rows, "meridian": columns, "lean": math.tan(lean) + 0.035}
 
@@ -522,100 +579,126 @@ def beyond(picked, others: list[Line], at_start: bool, extent: int, coarse: int)
     return float(np.median(away)), float(np.median(short))
 
 
-def label(picked, reference: float, low: float, high: float, interval: float,
-          ascending: bool, measured, traced: list[Line]):
-    """Give the picked lines their values, from where the paper begins.
+def neatlines(picked, reference: float, measured, traced: list[Line]):
+    """Which ends of a family of lines stop at a neatline, and how far outside
+    the end line each neatline is.
 
-    ``picked`` is :func:`pick`, in order of position; ``low`` and ``high`` are
-    the sheet's nominal limits on this axis. ``ascending`` says values rise
-    with position: true of meridians, which run west to east, and false of
-    parallels, which the scan shows north at the top. ``measured`` is
-    :func:`beyond` for the start and for the end of the axis, and ``traced``
-    is every long line of this family, in the graticule or not.
+    ``picked`` is :func:`pick`, in order of position; ``measured`` is
+    :func:`beyond` for the start and for the end; ``traced`` is every long
+    line of this family, in the graticule or not.
 
-    A side has a neatline if the crossing lines stop short of the edge of the
+    An end has a neatline if the crossing lines stop short of the edge of the
     scan, and stop at a ruled line: at the end line of the graticule itself,
     or at a line traced where they stop. Otherwise the map runs off the paper
-    there, and the side says nothing.
+    there. A picked line the crossing lines stop *inside* is a rule past the
+    neatline that fell in with the rhythm, and is dropped.
 
-    A neatline need not be a graticule line, and a sheet's limits are not
-    always what the index says. So the limit is not trusted to the minute: the
-    neatline is measured against the graticule -- so many intervals outside
-    the end line -- and the end line is the graticule value that puts the
-    neatline nearest the nominal limit. That holds while the nominal limit is
-    within half an interval of the truth.
-
-    Returns ``(sides, neatlines, kept)``: the sides that settled it, ``"low"``
-    and/or ``"high"`` in terms of value; the measured value of the neatline on
-    each; and the picked lines that are inside the neatlines, now labelled.
-    ``sides`` is empty if the map runs off the scan both ways.
-    Raises ValueError if a neatline is far from the sheet's limit, or if two
-    neatlines disagree.
+    Returns ``(found, kept)``: ``found`` maps True (the start) and False (the
+    end) to intervals outside the end line, for the ends that have a neatline;
+    ``kept`` is the picked lines inside the neatlines.
     """
-    if len(picked) < 2:
-        raise ValueError("fewer than two graticule lines were found")
     found = {}
     for at_start, (away, short) in zip((True, False), measured):
-        if short < MARGIN:
+        if short < MARGIN or len(picked) < 2:
             continue                    # the lines run off the scan here
         end_line, neighbour = (picked[0], picked[1]) if at_start else (picked[-1], picked[-2])
-        step = (abs(neighbour[0].at(reference) - end_line[0].at(reference))
-                / abs(neighbour[1] - end_line[1]))
-        outward = -1 if at_start else 1
         if away < -ON_THE_LINE:
-            # The crossing lines stop inside the end line: it is a rule past
-            # the neatline that fell in with the rhythm. Drop it and look again.
             rest = picked[1:] if at_start else picked[:-1]
-            return label(rest, reference, low, high, interval, ascending,
-                         _shifted(measured, at_start, away, end_line, rest), traced)
+            return neatlines(rest, reference, _shifted(measured, at_start, end_line, rest), traced)
         if away <= ON_THE_LINE:
             found[at_start] = 0.0
             continue
-        expected = end_line[0].at(reference) + outward * away * step
-        rules = [abs(line.at(reference) - expected) for line in traced if line.covers(reference)]
-        if rules and min(rules) <= RULE_REACH * step:
-            rule = min((line for line in traced if line.covers(reference)),
-                       key=lambda line: abs(line.at(reference) - expected))
+        step = (abs(neighbour[0].at(reference) - end_line[0].at(reference))
+                / abs(neighbour[1] - end_line[1]))
+        expected_at = end_line[0].at(reference) + (-1 if at_start else 1) * away * step
+        rules = [line for line in traced if line.covers(reference)
+                 and abs(line.at(reference) - expected_at) <= RULE_REACH * step]
+        if rules:
+            rule = min(rules, key=lambda line: abs(line.at(reference) - expected_at))
             found[at_start] = abs(rule.at(reference) - end_line[0].at(reference)) / step
-
-    numbers = [number for _, number in picked]
-    offsets, neatlines = {}, {}
-    for at_start, away in found.items():
-        # Which limit this end of the scan is, in terms of value.
-        side = "low" if at_start == ascending else "high"
-        limit = low if side == "low" else high
-        inward = 1 if side == "low" else -1
-        value = round((limit + inward * away * interval) / interval) * interval
-        at = value - inward * away * interval
-        if abs(at - limit) > NEATLINE_TOLERANCE * interval:
-            raise ValueError(
-                f"the {side} neatline is {away:.2f} intervals outside a graticule line, "
-                f"which puts it at {at:.3f}; the sheet's limit is given as {limit:g}")
-        offsets[side] = value - _signed(numbers[0 if at_start else -1], ascending) * interval
-        neatlines[side] = at
-    if not offsets:
-        return (), {}, picked
-    values = list(offsets.values())
-    if max(values) - min(values) > interval / 2:
-        raise ValueError(
-            f"the two neatlines disagree: {numbers[-1] - numbers[0]} intervals of {interval:g} "
-            f"were found between the first and last lines, and the sheet's nominal limits "
-            f"({low:g} to {high:g}) hold {(high - low) / interval:.2f}")
-    origin = values[0]
-    for line, number in picked:
-        line.value = round(origin + _signed(number, ascending) * interval, 9)
-    return tuple(offsets), neatlines, picked
+    return found, picked
 
 
-def _shifted(measured, at_start, away, end_line, rest):
+def _shifted(measured, at_start, end_line, rest):
     """``measured`` with one end moved in a line: the crossing lines now stop
     that much further out, in intervals of the new end."""
-    new_end, new_next = (rest[0], rest[1]) if at_start else (rest[-1], rest[-2])
+    new_end = rest[0] if at_start else rest[-1]
     dropped = abs(new_end[1] - end_line[1])
     start, end = measured
     if at_start:
         return (start[0] + dropped, start[1]), end
     return start, (end[0] + dropped, end[1])
+
+
+SIDES = {"parallel": ("north", "south"), "meridian": ("west", "east")}
+
+
+def put_values(survey: "Survey", sheet: Sheet, reading: Reading | None):
+    """Give a survey's lines their values. Returns ``(labelled by, where the
+    neatlines are, problems)``.
+
+    From a :class:`Reading` if there is one: the end line it names has the
+    value it gives, and the rest follow at one interval a line. Otherwise from
+    the sheet's nominal limits, on the sides that have a neatline: the end line
+    is the graticule value that puts the neatline nearest the limit. That is
+    right while the limit is within half an interval of the truth, and is
+    refused if the neatline then lies further than NEATLINE_TOLERANCE from it.
+    """
+    interval = sheet.interval
+    labelled_by: list[str] = []
+    measured: dict[str, float] = {}
+    problems: list[str] = []
+    for family, lines, ascending in (("parallel", survey.parallels, False),
+                                     ("meridian", survey.meridians, True)):
+        start_side, end_side = SIDES[family]
+        numbers = [number for _, number in lines]
+        origins = {}
+        if reading is not None:
+            side = reading.parallel_end if family == "parallel" else reading.meridian_end
+            value = reading.parallel if family == "parallel" else reading.meridian
+            if side not in (start_side, end_side):
+                raise ValueError(f"a {family} is read at the {start_side} or {end_side} end, "
+                                 f"not the {side}")
+            number = numbers[0 if side == start_side else -1]
+            origins["read"] = value - _signed(number, ascending) * interval
+        else:
+            for side in (start_side, end_side):
+                if side not in survey.neatline:
+                    continue
+                limit = getattr(sheet, side)
+                if limit is None:
+                    continue
+                away = survey.neatline[side]
+                # Inward is towards greater values from the west and the south.
+                inward = 1 if side in ("west", "south") else -1
+                value = round((limit + inward * away * interval) / interval) * interval
+                at = value - inward * away * interval
+                if abs(at - limit) > NEATLINE_TOLERANCE * interval:
+                    raise ValueError(
+                        f"the {side} neatline is {away:.2f} intervals outside a graticule line, "
+                        f"which puts it at {at:.3f}; the sheet's limit is given as {limit:g}")
+                number = numbers[0 if side == start_side else -1]
+                origins[side] = value - _signed(number, ascending) * interval
+        if not origins:
+            problems.append(f"no neatline {start_side} or {end_side} with a known limit: "
+                            f"the {family}s cannot be labelled")
+            continue
+        values = list(origins.values())
+        if max(values) - min(values) > interval / 2:
+            raise ValueError(
+                f"the {start_side} and {end_side} neatlines disagree: {numbers[-1] - numbers[0]} "
+                f"intervals of {interval:g} were found between the first and last {family}s, "
+                f"and the sheet's limits are given as {getattr(sheet, start_side):g} and "
+                f"{getattr(sheet, end_side):g}")
+        for line, number in lines:
+            line.value = round(values[0] + _signed(number, ascending) * interval, 9)
+        labelled_by += list(origins)
+        for side in (start_side, end_side):
+            if side in survey.neatline:
+                outward = -1 if side in ("west", "south") else 1
+                measured[side] = (survey.end_line(side).value
+                                  + outward * survey.neatline[side] * interval)
+    return tuple(dict.fromkeys(labelled_by)), measured, problems
 
 
 # -- crossings --------------------------------------------------------------
@@ -629,7 +712,7 @@ def crossing(parallel: Line, meridian: Line):
     for _ in range(6):
         column = meridian.at(row)
         row = parallel.at(column)
-    if not (parallel.covers(column) and meridian.covers(row)):
+    if not (parallel.covers(column, CROSSING_SLACK) and meridian.covers(row, CROSSING_SLACK)):
         return None
     if parallel.support(column) > CROSSING_SUPPORT or meridian.support(row) > CROSSING_SUPPORT:
         return None
@@ -653,20 +736,17 @@ def _rms(values) -> float:
 
 # -- the whole thing --------------------------------------------------------
 
-def register(rgb: np.ndarray, sheet: Sheet, log=None) -> Registration:
-    """Find a scanned sheet's graticule. ``rgb`` is ``(rows, columns, 3)``.
+def survey(rgb: np.ndarray, sheet: Sheet, log=None) -> Survey:
+    """Find and measure a scan's graticule. ``rgb`` is ``(rows, columns, 3)``.
     ``log``, if given, is called with a line about each step."""
     say = log or (lambda *_: None)
     dark = darkness(rgb)
     height, width = dark.shape
-    want = expected(sheet)
+    want = expected(sheet, max(width, height))
     coarse = int(max(MIN_COARSE, min(COARSE, FINE / max(want["lean"], 1e-6))))
     say(f"expecting parallels {want['parallel']:.0f} px apart and meridians "
         f"{want['meridian']:.0f} px, leaning up to "
         f"{math.degrees(math.atan(want['lean'])):.1f} degrees; strips of {coarse} px")
-
-    problems: list[str] = []
-    labelled_by: list[str] = []
 
     traced_rows = trace(dark, coarse)
     parallels, along_x = pick(traced_rows, want["parallel"], width)
@@ -677,51 +757,57 @@ def register(rgb: np.ndarray, sheet: Sheet, log=None) -> Registration:
     traced_columns = trace(np.ascontiguousarray(dark.T), coarse)
     meridians, along_y = pick(traced_columns, want["meridian"], height)
     say(f"meridians: {len(traced_columns)} long lines traced, {len(meridians)} in the "
-        f"graticule, "
-        f"at columns {[round(line.at(along_y)) for line, _ in meridians]}")
+        f"graticule, at columns {[round(line.at(along_y)) for line, _ in meridians]}")
     if len(parallels) < 2 or len(meridians) < 2:
         raise ValueError(f"too little of the graticule was found: {len(parallels)} parallels "
                          f"and {len(meridians)} meridians")
 
     along_columns = [line for line, _ in parallels]
     along_rows = [line for line, _ in meridians]
-    north = beyond(parallels, along_rows, True, height, coarse)
-    south = beyond(parallels, along_rows, False, height, coarse)
-    west = beyond(meridians, along_columns, True, width, coarse)
-    east = beyond(meridians, along_columns, False, width, coarse)
+    stops = {
+        "north": beyond(parallels, along_rows, True, height, coarse),
+        "south": beyond(parallels, along_rows, False, height, coarse),
+        "west": beyond(meridians, along_columns, True, width, coarse),
+        "east": beyond(meridians, along_columns, False, width, coarse),
+    }
     say("the crossing lines stop, in intervals past the end line and pixels short of the "
-        "edge: " + ", ".join(f"{name} {away:+.2f} {short:.0f}" for name, (away, short)
-                             in (("north", north), ("south", south), ("west", west), ("east", east))))
+        "edge: " + ", ".join(f"{name} {away:+.2f} {short:.0f}"
+                             for name, (away, short) in stops.items()))
 
-    neatlines = {}
-    sides, measured, parallels = label(parallels, along_x, sheet.south, sheet.north,
-                                       sheet.interval, False, (north, south), traced_rows)
-    if not sides:
-        problems.append("no neatline south or north: the parallels cannot be labelled")
-    for side in sides:
-        name = "south" if side == "low" else "north"
-        labelled_by.append(name)
-        neatlines[name] = measured[side]
-    sides, measured, meridians = label(meridians, along_y, sheet.west, sheet.east,
-                                       sheet.interval, True, (west, east), traced_columns)
-    if not sides:
-        problems.append("no neatline west or east: the meridians cannot be labelled")
-    for side in sides:
-        name = "west" if side == "low" else "east"
-        labelled_by.append(name)
-        neatlines[name] = measured[side]
-    say("neatlines measured: " + ", ".join(f"{k} {v:.3f}" for k, v in neatlines.items()))
+    neatline = {}
+    found, parallels = neatlines(parallels, along_x, (stops["north"], stops["south"]),
+                                 traced_rows)
+    neatline.update({("north" if at_start else "south"): away for at_start, away in found.items()})
+    found, meridians = neatlines(meridians, along_y, (stops["west"], stops["east"]),
+                                 traced_columns)
+    neatline.update({("west" if at_start else "east"): away for at_start, away in found.items()})
+    if len(parallels) < 2 or len(meridians) < 2:
+        raise ValueError("fewer than two graticule lines of a family lie inside the neatlines")
+    say("neatlines, in intervals outside the end line: "
+        + (", ".join(f"{side} {away:.2f}" for side, away in neatline.items()) or "none"))
+    return Survey(width=width, height=height, coarse=coarse, parallels=parallels,
+                  meridians=meridians, along_x=along_x, along_y=along_y, neatline=neatline,
+                  stops=stops)
 
-    parallels = [line for line, _ in parallels if line.value is not None]
-    meridians = [line for line, _ in meridians if line.value is not None]
-    say(f"parallels {[line.value for line in parallels]}")
-    say(f"meridians {[line.value for line in meridians]}")
+
+def register(rgb: np.ndarray, sheet: Sheet, reading: Reading | None = None,
+             log=None) -> Registration:
+    """Find a scanned sheet's graticule and label it: from ``reading`` if one
+    is given, from the sheet's nominal limits if not."""
+    say = log or (lambda *_: None)
+    found = survey(rgb, sheet, log)
+    labelled_by, measured, problems = put_values(found, sheet, reading)
+    parallels = [line for line, _ in found.parallels if line.value is not None]
+    meridians = [line for line, _ in found.meridians if line.value is not None]
+    say(f"labelled by {labelled_by}: parallels {[line.value for line in parallels]}, "
+        f"meridians {[line.value for line in meridians]}")
+    say("neatlines at " + (", ".join(f"{k} {v:.3f}" for k, v in measured.items()) or "none"))
 
     control = []
     for parallel in parallels:
         for meridian in meridians:
             at = crossing(parallel, meridian)
-            if at is not None and 0 <= at[0] < width and 0 <= at[1] < height:
+            if at is not None and 0 <= at[0] < found.width and 0 <= at[1] < found.height:
                 control.append((at[0], at[1], meridian.value, parallel.value))
     control = np.array(control, float).reshape(-1, 4)
     affine, residual = np.zeros((2, 3)), np.zeros(0)
@@ -733,9 +819,10 @@ def register(rgb: np.ndarray, sheet: Sheet, log=None) -> Registration:
         f"{_rms(residual):.1f} px rms, {residual.max() if len(residual) else 0:.1f} px at most")
 
     return Registration(
-        sheet=sheet, control=control, meridians=meridians, parallels=parallels,
-        labelled_by=tuple(labelled_by), neatlines=neatlines, affine=affine,
+        sheet=sheet, survey=found, control=control, meridians=meridians, parallels=parallels,
+        labelled_by=labelled_by, neatlines=measured, affine=affine,
         distortion_rms=_rms(residual),
         distortion_max=float(residual.max()) if len(residual) else 0.0,
         problems=problems,
     )
+
