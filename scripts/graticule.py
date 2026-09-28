@@ -127,6 +127,11 @@ BLACK_SHARE = 0.6
 # a label one line out: a degree of latitude is 3% of the meridians' scale at
 # 60 degrees and less nearer the equator, which a scanner can do by itself.
 OUT_OF_SQUARE = 0.06
+# An end meridian is the map's border and not a meridian if it leans this much
+# off what its neighbours' leans say it should, across per along (0.008 is
+# under half a degree), and there are this many lines to say so.
+LEAN_SCATTER = 0.008
+MIN_TO_JUDGE_LEAN = 5
 # How far the crossing a reading names may be from the nearest surveyed line,
 # in intervals, and still be that line.
 READING_REACH = 0.3
@@ -686,6 +691,43 @@ def _pick(lines: list[Line], step: float, extent: int):
     return [(lines[crossing_at[index][1]], number) for index, number in chosen], float(reference)
 
 
+def lean(line: Line) -> float:
+    """How a line leans: across per along, over its whole length."""
+    return float(np.polyfit(line.along, line.across, 1)[0])
+
+
+def without_borders(picked):
+    """The picked meridians without the ruled border of the map at either end.
+
+    An ONC is a rectangle on the paper. Its east and west edges are ruled
+    straight up the sheet, and the meridian through the corner leans away from
+    the rule into the map, by the convergence there: two degrees on a sheet at
+    20 north, six at 60. Where the rule falls in with the rhythm it is picked
+    as the end meridian, and it was on six of the first 270 sheets surveyed.
+    It gives itself away by not leaning as its neighbours say it should: on a
+    cone the lean of a meridian grows steadily from one side of the sheet to
+    the other, and a line through the leans of the rest says what the end
+    one's ought to be.
+    """
+    picked = list(picked)
+    while len(picked) >= MIN_TO_JUDGE_LEAN:
+        dropped = False
+        for end in (0, -1):
+            rest = picked[1:] if end == 0 else picked[:-1]
+            numbers = np.array([number for _, number in rest], float)
+            leans = np.array([lean(line) for line, _ in rest])
+            slope, offset = np.polyfit(numbers, leans, 1)
+            scatter = max(LEAN_SCATTER, 3 * float(np.std(leans - (slope * numbers + offset))))
+            line, number = picked[end]
+            if abs(lean(line) - (slope * number + offset)) > scatter:
+                picked = rest
+                dropped = True
+                break
+        if not dropped:
+            break
+    return picked
+
+
 def _signed(number: int, ascending: bool) -> int:
     return number if ascending else -number
 
@@ -903,6 +945,7 @@ def survey(rgb: np.ndarray, sheet: Sheet, log=None) -> Survey:
     # of the transposed scan.
     traced_columns = trace(np.ascontiguousarray(dark.T), coarse)
     meridians, along_y = pick(traced_columns, want["meridian"], height)
+    meridians = without_borders(meridians)
     say(f"meridians: {len(traced_columns)} long lines traced, {len(meridians)} in the "
         f"graticule, at columns {[round(line.at(along_y)) for line, _ in meridians]}")
     if len(parallels) < 2 or len(meridians) < 2:

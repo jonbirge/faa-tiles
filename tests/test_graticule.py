@@ -40,9 +40,10 @@ class Scan:
     """A chart drawn into an image, and the mapping it was drawn with."""
 
     def __init__(self, *, rotation=0.6, stretch=0.0, west=WEST, south=SOUTH, seed=1,
-                 margin_west=260, margin_south=240, clutter=True, grid=False):
+                 margin_west=260, margin_south=240, clutter=True, grid=False, border=False):
         self.width, self.height = SIZE
         self.grid = grid
+        self.border = border
         self.west, self.south = west, south
         self.stretch = stretch
         wgs = osr.SpatialReference()
@@ -116,6 +117,13 @@ class Scan:
         edge = ((np.abs(lat - self.south) < 1.3 * degrees_per_pixel)
                 | (np.abs(lon - self.west) * np.cos(np.radians(lat)) < 1.3 * degrees_per_pixel))
         image[(line | edge) & grown] = (25, 25, 25)
+        if self.border:
+            # The border of a map that is a rectangle on the paper: ruled
+            # straight up the sheet, one interval west of the first meridian
+            # where the graticule is looked at, which is where the next
+            # meridian would be if the map went on.
+            column = int(self.pixel([(self.west - INTERVAL, self.south + 3.0)])[0][0])
+            image[:self.height - 300, column - 1:column + 2] = (25, 25, 25)
         if clutter:
             # Type and symbols: short dark marks all over the map, and the blue
             # grid a military chart carries beside its graticule.
@@ -202,6 +210,29 @@ def test_the_military_grid_is_not_taken_for_the_graticule():
     # Left to the rhythm alone, the grid is what is found.
     taken, _ = g._pick(traced, g.expected(scan.sheet())["parallel"], scan.width)
     assert np.median([line.ink for line, _ in taken]) < 100
+
+
+def test_the_border_of_the_map_is_not_a_meridian():
+    """It is ruled straight up the sheet, and the meridians lean."""
+    scan = Scan(border=True, margin_west=420, seed=22)
+    dark = g.darkness(scan.rgb)
+    traced = g.trace(np.ascontiguousarray(dark.T), 32)
+    taken, _ = g.pick(traced, g.expected(scan.sheet())["meridian"], scan.height)
+    # The rhythm takes it for the first meridian...
+    assert abs(g.lean(taken[0][0]) - g.lean(taken[1][0])) > 0.03
+    # ...and how it leans says it is not.
+    kept = g.without_borders(taken)
+    assert [number for _, number in kept] == [number for _, number in taken[1:]]
+    registered = g.register(scan.rgb, scan.sheet(), scan.reading())
+    assert registered.ok and min(line.value for line in registered.meridians) == WEST
+    assert _misfit(scan, registered).max() < 2.5
+
+
+def test_meridians_that_lean_as_a_cone_has_them_are_all_kept(scan):
+    dark = g.darkness(scan.rgb)
+    traced = g.trace(np.ascontiguousarray(dark.T), 32)
+    taken, _ = g.pick(traced, g.expected(scan.sheet())["meridian"], scan.height)
+    assert len(g.without_borders(taken)) == len(taken)
 
 
 def test_the_lines_carry_the_values_that_were_read(registered):
