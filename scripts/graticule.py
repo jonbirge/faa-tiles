@@ -80,6 +80,10 @@ MARK = 38.0
 # heading, pixels, and how many strips a chain may miss and carry on.
 LINK_REACH = 5.0
 LINK_GAP = 10
+# Marks at an end of a line are stragglers if there are no more than this many
+# of them and they are more than this many strips from the rest.
+STRAGGLERS = 4
+STRAGGLER_GAP = 3
 # The steepest a line may lean against its own axis, as a tangent. Scans are
 # square to within a degree or two; the rest is the projection's convergence.
 MAX_LEAN = 0.30
@@ -519,6 +523,30 @@ def smooth_part(line: Line, coarse: int, extent: int) -> Line | None:
     return Line(along[chosen], across[chosen])
 
 
+def without_stragglers(line: Line, coarse: int) -> Line:
+    """The line without the few marks that stand off from either end of it.
+
+    A chain waits LINK_GAP strips for its line to come back, which is what
+    carries it across a town or a block of type. Past the edge of the map
+    there is no line to come back, and what turns up within the wait is the
+    stem of a letter in the sheet's title: TPC H-6B's 47th meridian is marked
+    every strip down to the neatline and then once more, eight strips on, in
+    the K of KUWAIT. A line that ends where it does not is shown where its
+    label is not, and says the map goes on where it does not.
+    """
+    along = line.along
+    first, last = 0, len(along)
+    wide = np.flatnonzero(np.diff(along) > STRAGGLER_GAP * coarse)
+    for gap in wide:
+        if gap + 1 <= STRAGGLERS:
+            first = max(first, gap + 1)
+        if len(along) - (gap + 1) <= STRAGGLERS:
+            last = min(last, gap + 1)
+    if last - first < 8:
+        return line
+    return Line(along[first:last], line.across[first:last])
+
+
 def inked(dark: np.ndarray, line: Line) -> float:
     """How dark a line is printed: the darkest pixel within two of each of its
     marks, and the middle one of those."""
@@ -532,7 +560,8 @@ def trace(dark: np.ndarray, coarse: int) -> list[Line]:
     """The long near-horizontal printed lines of a scan."""
     extent = dark.shape[1]
     lines = chains(marks(dark, thin(dark), coarse), coarse, extent)
-    kept = [part for part in (smooth_part(line, coarse, extent) for line in lines)
+    kept = [without_stragglers(part, coarse)
+            for part in (smooth_part(line, coarse, extent) for line in lines)
             if part is not None]
     for line in kept:
         line.ink = inked(dark, line)

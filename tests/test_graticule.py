@@ -395,3 +395,19 @@ def test_the_local_mean_is_the_same_taken_a_band_at_a_time(monkeypatch):
         assert whole[row, column] == pytest.approx(max(0.0, dark[row, column] - mean), abs=1e-4)
     monkeypatch.setattr(g, "BAND", 64)
     assert np.array_equal(g.thin(dark), whole)
+
+
+def test_marks_standing_off_from_the_end_of_a_line_are_not_the_line():
+    """TPC H-6B's 47th meridian was marked every strip down to the neatline,
+    and once more eight strips on, in a letter of the title."""
+    along = np.arange(16.0, 3000.0, 32.0)
+    body = g.Line(along, 500.0 + 0.01 * along)
+    assert len(g.without_stragglers(body, 32).along) == len(along)
+    beyond = np.array([along[-1] + 8 * 32, along[-1] + 9 * 32])
+    before = np.array([along[0] - 6 * 32])
+    strayed = g.Line(np.r_[before, along, beyond], 500.0 + 0.01 * np.r_[before, along, beyond])
+    kept = g.without_stragglers(strayed, 32)
+    assert kept.along[0] == along[0] and kept.along[-1] == along[-1]
+    # A gap in the body of a line is a town it ran under, and is kept.
+    holed = g.Line(np.r_[along[:40], along[48:]], 500.0 + 0.01 * np.r_[along[:40], along[48:]])
+    assert len(g.without_stragglers(holed, 32).along) == len(holed.along)
