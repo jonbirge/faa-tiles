@@ -237,6 +237,20 @@ def test_a_line_not_traced_to_the_edge_gives_way_to_the_next():
     assert shown.at == pytest.approx((column, row), abs=4)
 
 
+def test_a_line_that_had_no_label_can_be_passed_over():
+    scan = Scan(seed=11)
+    found = graticule.survey(scan.rgb, scan.sheet())
+    first = rectify.corner(found)
+    assert first.steps == (0, 0)
+    # The meridian it marked, named by where it crosses the parallel it marked.
+    again = rectify.corner(found, {"meridian": [first.at]})
+    assert again.steps == (0, 1) and again.parallel is first.parallel
+    column, row = scan.pixel([(WEST + INTERVAL, SOUTH)])[0]
+    assert again.at == pytest.approx((column, row), abs=4)
+    both = rectify.corner(found, {"meridian": [first.at], "parallel": [first.at]})
+    assert both.steps == (1, 1)
+
+
 def test_a_line_followed_out_into_the_margin_gives_way_too():
     scan = Scan(seed=11)
     found = graticule.survey(scan.rgb, scan.sheet())

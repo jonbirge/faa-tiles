@@ -310,7 +310,7 @@ def end_of(line: graticule.Line, side: str, coarse: int) -> tuple[float, float]:
     return float(along), line.at(along)
 
 
-def corner(found: graticule.Survey) -> Corner:
+def corner(found: graticule.Survey, avoid: dict | None = None) -> Corner:
     """The two lines to read, where they cross, and where to look for the label
     of each.
 
@@ -328,7 +328,14 @@ def corner(found: graticule.Survey) -> Corner:
     half an interval from where the next two in do, short or past. A line is
     lost under type before it reaches the edge, and on ONC L-3 one was followed
     out of the map along a line of the notes printed beside it.
+
+    ``avoid`` names lines not to mark, as ``{"parallel": [(column, row), ...],
+    "meridian": [...]}``: the lines through those pixels. It is for a second
+    look at a sheet whose marked line turned out to have no label to read --
+    the rule of a diagram in the margin, taken for a meridian -- and gets the
+    next line in marked instead.
     """
+    avoid = avoid or {}
     def has_margin(side):
         return side in found.neatline or found.stops[side][1] >= graticule.MARGIN
 
@@ -348,17 +355,23 @@ def corner(found: graticule.Survey) -> Corner:
         meridians = meridians[::-1]
     reach = (_spacing(found.meridians, found.along_y), _spacing(found.parallels, found.along_x))
 
-    def choose(lines, side, reach):
+    def choose(lines, side, reach, apart, avoided):
+        """Which line, counted from the end, and where it stops."""
+        allowed = [k for k, line in enumerate(lines)
+                   if not any(abs(line.at(along) - across) < 0.3 * apart
+                              for along, across in avoided)] or [0]
         if side is None:
-            return 0, None
-        ends = [end_of(line, side, found.coarse) for line in lines[:3]]
+            return allowed[0], None
+        ends = [end_of(lines[k], side, found.coarse) for k in allowed[:3]]
         usual = float(np.median([along for along, _ in ends]))
         i = next((i for i, (along, _) in enumerate(ends) if abs(along - usual) <= reach / 2),
                  int(np.argmin([abs(along - usual) for along, _ in ends])))
-        return i, ends[i]
+        return allowed[i], ends[i]
 
-    i, parallel_meets = choose(parallels, label_side[0], reach[0])
-    j, meridian_meets = choose(meridians, label_side[1], reach[1])
+    i, parallel_meets = choose(parallels, label_side[0], reach[0], reach[1],
+                               [(column, row) for column, row in avoid.get("parallel", ())])
+    j, meridian_meets = choose(meridians, label_side[1], reach[1], reach[0],
+                               [(row, column) for column, row in avoid.get("meridian", ())])
     parallel, meridian = parallels[i], meridians[j]
     # Where the two cross, or would if they were traced that far.
     column = float(meridian.across.mean())
@@ -468,8 +481,8 @@ def draw_panel(rgb: np.ndarray, found: graticule.Survey, shown: Corner, window):
     return Image.alpha_composite(view, marks).convert("RGB")
 
 
-def draw_cell(rgb: np.ndarray, found: graticule.Survey, caption: str):
-    shown = corner(found)
+def draw_cell(rgb: np.ndarray, found: graticule.Survey, caption: str, avoid=None):
+    shown = corner(found, avoid)
     views = Image.new("RGB", CELL, (255, 255, 160))
     for i, window in enumerate(shown.windows):
         views.paste(draw_panel(rgb, found, shown, window), (i * PANEL[0], 0))
@@ -490,7 +503,7 @@ def survey_one(task):
     Kept sheet by sheet, by the process that did the work, so that a review
     that is stopped -- 270 scans at 2 GB apiece is a long time for nothing else
     on the machine to want the memory -- has lost only the sheets in hand."""
-    stem, scan, entry, index, imprints, out_dir = task
+    stem, scan, entry, index, imprints, out_dir, avoid = task
     out_dir = Path(out_dir)
     try:
         sheet = sheet_for(stem, entry, index)
@@ -504,7 +517,8 @@ def survey_one(task):
         if entry.get("limits_from"):
             nominal = (f"  index ({entry['limits_from']}): W {entry['west']:g}  S {entry['south']:g}"
                        f"  E {entry['east']:g}  N {entry['north']:g}")
-        cell, shown = draw_cell(rgb, found, f"{entry.get('title', stem)}  [{stem}]{nominal}")
+        cell, shown = draw_cell(rgb, found, f"{entry.get('title', stem)}  [{stem}]{nominal}",
+                                avoid)
         cell.save(out_dir / "cells" / f"{stem}.jpg", quality=95)
         outcome = {
             "column": round(shown.at[0], 1), "row": round(shown.at[1], 1),
@@ -551,7 +565,7 @@ def pages(cells, out_dir: Path, name: str, readings: dict, key: str) -> int:
 
 
 def review(chart_series, index, scans, out_dir: Path, workers: int,
-           imprints: str = "", force: bool = False) -> int:
+           imprints: str = "", force: bool = False, avoid: dict | None = None) -> int:
     for directory in (out_dir, out_dir / "cells", out_dir / "imprints", out_dir / "surveyed"):
         directory.mkdir(parents=True, exist_ok=True)
 
@@ -569,7 +583,8 @@ def review(chart_series, index, scans, out_dir: Path, workers: int,
         return outcome if (out_dir / "cells" / f"{stem}.jpg").is_file() else None
 
     readings = {stem: kept(stem, scan) for stem, scan in scans}
-    tasks = [(stem, str(scan), index["sheets"][stem], index, imprints, str(out_dir))
+    tasks = [(stem, str(scan), index["sheets"][stem], index, imprints, str(out_dir),
+              (avoid or {}).get(stem))
              for stem, scan in scans if readings[stem] is None]
     print(f"{len(tasks)} of {len(scans)} sheet(s) to survey", flush=True)
     started = time.monotonic()
@@ -645,6 +660,11 @@ def main(argv=None) -> int:
                          "It is looked for under the south-west corner of the map, or with "
                          "'paper' in the bottom corners of the sheet, which is where it is on "
                          "the sheets the first does not find it on")
+    ap.add_argument("--avoid", type=Path, metavar="LINES",
+                    help="with --review, lines not to mark, as JSON: {sheet: {\"parallel\": "
+                         "[[column, row], ...], \"meridian\": [...]}}, each the line through "
+                         "that pixel of the scan. For a second look at sheets whose marked "
+                         "line had no label to read")
     ap.add_argument("--apply", type=Path, metavar="READINGS",
                     help="write the readings in this file into the sheet index")
     ap.add_argument("--trust-index", action="store_true",
@@ -671,8 +691,9 @@ def main(argv=None) -> int:
         raise SystemExit(f"no scans in {in_dir}; run scripts/fetch_charts.py "
                          f"{chart_series.name} first")
     if args.review:
+        avoid = json.loads(args.avoid.read_text(encoding="utf-8")) if args.avoid else None
         return review(chart_series, index, scans, args.review, args.workers, args.imprints,
-                      args.force)
+                      args.force, avoid)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path, areas_path = out_dir / REPORT, out_dir / AREAS
