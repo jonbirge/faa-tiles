@@ -142,7 +142,7 @@ def test_a_sheets_projection_follows_from_its_band():
     assert "+lat_1=-6.666667" in rectify.crs_for([-8, 0], -61)
     # The row next to the pole is not on a cone, and says so on its sheets.
     polar = rectify.crs_for([80, 88], -20)
-    assert "+proj=stere" in polar and "+lat_0=90" in polar and "+lat_ts=81.033333" in polar
+    assert "+proj=stere" in polar and "+lat_0=90" in polar and "+lat_ts=81.050000" in polar
     assert "+proj=lcc" in rectify.crs_for([72, 80], -20)
 
 

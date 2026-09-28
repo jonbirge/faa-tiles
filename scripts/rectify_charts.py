@@ -111,7 +111,7 @@ def load_index(chart_series) -> dict:
 # Bands reaching past this latitude are drawn on a polar stereographic
 # projection, true to scale at the latitude their sheets give.
 POLAR = 84.0
-POLAR_TRUE_SCALE = 81 + 2 / 60
+POLAR_TRUE_SCALE = 81 + 3 / 60
 
 
 def crs_for(band, longitude: float) -> str:
@@ -122,7 +122,7 @@ def crs_for(band, longitude: float) -> str:
     would do, and this one keeps north up.
 
     The row nearest a pole is not a cone: its sheets say "Polar Stereographic
-    Projection, Scale 1:1,000,000 at 81 02".
+    Projection, Scale 1:1,000,000 at 81 03".
     """
     south, north = band
     if max(abs(south), abs(north)) > POLAR:
