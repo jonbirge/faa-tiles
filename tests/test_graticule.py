@@ -40,10 +40,12 @@ class Scan:
     """A chart drawn into an image, and the mapping it was drawn with."""
 
     def __init__(self, *, rotation=0.6, stretch=0.0, west=WEST, south=SOUTH, seed=1,
-                 margin_west=260, margin_south=240, clutter=True, grid=False, border=False):
+                 margin_west=260, margin_south=240, clutter=True, grid=False, border=False,
+                 square=False):
         self.width, self.height = SIZE
         self.grid = grid
         self.border = border
+        self.square = square
         self.west, self.south = west, south
         self.stretch = stretch
         wgs = osr.SpatialReference()
@@ -92,6 +94,12 @@ class Scan:
         image = np.full((self.height, self.width, 3), PAPER, np.uint8)
         # Paper west and south of the neatline; the map runs off north and east.
         inside = (lon >= self.west) & (lat >= self.south)
+        if self.square:
+            # A map that is a rectangle on the paper: its west edge is ruled
+            # straight up from the south-west corner, and the meridian through
+            # the corner leans away from it into the map.
+            ruled = self.pixel([(self.west, self.south)])[0][0]
+            inside = (columns >= ruled) & (lat >= self.south)
         image[inside] = SEA
         if self.grid:
             # A military grid ruled across the sea in blue: straight in the
@@ -116,6 +124,8 @@ class Scan:
         # The neatline is ruled, whether or not it falls on the graticule.
         edge = ((np.abs(lat - self.south) < 1.3 * degrees_per_pixel)
                 | (np.abs(lon - self.west) * np.cos(np.radians(lat)) < 1.3 * degrees_per_pixel))
+        if self.square:
+            edge |= np.abs(columns - ruled) < 1.5
         image[(line | edge) & grown] = (25, 25, 25)
         if self.border:
             # The border of a map that is a rectangle on the paper: ruled

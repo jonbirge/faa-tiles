@@ -102,6 +102,35 @@ def test_the_map_area_is_the_graticules(tmp_path):
     assert last_parallel - step < limits["north"] < last_parallel
 
 
+def test_the_map_area_of_a_square_map_stops_at_the_corner_meridian():
+    """An ONC is a rectangle on the paper. West of the meridian through its
+    south-west corner there is map at the north edge and paper at the south,
+    and a box of meridians and parallels cannot have the one without the
+    other."""
+    scan = Scan(seed=16, square=True, margin_west=420)
+    registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
+    assert registration.ok
+    # The parallels were followed into the wedge, past the corner meridian...
+    north = registration.parallels[0]
+    assert north.value == max(line.value for line in registration.parallels)
+    corner_meridian = scan.pixel([(WEST, north.value)])[0][0]
+    assert north.along[0] < corner_meridian - 40
+    # ...and the box stops at it.
+    limits = rectify.limits_of(registration)
+    assert WEST < limits["west"] < WEST + 0.02
+    assert SOUTH < limits["south"] < SOUTH + 0.02
+
+
+def test_a_line_lost_before_the_edge_does_not_draw_the_map_area_in():
+    scan = Scan(seed=7)
+    registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
+    before = rectify.limits_of(registration)
+    lost = registration.parallels[2]
+    kept = lost.along > lost.along[0] + 400
+    lost.along, lost.across = lost.along[kept], lost.across[kept]
+    assert rectify.limits_of(registration) == before
+
+
 def test_crossings_measured_on_the_wrong_line_are_left_out():
     scan = Scan(seed=8, clutter=False)
     registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())

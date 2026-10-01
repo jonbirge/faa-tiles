@@ -200,23 +200,112 @@ def consistent(control: np.ndarray, project) -> np.ndarray:
     return kept
 
 
+def _value_at(lines, along: float, across: float) -> float:
+    """The longitude at a pixel, from the meridians either side of it -- or
+    the latitude, from the parallels. ``lines`` are labelled lines of one
+    family; ``along`` and ``across`` are the pixel in their terms. Past the end
+    lines it carries on as the last two were going."""
+    at = sorted((line.at(along), line.value) for line in lines)
+    places = np.array([p for p, _ in at])
+    values = np.array([v for _, v in at])
+    if across < places[0]:
+        places, values = places[:2], values[:2]
+    elif across > places[-1]:
+        places, values = places[-2:], values[-2:]
+    else:
+        return float(np.interp(across, places, values))
+    return float(values[0] + (across - places[0]) * (values[1] - values[0])
+                 / (places[1] - places[0]))
+
+
+def _steady(x, y):
+    """A line through points some of which are wild: the middle one of the
+    slopes between every two, and of what is left over."""
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    if len(x) < 4 or np.ptp(x) == 0:
+        return 0.0, float(np.median(y))
+    i, j = np.triu_indices(len(x), 1)
+    apart = x[j] != x[i]
+    slope = float(np.median((y[j] - y[i])[apart] / (x[j] - x[i])[apart]))
+    return slope, float(np.median(y - slope * x))
+
+
 def limits_of(registration: graticule.Registration) -> dict:
-    """A sheet's map area as limits in degrees: its graticule's end lines, or
-    the neatline where one was found outside them, drawn in by INSET."""
+    """A sheet's map area as limits in degrees: the largest box of meridians
+    and parallels that is map all over.
+
+    On a side the map runs off the scan, that is the last line of the
+    graticule. On a side with a margin it is where the lines crossing that
+    side stop, which need not be on a line of the graticule, or the same all
+    the way along: an ONC is a rectangle on the paper, ruled straight up from
+    its south-west corner, and the meridian through that corner leans away
+    into the map, so that the sheet reaches a quarter of a degree further west
+    at its north edge than at its south. The box has to stop at the corner
+    meridian. What is west of it is a wedge of map at one end and of paper at
+    the other, and the sheet next door has the map.
+
+    Where the lines stop is measured a line at a time. Mostly they stop on a
+    line of the graticule, and the middle one of them says which: that is the
+    limit, and a line lost under type that stops early does not move it. Where
+    they do not, a steady line is put through the measurements and read at
+    the box's two ends, and the limit is drawn in by the half strip a line's
+    end is known to.
+    """
+    found = registration.survey
     size = registration.pixel_size
-    metres = INSET * (np.nanmean(size) if np.isfinite(size).any() else 100.0)
+    pixel = float(np.nanmean(size)) if np.isfinite(size).any() else 100.0
     lat = float(np.mean([line.value for line in registration.parallels]))
-    d_lat = metres / 111_000.0
-    d_lon = d_lat / max(0.1, math.cos(math.radians(lat)))
-    meridians = [line.value for line in registration.meridians]
-    parallels = [line.value for line in registration.parallels]
-    found = registration.neatlines
-    return {
-        "west": round(min(min(meridians), found.get("west", math.inf)) + d_lon, 5),
-        "east": round(max(max(meridians), found.get("east", -math.inf)) - d_lon, 5),
-        "south": round(min(min(parallels), found.get("south", math.inf)) + d_lat, 5),
-        "north": round(max(max(parallels), found.get("north", -math.inf)) - d_lat, 5),
-    }
+    per_lat = pixel / 111_000.0
+    per_lon = per_lat / max(0.1, math.cos(math.radians(lat)))
+    interval = registration.sheet.interval
+    meridians, parallels = registration.meridians, registration.parallels
+    half = found.coarse / 2
+
+    def margin(side):
+        return side in found.neatline or found.stops[side][1] >= graticule.MARGIN
+
+    def stops(side):
+        """Where each line that crosses ``side`` stops there, as ``(value of
+        the line, value where it stops)``."""
+        crossing, across = ((parallels, meridians) if side in ("west", "east")
+                            else (meridians, parallels))
+        out = []
+        for line in crossing:
+            along = (line.along[0] - half if side in ("west", "north")
+                     else line.along[-1] + half)
+            out.append((line.value, _value_at(across, line.at(along), along)))
+        return out
+
+    def limit(side, low, high):
+        """The limit on ``side`` of a box reaching from ``low`` to ``high``
+        the other way."""
+        lines = meridians if side in ("west", "east") else parallels
+        inward = 1 if side in ("west", "south") else -1
+        end = min(line.value for line in lines) if inward > 0 else max(
+            line.value for line in lines)
+        per = per_lon if side in ("west", "east") else per_lat
+        if not margin(side):
+            return end + inward * INSET * per
+        stopped = stops(side)
+        usual = float(np.median([where for _, where in stopped]))
+        nearest = round(usual / interval) * interval
+        if abs(usual - nearest) <= graticule.ON_THE_LINE * interval:
+            return nearest + inward * INSET * per
+        slope, offset = _steady(*zip(*stopped))
+        at = [slope * low + offset, slope * high + offset]
+        edge = max(at) if inward > 0 else min(at)
+        nearest = round(edge / interval) * interval
+        if abs(edge - nearest) <= graticule.ON_THE_LINE * interval:
+            return nearest + inward * INSET * per
+        return edge + inward * (INSET + half) * per
+
+    south = limit("south", min(m.value for m in meridians), max(m.value for m in meridians))
+    north = limit("north", min(m.value for m in meridians), max(m.value for m in meridians))
+    west, east = limit("west", south, north), limit("east", south, north)
+    # Again, now that it is known how far east and west the box goes.
+    south, north = limit("south", west, east), limit("north", west, east)
+    return {"west": round(west, 5), "east": round(east, 5),
+            "south": round(south, 5), "north": round(north, 5)}
 
 
 def rectify(scan: Path, out: Path, registration: graticule.Registration, limits: dict) -> dict:
