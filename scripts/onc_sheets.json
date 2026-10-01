@@ -16,7 +16,15 @@
    "east": 33.9999,
    "north": 84.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 3601.0,
+    "row": 5058.9,
+    "parallel": 81.0,
+    "meridian": -15.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense and published by the Aeronautical Chart and Information Center, U.S. Air Force, St. Louis, Mo., 63118. Compiled April 1969 from the best available source. Lithographed by ACIC 6-69"
   },
   "a_2": {
    "title": "ONC A-2",
@@ -31,7 +39,15 @@
    "east": 104.0,
    "north": 84.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 2994.5,
+    "row": 4891.7,
+    "parallel": 81.0,
+    "meridian": 49.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled JANUARY 1974. Lithographed by DMAAC 5-74"
   },
   "a_5": {
    "title": "ONC A-5",
@@ -46,7 +62,15 @@
    "east": -36.0,
    "north": 84.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 2992.8,
+    "row": 4822.5,
+    "parallel": 81.0,
+    "meridian": -91.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled April 1968. Revised February 1987 (NOS). (Revision limited to aeronautical information and correction of all CHUM conditions.) Lithographed By DMAAC 10-90"
   },
   "b_1": {
    "title": "ONC B-1",
@@ -61,7 +85,15 @@
    "east": 42.0119,
    "north": 80.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1193.7,
+    "row": 4757.8,
+    "parallel": 73.0,
+    "meridian": 4.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1973 Revised June 1982 (Revision limited to aeronautical information) Lithographed by DMAAC 8-82"
   },
   "b_2": {
    "title": "ONC B-2",
@@ -76,7 +108,15 @@
    "east": 80.0114,
    "north": 80.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1196.5,
+    "row": 4779.3,
+    "parallel": 73.0,
+    "meridian": 42.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1973 Lithographed by DMAAC 6-74"
   },
   "b_3": {
    "title": "ONC B-3",
@@ -91,7 +131,15 @@
    "east": 118.0092,
    "north": 80.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1219.2,
+    "row": 4826.5,
+    "parallel": 73.0,
+    "meridian": 80.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled January 1960. Revised July 1975. Lithographed by DMAAC 11-75"
   },
   "b_4": {
    "title": "ONC B-4",
@@ -106,7 +154,15 @@
    "east": 156.0074,
    "north": 80.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1198.3,
+    "row": 4753.8,
+    "parallel": 73.0,
+    "meridian": 118.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled December 1968. Revised September 1975. Lithographed by DMAAC 2-76"
   },
   "b_7": {
    "title": "ONC B-7",
@@ -117,7 +173,15 @@
     80
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1210.5,
+    "row": 4730.8,
+    "parallel": 73.0,
+    "meridian": -128.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled August 1969. Revised January 1986 (Revisions limited to aeronautical information and correction of all CHUM conditions.) Lithographed By DMAAC 8-90"
   },
   "b_8": {
    "title": "ONC B-8",
@@ -128,7 +192,15 @@
     80
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1201.3,
+    "row": 4721.9,
+    "parallel": 73.0,
+    "meridian": -90.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Base information compiled August 1969. Revised August 1975. Lithographed by WPC 4-76"
   },
   "b_9": {
    "title": "ONC B-9",
@@ -143,7 +215,15 @@
    "east": -13.9883,
    "north": 80.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1212.0,
+    "row": 4711.5,
+    "parallel": 73.0,
+    "meridian": -52.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled March 1968. Reprinted by WPC 2-76"
   },
   "c_1": {
    "title": "ONC C-1",
@@ -158,7 +238,15 @@
    "east": 0.0005,
    "north": 72.0011,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1231.3,
+    "row": 4910.3,
+    "parallel": 65.0,
+    "meridian": -26.0
+   },
+   "producer": "US",
+   "imprint": "BASE 100. BASE INFORMATION COMPILED JULY 1965 (NS). FROM SOURCE DATED 1951 TO 1963. COLOR SEPARATION (NS). SPEC. NO. ONC A-2. Lithographed by ACIC 8-65. 1ST EDITION"
   },
   "c_2": {
    "title": "ONC C-2",
@@ -173,7 +261,15 @@
    "east": 36.0058,
    "north": 71.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 971.9,
+    "row": 5784.6,
+    "parallel": 64.0,
+    "meridian": 9.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled September 1960. Revised October 1989. (Revision limited to the addition of the Military Grid Reference System.) Lithographed By DMAAC 12-89"
   },
   "c_3": {
    "title": "ONC C-3",
@@ -188,7 +284,15 @@
    "east": 63.0049,
    "north": 71.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1123.3,
+    "row": 5156.1,
+    "parallel": 65.0,
+    "meridian": 36.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled March 1971. Revised June 1982. (Revision limited to Aeronautical Information and correction of CHUM conditions) Lithographed By DMAAC 12-82"
   },
   "c_4": {
    "title": "ONC C-4",
@@ -203,7 +307,15 @@
    "east": 91.0024,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 787.4,
+    "row": 5697.2,
+    "parallel": 64.0,
+    "meridian": 63.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled September 1973. Revised July 1982. Revision limited to aeronautical information and correction of CHUM conditions."
   },
   "c_5": {
    "title": "ONC C-5",
@@ -218,7 +330,15 @@
    "east": 119.0059,
    "north": 71.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 798.1,
+    "row": 5748.2,
+    "parallel": 64.0,
+    "meridian": 91.0
+   },
+   "producer": "US",
+   "imprint": "BASE INFORMATION COMPILED AUGUST 1959 FROM SOURCE DATED 1949 TO 1958. REVISED NOVEMBER 1966 FROM SOURCE DATED 1963 TO 1966. CONTOUR EVALUATION OVERPRINT NO. 2, JANUARY 1966. Lithographed by DMAAC 8-76. EDITION 2"
   },
   "c_6": {
    "title": "ONC C-6",
@@ -233,7 +353,15 @@
    "east": 147.0053,
    "north": 71.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 775.7,
+    "row": 5715.0,
+    "parallel": 64.0,
+    "meridian": 119.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1974"
   },
   "c_7": {
    "title": "ONC C-7",
@@ -248,7 +376,15 @@
    "east": 175.0071,
    "north": 71.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 784.8,
+    "row": 5697.8,
+    "parallel": 64.0,
+    "meridian": 147.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled October 1973. Revised June 1982. (Revision limited to aeronautical information and correction of Chum conditions.)"
   },
   "c_8": {
    "title": "ONC C-8",
@@ -259,7 +395,15 @@
     72
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1231.8,
+    "row": 5144.6,
+    "parallel": 65.0,
+    "meridian": 175.0
+   },
+   "producer": "US",
+   "imprint": "BASE INFORMATION COMPILED NOVEMBER 1958. REVISED JULY 1973 (NOS). Lithographed by DMAAC 12-74. EDITION 2"
   },
   "c_9": {
    "title": "ONC C-9",
@@ -274,7 +418,15 @@
    "east": -132.0014,
    "north": 68.2765,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1242.4,
+    "row": 5688.0,
+    "parallel": 64.0,
+    "meridian": -158.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information Compiled June 1965 (NOS). Revised [...]"
   },
   "c_10": {
    "title": "ONC C-10",
@@ -289,7 +441,15 @@
    "east": -105.0033,
    "north": 68.2752,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1233.4,
+    "row": 4925.2,
+    "parallel": 65.0,
+    "meridian": -132.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from the Department of Energy, Mines, and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base data corrected to March 1984. Revised by DMAAC December 1984. (Revision limited to aeronautical information.) Lithographed By DMAAC 6-85"
   },
   "c_11": {
    "title": "ONC C-11",
@@ -304,7 +464,15 @@
    "east": -79.9987,
    "north": 68.2765,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1086.2,
+    "row": 5592.6,
+    "parallel": 64.0,
+    "meridian": -106.0
+   },
+   "producer": "US",
+   "imprint": "[Prep]ared under the direction of the Department of [Def]ense from Department of Energy, Mines and [Reso]urces (Canada) WAC series reproduction [mat]erials and published by the Defense Mapping [Age]ncy Aerospace Center, St. Louis Air Force [Stati]on, Missouri 63118. [...] data corrected February 1971"
   },
   "c_12": {
    "title": "ONC C-12",
@@ -319,7 +487,15 @@
    "east": -58.0235,
    "north": 68.2765,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1414.5,
+    "row": 5696.8,
+    "parallel": 64.0,
+    "meridian": -79.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC Series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri Compiled March 1972. Revised May 1985. (Revision limited to aeronautical information and correction [...]"
   },
   "c_13": {
    "title": "ONC C-13",
@@ -334,7 +510,15 @@
    "east": -25.9943,
    "north": 71.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 799.9,
+    "row": 4923.8,
+    "parallel": 65.0,
+    "meridian": -54.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled July 1965. Revised July 1975. Lithographed by WPC 4-76"
   },
   "d_1": {
    "title": "ONC D-1",
@@ -345,7 +529,15 @@
     64
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 982.0,
+    "row": 5743.3,
+    "parallel": 56.0,
+    "meridian": -21.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1983. Recompiled in 1982. Printed by MCE RE. 38000/2/84/820982M Copyright \u00a9 HMSO London 1983"
   },
   "d_2": {
    "title": "ONC D-2",
@@ -360,7 +552,15 @@
    "east": 22.0046,
    "north": 64.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 855.3,
+    "row": 4273.4,
+    "parallel": 58.0,
+    "meridian": 0.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled September 1960. Revised May 1973. Lithographed by UP 1-74"
   },
   "d_3": {
    "title": "ONC D-3",
@@ -375,7 +575,15 @@
    "east": 44.0039,
    "north": 64.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 604.4,
+    "row": 5654.6,
+    "parallel": 56.0,
+    "meridian": 22.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled May 1965. Revised April 1973. Lithographed by DMAAC 5-74"
   },
   "d_4": {
    "title": "ONC D-4",
@@ -390,7 +598,15 @@
    "east": 66.0023,
    "north": 64.0006,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 586.0,
+    "row": 5669.4,
+    "parallel": 56.0,
+    "meridian": 44.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Air Force Station, Missouri 63118 Compiled November 1973. Lithographed by DMAAC 6-74"
   },
   "d_5": {
    "title": "ONC D-5",
@@ -405,7 +621,15 @@
    "east": 88.0043,
    "north": 64.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 963.9,
+    "row": 5688.6,
+    "parallel": 56.0,
+    "meridian": 67.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled February 1974 Revised November 1979. Lithographed by DMAAC 4-80"
   },
   "d_6": {
    "title": "ONC D-6",
@@ -420,7 +644,15 @@
    "east": 110.001,
    "north": 64.0006,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 591.6,
+    "row": 5719.6,
+    "parallel": 56.0,
+    "meridian": 88.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled November 1973. Revised January 1987. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) Lithographed By DMAAC 8-87"
   },
   "d_7": {
    "title": "ONC D-7",
@@ -435,7 +667,15 @@
    "east": 132.0016,
    "north": 64.0006,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 708.7,
+    "row": 4981.6,
+    "parallel": 57.0,
+    "meridian": 110.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled September 1974. Revised August 1980. Lithographed By DMAAC 9-89"
   },
   "d_8": {
    "title": "ONC D-8",
@@ -450,7 +690,15 @@
    "east": 154.0041,
    "north": 64.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 596.4,
+    "row": 5663.7,
+    "parallel": 56.0,
+    "meridian": 132.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled May 1974. Revised July 1981. Revision limited to aeronautical and correction of CHUM conditions. Lithographed By DMAAC 2-82"
   },
   "d_9": {
    "title": "ONC D-9",
@@ -465,7 +713,15 @@
    "east": 176.0052,
    "north": 64.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 583.9,
+    "row": 5651.5,
+    "parallel": 56.0,
+    "meridian": 154.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled June 1973 Revised August 1982. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "d_10": {
    "title": "ONC D-10",
@@ -476,7 +732,15 @@
     64
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 603.7,
+    "row": 5693.7,
+    "parallel": 56.0,
+    "meridian": 176.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled March, 1967 (NOS). Revised May, 1989 (NOS). (Revisions limited to aeronautical information.)"
   },
   "d_11": {
    "title": "ONC D-11",
@@ -491,7 +755,15 @@
    "east": -140.9987,
    "north": 64.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 907.5,
+    "row": 5973.1,
+    "parallel": 56.0,
+    "meridian": -162.0
+   },
+   "producer": "US",
+   "imprint": "[cut off] Defense Mapping / [cut off] Louis, Missouri. / [cut off]y 1965. Revised / [cut off]sion limited to [cut off]"
   },
   "d_12": {
    "title": "ONC D-12",
@@ -506,7 +778,15 @@
    "east": -119.9987,
    "north": 64.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1001.7,
+    "row": 5019.6,
+    "parallel": 57.0,
+    "meridian": -141.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled May 1965 (NOS). Revised January 1989 (NOS). (Revisions limited to aeronautical information.) Lithographed By DMAAC 4-90"
   },
   "d_13": {
    "title": "ONC D-13",
@@ -521,7 +801,15 @@
    "east": -97.9979,
    "north": 64.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 578.0,
+    "row": 5651.3,
+    "parallel": 56.0,
+    "meridian": -120.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Base data corrected to January 1973. Lithographed by WPC 2-74"
   },
   "d_14": {
    "title": "ONC D-14",
@@ -536,7 +824,15 @@
    "east": -75.9979,
    "north": 64.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1773.4,
+    "row": 5828.8,
+    "parallel": 56.0,
+    "meridian": -95.0
+   },
+   "producer": "US",
+   "imprint": "Prepared from Department of Energy, Mines and Resources (CANADA) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base data corrected April 1973. Revised June 1989. (Revision limited to aeronautical information and correction of CHUM conditions). Reprinted By DMAAC 1-90"
   },
   "d_15": {
    "title": "ONC D-15",
@@ -551,7 +847,15 @@
    "east": -58.0227,
    "north": 64.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 586.6,
+    "row": 5655.5,
+    "parallel": 56.0,
+    "meridian": -76.0
+   },
+   "producer": "US",
+   "imprint": "[...t]he direction of the Department [...] Department of Energy, Mines, [...Ca]nada) WAC series reproduction [...pub]lished by the Defense Mapping [...]e Center, St. Louis, Missouri. [...]ed to April 1983. Revised by [...] 1984. (Revision limited to [...]mation.) [...]AAC 7-84"
   },
   "d_16": {
    "title": "ONC D-16",
@@ -566,7 +870,15 @@
    "east": -31.9951,
    "north": 64.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 846.9,
+    "row": 4287.3,
+    "parallel": 58.0,
+    "meridian": -54.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled December 1971. Lithographed by DMAAC 7-74"
   },
   "e_1": {
    "title": "ONC E-1",
@@ -577,7 +889,15 @@
     56
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 916.8,
+    "row": 11430.6,
+    "parallel": 49.0,
+    "meridian": -10.0
+   },
+   "producer": "UK",
+   "imprint": "[cut off]ction of the Director General of / [cut off] of Defence, United Kingdom, / [cut off]3. / [cut off]3 / [cut off]y (UK)"
   },
   "e_2": {
    "title": "ONC E-2",
@@ -588,7 +908,15 @@
     56
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 704.1,
+    "row": 5749.7,
+    "parallel": 48.0,
+    "meridian": -2.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April, 1971. Revised May 1972. Reprinted for Directorate of Military Survey. Ministry of Defence, United Kingdom by Mapping and Charting Establishment RE. 12/72/711799M. Lithographed by DMAAC 9-72"
   },
   "e_3": {
    "title": "ONC E-3",
@@ -603,7 +931,15 @@
    "east": 34.0028,
    "north": 55.9987,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1859.1,
+    "row": 3713.7,
+    "parallel": 51.0,
+    "meridian": 18.0
+   },
+   "producer": "US",
+   "imprint": "[...a]nd published by the Defense [...A]gency Aerospace Center, St. [...F]orce Station, Missouri 63118. [...]ne 1965. Revised May 1973. [...b]y UP 1-74"
   },
   "e_4": {
    "title": "ONC E-4",
@@ -618,7 +954,15 @@
    "east": 52.0032,
    "north": 55.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 725.1,
+    "row": 5764.6,
+    "parallel": 48.0,
+    "meridian": 34.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri, 63118. Compiled August 1965. Revised June 1973. Lithographed by UP 1-74"
   },
   "e_5": {
    "title": "ONC E-5",
@@ -633,7 +977,15 @@
    "east": 70.0032,
    "north": 55.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 706.9,
+    "row": 5734.1,
+    "parallel": 48.0,
+    "meridian": 52.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled September 1972. Lithographed by DMAAC 12-73"
   },
   "e_6": {
    "title": "ONC E-6",
@@ -648,7 +1000,15 @@
    "east": 88.0032,
    "north": 55.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1683.8,
+    "row": 5863.6,
+    "parallel": 48.0,
+    "meridian": 72.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and Published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled August 1974 Revised May 1983. (Revision limited to aeronautical information and correction of CHUM Conditions.) Lithographed By DMAAC 11-83"
   },
   "e_7": {
    "title": "ONC E-7",
@@ -663,7 +1023,15 @@
    "east": 106.0032,
    "north": 55.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 722.5,
+    "row": 5685.6,
+    "parallel": 48.0,
+    "meridian": 88.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled August 1974. Revised September 1987. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) Lithographed By DMAAC 7-88"
   },
   "e_8": {
    "title": "ONC E-8",
@@ -678,7 +1046,15 @@
    "east": 124.0032,
    "north": 55.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1037.5,
+    "row": 5057.6,
+    "parallel": 48.0,
+    "meridian": 107.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled December 1974. Revised February 1987. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) Lithographed By DMAAC 9-87"
   },
   "e_9": {
    "title": "ONC E-9",
@@ -693,7 +1069,15 @@
    "east": 142.0006,
    "north": 56.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1237.2,
+    "row": 5062.2,
+    "parallel": 49.0,
+    "meridian": 125.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled September 1974 Revised February 1981 Lithographed By DMAAC 3-85"
   },
   "e_10": {
    "title": "ONC E-10",
@@ -708,7 +1092,15 @@
    "east": 160.0032,
    "north": 55.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 714.8,
+    "row": 5707.9,
+    "parallel": 48.0,
+    "meridian": 142.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled August 1975. Revised July 1989. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) Lithographed By DMAAC 3-90"
   },
   "e_11": {
    "title": "ONC E-11",
@@ -723,7 +1115,15 @@
    "east": 171.0009,
    "north": 56.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 712.1,
+    "row": 5746.8,
+    "parallel": 48.0,
+    "meridian": 160.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled June 1968. Revised July 1981. Revision limited to Aeronautical Information and correction of CHUM conditions. Lithographed By DMAAC 3-82"
   },
   "e_12": {
    "title": "ONC E-12",
@@ -738,7 +1138,15 @@
    "east": -170.9998,
    "north": 56.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 730.7,
+    "row": 5716.3,
+    "parallel": 48.0,
+    "meridian": 171.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled June 1967 (USC & GS). Revised August 1983 (NOS). Revision limited to aeronautical information. Lithographed By DMAAC 2-84"
   },
   "e_13": {
    "title": "ONC E-13",
@@ -753,7 +1161,15 @@
    "east": -153.9979,
    "north": 56.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 780.1,
+    "row": 5831.2,
+    "parallel": 48.0,
+    "meridian": -171.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Base information Compiled JUNE 1967 (USC&GS). Revised JANUARY 1975 (NOS). Lithographed by DMAAC 2-77"
   },
   "e_15": {
    "title": "ONC E-15",
@@ -768,7 +1184,15 @@
    "east": -114.0037,
    "north": 55.9928,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1454.1,
+    "row": 5253.5,
+    "parallel": 49.0,
+    "meridian": -130.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base data corrected to November 1980. Revised by DMAAC, May 1991. (Revision limited to aeronautical information and correction of CHUM conditions.) Lithographed by DMAAC 09-91"
   },
   "e_16": {
    "title": "ONC E-16",
@@ -783,7 +1207,15 @@
    "east": -95.9998,
    "north": 56.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1422.4,
+    "row": 5829.8,
+    "parallel": 48.0,
+    "meridian": -113.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled August 1974. Revised July 1983. (Revisions limited to aeronautical information and correction of CHUM conditions.) Lithographed By DMAAC 3-84"
   },
   "e_17": {
    "title": "ONC E-17",
@@ -798,7 +1230,15 @@
    "east": -83.9974,
    "north": 56.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1203.0,
+    "row": 5844.7,
+    "parallel": 48.0,
+    "meridian": -104.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Base information compiled April 1973. Revised October 1976. Lithographed by DMAAC 2-77"
   },
   "e_18": {
    "title": "ONC E-18",
@@ -813,7 +1253,15 @@
    "east": -67.9974,
    "north": 56.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1644.6,
+    "row": 5852.0,
+    "parallel": 48.0,
+    "meridian": -84.0
+   },
+   "producer": "US",
+   "imprint": "[...]n of the Department of [...] of Energy, Mines and [...]ies reproduction materials [...]e Mapping Agency Aero-[...]souri. Revised November [...] aeronautical information [...]ditions.)"
   },
   "e_19": {
    "title": "ONC E-19",
@@ -828,7 +1276,15 @@
    "east": -58.5006,
    "north": 56.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1668.7,
+    "row": 5072.7,
+    "parallel": 49.0,
+    "meridian": -68.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri Base date corrected to March 1980. Revised by DMAAC July 1983. (Revision limited to aeronautical information and correction of CHUM conditions.) Lithographed By DMAAC 2-84"
   },
   "f_1": {
    "title": "ONC F-1",
@@ -843,7 +1299,15 @@
    "east": 3.0025,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 637.0,
+    "row": 5769.7,
+    "parallel": 40.0,
+    "meridian": -13.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled August 1965. Revised November 1982. (Revision limited to aeronautical information, correction of all CHUM corrections and currency of planimetric data.) Lithographed By DMAAC 8-83"
   },
   "f_2": {
    "title": "ONC F-2",
@@ -858,7 +1322,15 @@
    "east": 19.0036,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1654.1,
+    "row": 5879.5,
+    "parallel": 40.0,
+    "meridian": 5.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled October 1964 Revised January 1981 Lithographed By DMAAC 12-82"
   },
   "f_3": {
    "title": "ONC F-3",
@@ -873,7 +1345,15 @@
    "east": 35.0024,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 755.6,
+    "row": 5696.8,
+    "parallel": 40.0,
+    "meridian": 19.0
+   },
+   "producer": "UK",
+   "imprint": "Produced by DGIA, Ministry of Defence, United Kingdom, 2000. Compiled July 1973. Revised by DGIA (UK), 2000. Printed by DGIA (UK) 9/00/981215M \u00a9 Crown Copyright 2000."
   },
   "f_4": {
    "title": "ONC F-4",
@@ -888,7 +1368,15 @@
    "east": 51.0035,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 595.9,
+    "row": 5737.6,
+    "parallel": 40.0,
+    "meridian": 35.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled February 1974. Revised November 1982. (Revision limited to Aeronautical information and correction of CHUM conditions.) Lithographed By DMAAC 6-83"
   },
   "f_5": {
    "title": "ONC F-5",
@@ -903,7 +1391,15 @@
    "east": 67.0023,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 652.2,
+    "row": 5090.8,
+    "parallel": 41.0,
+    "meridian": 51.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled August 1970 Revised November 1979 Lithographed by DMAAC 5-80"
   },
   "f_6": {
    "title": "ONC F-6",
@@ -918,7 +1414,15 @@
    "east": 83.0011,
    "north": 48.0004,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 651.0,
+    "row": 5053.3,
+    "parallel": 41.0,
+    "meridian": 67.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled November 1974. Revised March 1985. (Revision limited to aeronautical information correction of all CHUM conditions and currency of planimetric data.) Lithographed By DMAAC 10-85"
   },
   "f_7": {
    "title": "ONC F-7",
@@ -933,7 +1437,15 @@
    "east": 99.0022,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 580.2,
+    "row": 5763.3,
+    "parallel": 40.0,
+    "meridian": 83.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled (August 1974). Revised (November 1982). Revision limited to aeronautical information and correction of CHUM conditions. Lithographed By DMAAC 3-83"
   },
   "f_8": {
    "title": "ONC F-8",
@@ -948,7 +1460,15 @@
    "east": 115.0034,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 601.6,
+    "row": 5802.9,
+    "parallel": 40.0,
+    "meridian": 99.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled May 1974. Lithographed by DMAAC 6-74"
   },
   "f_9": {
    "title": "ONC F-9",
@@ -963,7 +1483,15 @@
    "east": 131.0021,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 584.2,
+    "row": 5767.3,
+    "parallel": 40.0,
+    "meridian": 115.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled APRIL 1973 Lithographed by DMAAC 12-74"
   },
   "f_10": {
    "title": "ONC F-10",
@@ -974,7 +1502,15 @@
     48
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 592.4,
+    "row": 5757.0,
+    "parallel": 40.0,
+    "meridian": 131.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled November 1974. Revised December 1981. Revision limited to aeronautical information, corection of all CHUM conditions and currency of planimetric data. Lithographed By DMAAC 5-85"
   },
   "f_11": {
    "title": "ONC F-11",
@@ -989,7 +1525,15 @@
    "east": 163.0021,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 582.6,
+    "row": 5729.7,
+    "parallel": 40.0,
+    "meridian": 147.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1958. Revised October 1975. Lithographed by DMAAC 6-76"
   },
   "f_16": {
    "title": "ONC F-16",
@@ -1004,7 +1548,15 @@
    "east": -108.9979,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1124.7,
+    "row": 6363.9,
+    "parallel": 40.0,
+    "meridian": -124.0
+   },
+   "producer": "US",
+   "imprint": "[...Def]ense Mapping [...Lo]uis Air Force [...inform]ation compiled [...]r 1981 (NOS). [...infor]mation). [seal] DEFENSE MAPPING AGENCY . UNITED STATES OF AMERICA"
   },
   "f_17": {
    "title": "ONC F-17",
@@ -1019,7 +1571,15 @@
    "east": -92.9967,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 601.5,
+    "row": 6324.1,
+    "parallel": 40.0,
+    "meridian": -109.0
+   },
+   "producer": "US",
+   "imprint": "[...] Mapping [...] Missouri. [...]4 (NOS). [...] limited to [...]ection of [seal] DEFENSE MAPPING AGENCY . UNITED STATES OF AMERICA"
   },
   "f_18": {
    "title": "ONC F-18",
@@ -1034,7 +1594,15 @@
    "east": -76.9974,
    "north": 48.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 588.0,
+    "row": 5752.0,
+    "parallel": 40.0,
+    "meridian": -93.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled February 1965 (NOS). Revised August 1989 (NOS). (Revisions limited to aeronautical information.) Lithographed by DMAAC 09-91"
   },
   "f_19": {
    "title": "ONC F-19",
@@ -1049,7 +1617,15 @@
    "east": -60.9968,
    "north": 48.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1666.6,
+    "row": 5859.5,
+    "parallel": 40.0,
+    "meridian": -75.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled February 1971 (NOS). Revised October 1990 (NOS).(Revision limited to aeronatical information and correction of CHUM conditions.) Lithographed By DMAAC 3-92"
   },
   "f_20": {
    "title": "ONC F-20",
@@ -1060,7 +1636,15 @@
     48
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 570.0,
+    "row": 5842.5,
+    "parallel": 40.0,
+    "meridian": -61.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Base data corrected to February 1973. Lithographed by DMAAC 7-75"
   },
   "f_22": {
    "title": "ONC F-22",
@@ -1075,7 +1659,15 @@
    "east": -58.4998,
    "north": 51.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 729.5,
+    "row": 5211.0,
+    "parallel": 44.0,
+    "meridian": -69.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled March 1980. (Revision limited to Aeronautical Information only.) Lithographed By DMAAC 8-82"
   },
   "g_1": {
    "title": "ONC G-1",
@@ -1090,7 +1682,15 @@
    "east": 4.003,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 817.8,
+    "row": 5745.8,
+    "parallel": 32.0,
+    "meridian": -10.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled October 1965. Revised May 1983. (Revision limited to aeronautical information and correction of CHUM conditions.) Lithographed By DMAAC 11-83"
   },
   "g_2": {
    "title": "ONC G-2",
@@ -1105,7 +1705,15 @@
    "east": 18.0018,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 792.5,
+    "row": 5767.8,
+    "parallel": 32.0,
+    "meridian": 4.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled December 1963. Revised December 1981. (Revision limited to aeronautical information and correction of CHUM conditions.) Lithographed By DMAAC 7-82"
   },
   "g_3": {
    "title": "ONC G-3",
@@ -1120,7 +1728,15 @@
    "east": 32.003,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 797.0,
+    "row": 5781.3,
+    "parallel": 32.0,
+    "meridian": 18.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled August 1973. Revised July 1981. Lithographed By DMAAC 12-82"
   },
   "g_4": {
    "title": "ONC G-4",
@@ -1135,7 +1751,15 @@
    "east": 46.0028,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 722.1,
+    "row": 5582.8,
+    "parallel": 32.0,
+    "meridian": 32.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery And Mapping Agency. Compiled August 1972. Revised December 1996. (Revision limited to aeronautical information and correction of CHUM conditions. Reprinted by NIMA 12-02 \u00a9COPYRIGHT 1997 BY THE UNITED STATES GOVERNMENT NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "g_5": {
    "title": "ONC G-5",
@@ -1150,7 +1774,15 @@
    "east": 60.0022,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 713.3,
+    "row": 5570.0,
+    "parallel": 32.0,
+    "meridian": 46.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled October 1973. Revised April 1996. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) Reprinted by NIMA 3-98"
   },
   "g_6": {
    "title": "ONC G-6",
@@ -1165,7 +1797,15 @@
    "east": 74.002,
    "north": 39.9994,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 782.4,
+    "row": 5765.6,
+    "parallel": 32.0,
+    "meridian": 60.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled August 1973 Revised October 1982. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data). Lithographed By DMAAC 7-83"
   },
   "g_7": {
    "title": "ONC G-7",
@@ -1180,7 +1820,15 @@
    "east": 88.0008,
    "north": 40.0008,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 854.3,
+    "row": 5073.9,
+    "parallel": 33.0,
+    "meridian": 74.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled July 1974. Revised August 1980. Lithographed By DMAAC 3-81"
   },
   "g_8": {
    "title": "ONC G-8",
@@ -1195,7 +1843,15 @@
    "east": 102.0026,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 855.7,
+    "row": 5054.7,
+    "parallel": 33.0,
+    "meridian": 88.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled December 1973."
   },
   "g_9": {
    "title": "ONC G-9",
@@ -1210,7 +1866,15 @@
    "east": 116.0024,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 804.1,
+    "row": 5765.2,
+    "parallel": 32.0,
+    "meridian": 102.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled May 1974."
   },
   "g_10": {
    "title": "ONC G-10",
@@ -1225,7 +1889,15 @@
    "east": 130.0027,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 793.1,
+    "row": 5745.7,
+    "parallel": 32.0,
+    "meridian": 116.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled April 1972, Revised September 2000. (Revision limited to aeronautical information, correction of CHUM conditions and currency of planimetric data.) Lithographed by NIMA 9-00 \u00a9 COPYRIGHT 2000 BY THE UNITED STATES GOVERNMENT NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "g_11": {
    "title": "ONC G-11",
@@ -1240,7 +1912,15 @@
    "east": 144.0025,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 821.7,
+    "row": 5755.1,
+    "parallel": 32.0,
+    "meridian": 130.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled April 1964. Revised February 2001. (Revision limited to Aeronautical information and correction of all CHUM conditions.) Lithographed by NIMA 09-01 \u00a9 COPYRIGHT 2001 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "g_18": {
    "title": "ONC G-18",
@@ -1255,7 +1935,15 @@
    "east": -110.9975,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1401.1,
+    "row": 5814.6,
+    "parallel": 32.0,
+    "meridian": -124.0
+   },
+   "producer": "US",
+   "imprint": "[cut off]fense Mapping / [cut off]ouis, Missouri. / [cut off] 1984 (NOS). / [cut off]on limited to / [cut off]ction of CHUM [cut off]"
   },
   "g_19": {
    "title": "ONC G-19",
@@ -1270,7 +1958,15 @@
    "east": -99.9974,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1410.5,
+    "row": 5795.7,
+    "parallel": 32.0,
+    "meridian": -113.0
+   },
+   "producer": "US",
+   "imprint": "[cut off]Defense Mapping / [cut off]is, Missouri. Base / [cut off] (NOS). Revised / [cut off]ed to aeronautical / [cut off]M conditions.)"
   },
   "g_20": {
    "title": "ONC G-20",
@@ -1285,7 +1981,15 @@
    "east": -85.997,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 2127.6,
+    "row": 3727.6,
+    "parallel": 35.0,
+    "meridian": -98.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled February 1974 (NOS). Revised December 1989 (NOS). (Revision limited to aeronautical information.) Lithographed by DMAAC 06-92"
   },
   "g_21": {
    "title": "ONC G-21",
@@ -1300,7 +2004,15 @@
    "east": -71.999,
    "north": 40.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 807.9,
+    "row": 5787.9,
+    "parallel": 32.0,
+    "meridian": -86.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled August 1970 (NOS). Revised April 1990 (NOS). (Revision limited to aeronautical information and correction of CHUM conditions.) Lithographed By DMAAC 4-92"
   },
   "g_22": {
    "title": "ONC G-22",
@@ -1315,7 +2027,15 @@
    "east": -57.997,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 796.2,
+    "row": 5760.0,
+    "parallel": 32.0,
+    "meridian": -72.0
+   },
+   "producer": "US",
+   "imprint": "BASE INFORMATION COMPILED DECEMBER 1967 (IAM) FROM SOURCE DATED 1955 TO 1965. Lithographed by DMAAC 10-75"
   },
   "g_24": {
    "title": "ONC G-24",
@@ -1330,7 +2050,15 @@
    "east": -23.9971,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 811.9,
+    "row": 5785.4,
+    "parallel": 32.0,
+    "meridian": -38.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled September 1968. Revised September 1989. (Revision limited to aeronautical information.) Lithographed By DMAAC 2-90"
   },
   "g_25": {
    "title": "ONC G-25",
@@ -1345,7 +2073,15 @@
    "east": -9.9974,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 796.5,
+    "row": 5750.5,
+    "parallel": 32.0,
+    "meridian": -24.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center St. Louis Air Force Station, Missouri 63118. Compiled April 1968. Revised August 1975. Lithographed by DMAAC 11-80"
   },
   "h_1": {
    "title": "ONC H-1",
@@ -1360,7 +2096,15 @@
    "east": -6.997,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1269.4,
+    "row": 5767.2,
+    "parallel": 24.0,
+    "meridian": -19.0
+   },
+   "producer": "US",
+   "imprint": "[...]shed by the Defense Mapping / [...] Center, St. Louis Air Force / [...]118. Compiled January 1972 / [...]Revisions limited to aeronauti- / [...]correction of CHUM conditions."
   },
   "h_2": {
    "title": "ONC H-2",
@@ -1375,7 +2119,15 @@
    "east": 5.003,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1278.8,
+    "row": 5757.7,
+    "parallel": 24.0,
+    "meridian": -7.0
+   },
+   "producer": "US",
+   "imprint": "[...]ublished by the Defense Mapping / [...]ace Center, St. Louis, Missouri. / [...] 1972. Revised May 1983. (Revision / [...]autical information and correction / [...]tions.)"
   },
   "h_3": {
    "title": "ONC H-3",
@@ -1390,7 +2142,15 @@
    "east": 17.0028,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1317.3,
+    "row": 5809.0,
+    "parallel": 24.0,
+    "meridian": 5.0
+   },
+   "producer": "US",
+   "imprint": "[...]ished by the Defense Mapping / [...] Center, St. Louis, Missouri. / [...]9. Revised March 1984. (Revision / [...]ical information and correction / [...]s.)"
   },
   "h_4": {
    "title": "ONC H-4",
@@ -1405,7 +2165,15 @@
    "east": 29.0018,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1288.6,
+    "row": 5744.8,
+    "parallel": 24.0,
+    "meridian": 17.0
+   },
+   "producer": "US",
+   "imprint": "[...]by the Defense Mapping / [...]ter, St. Louis, Missouri. / [...]2, Revised March 1984. / [...]nautical information and / [...]ditions.)"
   },
   "h_5": {
    "title": "ONC H-5",
@@ -1416,7 +2184,15 @@
     32
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1303.4,
+    "row": 5719.3,
+    "parallel": 24.0,
+    "meridian": 29.0
+   },
+   "producer": "UK",
+   "imprint": "[...]ction of the Director of Military Survey, / [...]ted Kingdom, 1982 [...]don 1982"
   },
   "h_6": {
    "title": "ONC H-6",
@@ -1427,7 +2203,15 @@
     32
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1210.2,
+    "row": 5591.9,
+    "parallel": 24.0,
+    "meridian": 41.0
+   },
+   "producer": "US",
+   "imprint": "[...]ed by the Defense Mapping / [...]enter, St. Louis Air Force Sta- / [...]Compiled December 1972."
   },
   "h_7": {
    "title": "ONC H-7",
@@ -1442,7 +2226,15 @@
    "east": 65.0023,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1312.1,
+    "row": 5781.9,
+    "parallel": 24.0,
+    "meridian": 53.0
+   },
+   "producer": "US",
+   "imprint": "[...]ed by the Defense Mapping / [...]enter, St. Louis, Missouri. / [...]2. Revised December 1994. / [...]eronautical information and / [...]conditions.) [...]THE UNITED STATES GOVERNMENT. [...]CLAIMED UNDER TITLE 17 U.S.C."
   },
   "h_8": {
    "title": "ONC H-8",
@@ -1457,7 +2249,15 @@
    "east": 77.0023,
    "north": 31.9989,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1277.6,
+    "row": 5775.1,
+    "parallel": 24.0,
+    "meridian": 65.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled January 1960. Revised September 1981. (Revision limited to aeronautical information correction of all CHUM conditions, and currency of planimetric data)."
   },
   "h_9": {
    "title": "ONC H-9",
@@ -1472,7 +2272,15 @@
    "east": 89.003,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1292.7,
+    "row": 5745.6,
+    "parallel": 24.0,
+    "meridian": 77.0
+   },
+   "producer": "US",
+   "imprint": "[P]repared and published by the Defense Mapping / [A]gency Aerospace Center, St. Louis, Missouri. Com- / [p]iled October 1970. Revised January 1984. (Revi- / [si]on limited to aeronautical, correction of CHUM / [c]onditions and currency of planimetric detail.)"
   },
   "h_10": {
    "title": "ONC H-10",
@@ -1487,7 +2295,15 @@
    "east": 101.0029,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1941.3,
+    "row": 5781.1,
+    "parallel": 24.0,
+    "meridian": 90.0
+   },
+   "producer": "US",
+   "imprint": "[...]l published by the Defense Mapping / [...]space Center, St. Louis, Missouri. / [...]ber 1972. Revised May 1984. (Revision / [...]onautical information and correction / [...]ditions.)"
   },
   "h_11": {
    "title": "ONC H-11",
@@ -1502,7 +2318,15 @@
    "east": 113.0028,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1303.4,
+    "row": 5756.5,
+    "parallel": 24.0,
+    "meridian": 101.0
+   },
+   "producer": "US",
+   "imprint": "[...]y the Defense Mapping / [...]er, St. Louis, Missouri. / [...]4. Revised June 1989. / [...]autical information and / [...]nditions)."
   },
   "h_12": {
    "title": "ONC H-12",
@@ -1517,7 +2341,15 @@
    "east": 125.0027,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1303.4,
+    "row": 5711.5,
+    "parallel": 24.0,
+    "meridian": 113.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1972. Lithographed by DMAAC 6-73"
   },
   "h_13": {
    "title": "ONC H-13",
@@ -1532,7 +2364,15 @@
    "east": 137.0004,
    "north": 32.0004,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1277.9,
+    "row": 5775.0,
+    "parallel": 24.0,
+    "meridian": 125.0
+   },
+   "producer": "US",
+   "imprint": "[...]d published by the National Imagery and / [...]ency. Compiled April 1964. Revised / [...] (Revision limited to Aeronautical / [...]and correction of all CHUM conditions.) [...]HT 2001 BY THE UNITED STATES GOVERNMENT. [...]GHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "h_14": {
    "title": "ONC H-14",
@@ -1547,7 +2387,15 @@
    "east": 149.0024,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1334.9,
+    "row": 5026.5,
+    "parallel": 25.0,
+    "meridian": 137.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense and published by the Aeronautical Chart and Information Center, U.S. Air Force, St. Louis, Missouri, 63118. Compiled February 1970 from the best available source material. Lithographed by ACIC 7-71"
   },
   "h_15": {
    "title": "ONC H-15",
@@ -1562,7 +2410,15 @@
    "east": 161.0009,
    "north": 32.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1267.5,
+    "row": 5801.7,
+    "parallel": 24.0,
+    "meridian": 149.0
+   },
+   "producer": "US",
+   "imprint": "[...]shed by the Defense Mapping / [...] Center, St. Louis Air Force / [...]18. Compiled October 1975."
   },
   "h_17": {
    "title": "ONC H-17",
@@ -1577,7 +2433,15 @@
    "east": -167.9969,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1277.2,
+    "row": 5744.4,
+    "parallel": 24.0,
+    "meridian": 180.0
+   },
+   "producer": "US",
+   "imprint": "[...]d by the Defense Mapping / [...]nter, St. Louis Air Force Sta- / [...]ompiled September 1974"
   },
   "h_22": {
    "title": "ONC H-22",
@@ -1592,7 +2456,15 @@
    "east": -108.9977,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1285.0,
+    "row": 5736.6,
+    "parallel": 24.0,
+    "meridian": -121.0
+   },
+   "producer": "US",
+   "imprint": "[...]ed by the Defense Mapping / [...]enter, St. Louis Air Force Sta- / [...] Compiled August 1963. Re-"
   },
   "h_23": {
    "title": "ONC H-23",
@@ -1607,7 +2479,15 @@
    "east": -96.9978,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1293.6,
+    "row": 5804.7,
+    "parallel": 24.0,
+    "meridian": -109.0
+   },
+   "producer": "US",
+   "imprint": "[...]d by the Defense Mapping / [...]enter, St. Louis, Missouri. / [...]mpiled May 1970 (NOS). / [...] (NOS). (Revision limited to / [...]on and correction of CHUM"
   },
   "h_24": {
    "title": "ONC H-24",
@@ -1622,7 +2502,15 @@
    "east": -84.997,
    "north": 31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1311.0,
+    "row": 5091.3,
+    "parallel": 25.0,
+    "meridian": -97.0
+   },
+   "producer": "US",
+   "imprint": "[...]y the Defense Mapping / [...]r, St. Louis, Missouri. / [...]May 1970 (NOS). Revised / [...]ision limited to aero- / [...]d correction of CHUM"
   },
   "h_25": {
    "title": "ONC H-25",
@@ -1633,7 +2521,15 @@
     32
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1279.9,
+    "row": 5780.9,
+    "parallel": 24.0,
+    "meridian": -85.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled July 1970 (NOS). Revised March 1991 (NOS). (Revision limited to aeronautical information.)"
   },
   "j_1": {
    "title": "ONC J-1",
@@ -1648,7 +2544,15 @@
    "east": -11.9976,
    "north": 24.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 963.2,
+    "row": 5796.9,
+    "parallel": 16.0,
+    "meridian": -24.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center St. Louis Air Force Station, Missouri 63118. Compiled August 1973 Revised November 1979"
   },
   "j_2": {
    "title": "ONC J-2",
@@ -1663,7 +2567,15 @@
    "east": 0.0008,
    "north": 24.0007,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 966.6,
+    "row": 5761.8,
+    "parallel": 16.0,
+    "meridian": -12.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled December 1973. Revised April 1985. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "j_3": {
    "title": "ONC J-3",
@@ -1678,7 +2590,15 @@
    "east": 12.0031,
    "north": 24.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 968.4,
+    "row": 5749.1,
+    "parallel": 16.0,
+    "meridian": 0.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Revised November 1975."
   },
   "j_4": {
    "title": "ONC J-4",
@@ -1693,7 +2613,15 @@
    "east": 23.9997,
    "north": 24.0007,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 947.8,
+    "row": 5781.2,
+    "parallel": 16.0,
+    "meridian": 12.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled November 1965. Revised November 1998. (Revision limited to aeronautical information correction of all CHUM conditions and currency of planimetric data). \u00a9COPYRIGHT 2000 BY THE UNITED STATES GOVERNMENT NO COPYRIGHT CLAIMS UNDER TITLE 17 U.S.C."
   },
   "j_5": {
    "title": "ONC J-5",
@@ -1708,7 +2636,15 @@
    "east": 36.0028,
    "north": 24.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 965.0,
+    "row": 5780.6,
+    "parallel": 16.0,
+    "meridian": 24.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled July 1977. Revised April 1981."
   },
   "j_6": {
    "title": "ONC J-6",
@@ -1719,7 +2655,15 @@
     24
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 942.8,
+    "row": 5752.3,
+    "parallel": 16.0,
+    "meridian": 36.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1981. Compiled 1980. Printed by MCE RE Copyright \u00a9 HMSO London 1981"
   },
   "j_7": {
    "title": "ONC J-7",
@@ -1730,7 +2674,15 @@
     24
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 985.1,
+    "row": 5795.1,
+    "parallel": 16.0,
+    "meridian": 48.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled November 1973."
   },
   "j_8": {
    "title": "ONC J-8",
@@ -1745,7 +2697,15 @@
    "east": 78.0023,
    "north": 24.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 981.8,
+    "row": 5764.4,
+    "parallel": 16.0,
+    "meridian": 66.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled April 1977. Revised April 1984. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "j_9": {
    "title": "ONC J-9",
@@ -1760,7 +2720,15 @@
    "east": 90.0008,
    "north": 23.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 993.5,
+    "row": 5763.0,
+    "parallel": 16.0,
+    "meridian": 78.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled October 1961. Revised September 1989. (Revision limited to aeronautical information, correction of all CHUM conditions, and currency of planimetric data)."
   },
   "j_10": {
    "title": "ONC J-10",
@@ -1775,7 +2743,15 @@
    "east": 102.0031,
    "north": 24.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 962.6,
+    "row": 5779.8,
+    "parallel": 16.0,
+    "meridian": 90.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled April 1967. Revised June 1983. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "j_11": {
    "title": "ONC J-11",
@@ -1790,7 +2766,15 @@
    "east": 114.002,
    "north": 24.0007,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 962.0,
+    "row": 5750.5,
+    "parallel": 16.0,
+    "meridian": 102.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled June 1970. Revised June 1984. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "j_12": {
    "title": "ONC J-12",
@@ -1805,7 +2789,15 @@
    "east": 125.9997,
    "north": 24.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 973.2,
+    "row": 5788.3,
+    "parallel": 16.0,
+    "meridian": 114.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled May 1964 Revised June 1984. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "j_14": {
    "title": "ONC J-14",
@@ -1820,7 +2812,15 @@
    "east": 148.0009,
    "north": 23.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 971.7,
+    "row": 5780.1,
+    "parallel": 16.0,
+    "meridian": 136.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled October 1971. Revised February 1983. Revision limited to Aeronautical Information and Correction of CHUM conditions."
   },
   "j_16": {
    "title": "ONC J-16",
@@ -1835,7 +2835,15 @@
    "east": 174.0009,
    "north": 23.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 965.7,
+    "row": 5768.8,
+    "parallel": 16.0,
+    "meridian": 162.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118."
   },
   "j_18": {
    "title": "ONC J-18",
@@ -1850,7 +2858,15 @@
    "east": -162.0002,
    "north": 24.0007,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 970.3,
+    "row": 5771.1,
+    "parallel": 16.0,
+    "meridian": -174.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled September 1974. Revised January 2000. (Revision limited to aeronautical information and correction of CHUM conditions.) \u00a9COPYRIGHT 2000 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C"
   },
   "j_19": {
    "title": "ONC J-19",
@@ -1865,7 +2881,15 @@
    "east": -149.9985,
    "north": 24.0007,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 965.9,
+    "row": 5817.8,
+    "parallel": 16.0,
+    "meridian": -162.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled April 1969. Revised April 1991. (Revision limited to aeronautical information and correction of all CHUM conditions.)"
   },
   "j_23": {
    "title": "ONC J-23",
@@ -1880,7 +2904,15 @@
    "east": -108.9991,
    "north": 24.0007,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 976.3,
+    "row": 5742.7,
+    "parallel": 16.0,
+    "meridian": -121.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled October 1975."
   },
   "j_24": {
    "title": "ONC J-24",
@@ -1895,7 +2927,15 @@
    "east": -96.9984,
    "north": 23.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 965.4,
+    "row": 5762.8,
+    "parallel": 16.0,
+    "meridian": -109.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled March 1965. Revised November 1980. Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data."
   },
   "j_25": {
    "title": "ONC J-25",
@@ -1910,7 +2950,15 @@
    "east": -85.0011,
    "north": 24.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 985.7,
+    "row": 5073.3,
+    "parallel": 17.0,
+    "meridian": -97.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled August 1964. Revised October 1974."
   },
   "j_26": {
    "title": "ONC J-26",
@@ -1925,7 +2973,15 @@
    "east": -72.9972,
    "north": 24.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 987.7,
+    "row": 5756.7,
+    "parallel": 16.0,
+    "meridian": -85.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled February 1969. Revised December 1974."
   },
   "j_27": {
    "title": "ONC J-27",
@@ -1940,7 +2996,15 @@
    "east": -60.9987,
    "north": 24.0007,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1646.3,
+    "row": 5797.8,
+    "parallel": 16.0,
+    "meridian": -72.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled December 1971. Revised August, 1980."
   },
   "k_0": {
    "title": "ONC K-0",
@@ -1955,7 +3019,15 @@
    "east": -14.9971,
    "north": 18.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 996.5,
+    "row": 5799.5,
+    "parallel": 10.0,
+    "meridian": -27.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled March 1964. Revised January 1982. (Revision limited to aeronautical information and CHUM conditions.)"
   },
   "k_1": {
    "title": "ONC K-1",
@@ -1970,7 +3042,15 @@
    "east": -4.9976,
    "north": 15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 976.9,
+    "row": 5834.2,
+    "parallel": 8.0,
+    "meridian": -17.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled July 1965. Revised July 1984. (Revision limited to aeronautical information, and correction of CHUM conditions.)"
   },
   "k_2": {
    "title": "ONC K-2",
@@ -1985,7 +3065,15 @@
    "east": 7.0023,
    "north": 15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 947.5,
+    "row": 5823.7,
+    "parallel": 8.0,
+    "meridian": -5.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled July, 1965. Revised July, 1983. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "k_3": {
    "title": "ONC K-3",
@@ -2000,7 +3088,15 @@
    "east": 19.0031,
    "north": 15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 950.3,
+    "row": 5814.4,
+    "parallel": 8.0,
+    "meridian": 7.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled May 1962. Revised December 1982. Revisions limited to aeronautical information and correction of CHUM conditions."
   },
   "k_4": {
    "title": "ONC K-4",
@@ -2015,7 +3111,15 @@
    "east": 31.003,
    "north": 15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 958.2,
+    "row": 5769.1,
+    "parallel": 8.0,
+    "meridian": 19.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled May 1967. Revised December 1979."
   },
   "k_5": {
    "title": "ONC K-5",
@@ -2030,7 +3134,15 @@
    "east": 43.0029,
    "north": 15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 954.5,
+    "row": 5106.3,
+    "parallel": 9.0,
+    "meridian": 31.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled April 1977. Revised February 1984. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "k_6": {
    "title": "ONC K-6",
@@ -2045,7 +3157,15 @@
    "east": 55.0028,
    "north": 15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 926.8,
+    "row": 5774.3,
+    "parallel": 8.0,
+    "meridian": 43.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled February 1972. Revised January 1974."
   },
   "k_8": {
    "title": "ONC K-8",
@@ -2060,7 +3180,15 @@
    "east": 83.0016,
    "north": 16.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 956.6,
+    "row": 5772.0,
+    "parallel": 8.0,
+    "meridian": 71.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled October 1961. Revised May 1981."
   },
   "k_9": {
    "title": "ONC K-9",
@@ -2075,7 +3203,15 @@
    "east": 103.0017,
    "north": 16.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 959.3,
+    "row": 5790.9,
+    "parallel": 8.0,
+    "meridian": 91.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled May 1967. Revised June 1984. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "k_10": {
    "title": "ONC K-10",
@@ -2086,7 +3222,15 @@
     16
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1671.8,
+    "row": 5140.5,
+    "parallel": 9.0,
+    "meridian": 104.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled April 1968. Revised August 1984. (Revision limited to aeronautical information.)"
   },
   "k_11": {
    "title": "ONC K-11",
@@ -2101,7 +3245,15 @@
    "east": 127.0016,
    "north": 16.001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 939.8,
+    "row": 5777.2,
+    "parallel": 8.0,
+    "meridian": 115.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled June 1966. Revised July 1984. (Revision limited to aeronautical information and correction of CHUM conditions)."
   },
   "k_12": {
    "title": "ONC K-12",
@@ -2112,7 +3264,15 @@
     16
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 916.8,
+    "row": 5825.9,
+    "parallel": 8.0,
+    "meridian": 127.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense and published by the Aeronautical Chart and Information Center, U.S. Air Force, St. Louis, Missouri 63118. Compiled JULY 1970 from best available source."
   },
   "k_13": {
    "title": "ONC K-13",
@@ -2127,7 +3287,15 @@
    "east": 147.0014,
    "north": 16.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 881.2,
+    "row": 5910.9,
+    "parallel": 8.0,
+    "meridian": 135.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled September 1978. Revised May 1991. (Revision limited to aeronautical information correction of all CHUM conditions.)"
   },
   "k_14": {
    "title": "ONC K-14",
@@ -2142,7 +3310,15 @@
    "east": 160.0014,
    "north": 16.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 868.6,
+    "row": 5812.2,
+    "parallel": 8.0,
+    "meridian": 148.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled December 1975."
   },
   "k_15": {
    "title": "ONC K-15",
@@ -2157,7 +3333,15 @@
    "east": 172.0016,
    "north": 16.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 959.5,
+    "row": 5923.3,
+    "parallel": 8.0,
+    "meridian": 163.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense and published by the Aeronautical Chart and Information Center, U.S. Air Force, St. Louis, Missouri, 63118. Compiled August 1970 from the best available source."
   },
   "k_23": {
    "title": "ONC K-23",
@@ -2172,7 +3356,15 @@
    "east": -105.9987,
    "north": 16.001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 942.4,
+    "row": 5891.8,
+    "parallel": 8.0,
+    "meridian": -118.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled October 1975."
   },
   "k_25": {
    "title": "ONC K-25",
@@ -2187,7 +3379,15 @@
    "east": -81.9989,
    "north": 16.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 956.3,
+    "row": 5905.8,
+    "parallel": 8.0,
+    "meridian": -94.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled November 1978. Revised June 1989. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data)."
   },
   "k_26": {
    "title": "ONC K-26",
@@ -2198,7 +3398,15 @@
     16
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1646.8,
+    "row": 5947.0,
+    "parallel": 8.0,
+    "meridian": -81.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled October 1969. Revised August 1984. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "k_27": {
    "title": "ONC K-27",
@@ -2213,7 +3421,15 @@
    "east": -57.9989,
    "north": 16.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 928.4,
+    "row": 5840.8,
+    "parallel": 8.0,
+    "meridian": -70.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information Compiled May 1973. Revised September 1984. (Revision limited to aeronautical information and correction of CHUM conditions)."
   },
   "l_1": {
    "title": "ONC L-1",
@@ -2228,7 +3444,15 @@
    "east": -6.0004,
    "north": 8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 720.6,
+    "row": 5777.4,
+    "parallel": 0.0,
+    "meridian": -18.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled February 1968 Revised April 1980"
   },
   "l_2": {
    "title": "ONC L-2",
@@ -2243,7 +3467,15 @@
    "east": 6.0031,
    "north": 8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 718.2,
+    "row": 5759.0,
+    "parallel": 0.0,
+    "meridian": -6.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled March 1970. Revised September 1984. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "l_3": {
    "title": "ONC L-3",
@@ -2258,7 +3490,15 @@
    "east": 18.003,
    "north": 8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 740.2,
+    "row": 4360.1,
+    "parallel": 2.0,
+    "meridian": 6.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled June 1974. Revised October 1984. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data)."
   },
   "l_4": {
    "title": "ONC L-4",
@@ -2273,7 +3513,15 @@
    "east": 30.0029,
    "north": 8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1411.1,
+    "row": 5777.2,
+    "parallel": 0.0,
+    "meridian": 19.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled November 1967. Revised January 1982. (Revisions limited to aeronautical information, correction of all CHUM conditions, and currency of planimetric data.)"
   },
   "l_5": {
    "title": "ONC L-5",
@@ -2288,7 +3536,15 @@
    "east": 42.0027,
    "north": 8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 694.3,
+    "row": 5826.3,
+    "parallel": 0.0,
+    "meridian": 30.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1966. Revised July 1973."
   },
   "l_6": {
    "title": "ONC L-6",
@@ -2303,7 +3559,14 @@
    "east": 54.0026,
    "north": 8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 729.9,
+    "row": 5742.1,
+    "parallel": 0.0,
+    "meridian": 42.0
+   },
+   "producer": "unread"
   },
   "l_8": {
    "title": "ONC L-8",
@@ -2318,7 +3581,14 @@
    "east": 84.0006,
    "north": 8.0005,
    "limits_from": "nyu",
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 717.6,
+    "row": 5770.7,
+    "parallel": 0.0,
+    "meridian": 72.0
+   },
+   "producer": "unread"
   },
   "l_9": {
    "title": "ONC L-9",
@@ -2329,7 +3599,15 @@
     8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 695.2,
+    "row": 5744.4,
+    "parallel": 0.0,
+    "meridian": 84.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Department of Defence, (Air Force Office), DAP-AF (AIS), Victoria Barracks, 350 St Kilda Road, Melbourne, Victoria, 3004. Compiled in November 1982 from source material dated 1967-1977."
   },
   "l_10": {
    "title": "ONC L-10",
@@ -2344,7 +3622,15 @@
    "east": 108.0002,
    "north": 7.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1406.5,
+    "row": 5747.9,
+    "parallel": 0.0,
+    "meridian": 97.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director General of Military Survey, Ministry of Defence, United Kingdom,1990 Recompiled 1989 \u00a9 Crown Copyright 1990"
   },
   "l_11": {
    "title": "ONC L-11",
@@ -2355,7 +3641,15 @@
     8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1808.5,
+    "row": 5665.6,
+    "parallel": 0.0,
+    "meridian": 109.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Department of Defence, (Air Force Office ), RAAF AIS, Victoria, Victoria Barracks, 350 St Kilda Barracks, 350 St Kilda Road, MELBOURNE, Victoria, 3004. Prepared from Operational Navigation Chart L-11 Edition 6 GSGS, with Aeronautical Revision in April 1994. \u00a9 Commonwealth of Australia 1994"
   },
   "l_12": {
    "title": "ONC L-12",
@@ -2370,7 +3664,15 @@
    "east": 132.0014,
    "north": 8.0005,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1570.6,
+    "row": 5878.6,
+    "parallel": 0.0,
+    "meridian": 121.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled December 1961. Revised December 1966."
   },
   "l_13": {
    "title": "ONC L-13",
@@ -2385,7 +3687,15 @@
    "east": 144.0012,
    "north": 8.0005,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 864.2,
+    "row": 5863.4,
+    "parallel": 0.0,
+    "meridian": 132.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled September 1978. Revised May 1989. (Revision limited to aeronautical information and correction of all CHUM conditions.)"
   },
   "l_14": {
    "title": "ONC L-14",
@@ -2400,7 +3710,15 @@
    "east": 156.0011,
    "north": 8.0005,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 857.5,
+    "row": 5869.3,
+    "parallel": 0.0,
+    "meridian": 144.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and Published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled September 1978. Revised November 1985. (Revision limited to aeronautical information)."
   },
   "l_15": {
    "title": "ONC L-15",
@@ -2415,7 +3733,15 @@
    "east": 168.001,
    "north": 8.0005,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1565.6,
+    "row": 5899.1,
+    "parallel": 0.0,
+    "meridian": 157.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled September 1978."
   },
   "l_16": {
    "title": "ONC L-16",
@@ -2426,7 +3752,15 @@
     8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 2941.3,
+    "row": 6001.5,
+    "parallel": 0.0,
+    "meridian": 171.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1984. Compiled 1975. Revised 1984. Printed by MCE RE 6500/5/84/831603M Copyright \u00a9 HMSO London 1984"
   },
   "l_18": {
    "title": "ONC L-18",
@@ -2437,7 +3771,15 @@
     8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1406.8,
+    "row": 5801.2,
+    "parallel": 0.0,
+    "meridian": -167.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1975. Compiled by Mapping and Charting Establishment RE 1975 \u00a9 CROWN COPYRIGHT"
   },
   "l_25": {
    "title": "ONC L-25",
@@ -2452,7 +3794,15 @@
    "east": -81.9989,
    "north": 8.0005,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 869.8,
+    "row": 5934.2,
+    "parallel": 0.0,
+    "meridian": -94.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled January 1970. Revised January 1990. (Revision limited to aeronautical information, correction of all CHUM conditions.)"
   },
   "l_26": {
    "title": "ONC L-26",
@@ -2467,7 +3817,15 @@
    "east": -69.9991,
    "north": 8.0005,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 874.6,
+    "row": 5900.9,
+    "parallel": 0.0,
+    "meridian": -82.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled May 1966. Revised October 1981."
   },
   "l_27": {
    "title": "ONC L-27",
@@ -2482,7 +3840,15 @@
    "east": -57.9983,
    "north": 8.0005,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 875.7,
+    "row": 5887.7,
+    "parallel": 0.0,
+    "meridian": -70.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled February 1965. Revised October 1982. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "l_28": {
    "title": "ONC L-28",
@@ -2497,7 +3863,15 @@
    "east": -45.9983,
    "north": 8.0005,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 920.1,
+    "row": 5882.8,
+    "parallel": 0.0,
+    "meridian": -58.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled September 1971."
   },
   "m_2": {
    "title": "ONC M-2",
@@ -2508,7 +3882,15 @@
     0
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 631.2,
+    "row": 5879.6,
+    "parallel": -8.0,
+    "meridian": -5.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1975 / Compiled by Mapping and Charting Establishment RE 1975 / Printed by MCE RE 6000/1/76/751118M \u00a9 CROWN COPYRIGHT"
   },
   "m_3": {
    "title": "ONC M-3",
@@ -2523,7 +3905,15 @@
    "east": 19.0031,
    "north": -0.0004,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 764.1,
+    "row": 5730.4,
+    "parallel": -8.0,
+    "meridian": 7.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled June 1965. Revised November 1984. (Revision limited to aeronautical information and correction of all CHUM conditions.) / Lithographed By DMAAC 4-85"
   },
   "m_4": {
    "title": "ONC M-4",
@@ -2538,7 +3928,15 @@
    "east": 31.003,
    "north": -0.0004,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 663.7,
+    "row": 5173.8,
+    "parallel": -8.0,
+    "meridian": 19.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled March 1968. Revised August 1994. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) / Reprinted by NGA 08-05 \u00a9COPYRIGHT 1994 BY THE UNITED STATES GOVERNMENT NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "m_5": {
    "title": "ONC M-5",
@@ -2553,7 +3951,15 @@
    "east": 43.0029,
    "north": -0.0004,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 769.6,
+    "row": 5752.3,
+    "parallel": -8.0,
+    "meridian": 31.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled November 1969. Revised July 1973. / Lithographed by DMAAC 9-73"
   },
   "m_6": {
    "title": "ONC M-6",
@@ -2568,7 +3974,15 @@
    "east": 55.0028,
    "north": -0.0004,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 761.7,
+    "row": 5713.7,
+    "parallel": -8.0,
+    "meridian": 43.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled January 1970. Revised June 1981. / Lithographed by DMAAC 8-81"
   },
   "m_7": {
    "title": "ONC M-7",
@@ -2583,7 +3997,15 @@
    "east": 67.0026,
    "north": -0.0004,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 751.1,
+    "row": 5802.0,
+    "parallel": -8.0,
+    "meridian": 55.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense and published by the Aeronautical Chart and Information Center, U.S. Air Force, St. Louis, Missouri, 63118. Compiled January 1970 from best available source. / Lithographed by ACIC 10-71"
   },
   "m_8": {
    "title": "ONC M-8",
@@ -2598,7 +4020,15 @@
    "east": 79.0011,
    "north": 0.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 760.1,
+    "row": 5711.0,
+    "parallel": -8.0,
+    "meridian": 67.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense and published by the Aeronautical Chart and Information Center U.S. Air Force, St. Louis, Missouri 63118. Compiled September 1969 from best available source. / Lithographed by DMAAC 7-72"
   },
   "m_10": {
    "title": "ONC M-10",
@@ -2609,7 +4039,15 @@
     0
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 771.3,
+    "row": 5787.4,
+    "parallel": -8.0,
+    "meridian": 97.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled January 1962. Revised October 1974."
   },
   "m_11": {
    "title": "ONC M-11",
@@ -2620,7 +4058,15 @@
     0
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 776.0,
+    "row": 5799.4,
+    "parallel": -8.0,
+    "meridian": 109.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled December 1961"
   },
   "m_12": {
    "title": "ONC M-12",
@@ -2631,7 +4077,15 @@
     0
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 848.8,
+    "row": 5772.8,
+    "parallel": -8.0,
+    "meridian": 121.0
+   },
+   "producer": "AUS",
+   "imprint": "Published under the direction of the Chief of Air Force, Air Force Headquarters. Aeronautical Information provided by the RAAF Aeronautical Information Service. Produced under the direction of the Chief of Army, Army Headquarters, Australia, by the Army Topographic Support Establishment. Compiled in 1997 from topographic source information dated 1947-1996. \u00a9 Commonwealth of Australia 1997."
   },
   "m_13": {
    "title": "ONC M-13",
@@ -2642,7 +4096,15 @@
     0
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 764.2,
+    "row": 5790.1,
+    "parallel": -8.0,
+    "meridian": 133.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Military Forces, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled Oct 1971 from source material dated 1957-1965"
   },
   "m_14": {
    "title": "ONC M-14",
@@ -2653,7 +4115,15 @@
     0
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 759.4,
+    "row": 5729.8,
+    "parallel": -8.0,
+    "meridian": 145.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Department of Defence, (Air Force Office), Aeronautical Information Service, RAAF, 'Frognall', via CANTERBURY, Victoria, 3126. Compiled in May 1980 from source material dated 1965-1980."
   },
   "m_15": {
    "title": "ONC M-15",
@@ -2664,7 +4134,15 @@
     0
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1489.0,
+    "row": 5808.5,
+    "parallel": -8.0,
+    "meridian": 158.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled Oct 1972 from best available source material."
   },
   "m_16": {
    "title": "ONC M-16",
@@ -2675,7 +4153,15 @@
     0
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 771.9,
+    "row": 5838.9,
+    "parallel": -8.0,
+    "meridian": 169.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled 1975 (UK). Revised January 1990. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "m_17": {
    "title": "ONC M-17",
@@ -2686,7 +4172,15 @@
     0
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 587.5,
+    "row": 6147.8,
+    "parallel": -8.0,
+    "meridian": -179.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1976. Compiled by Ordnance Survey in January 1976. Printed by Mapping and Charting Establishment RE \u00a9 CROWN COPYRIGHT"
   },
   "m_18": {
    "title": "ONC M-18",
@@ -2697,7 +4191,15 @@
     0
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 624.4,
+    "row": 5928.9,
+    "parallel": -8.0,
+    "meridian": -167.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1976 / Compiled by Ordnance Survey November 1975. / Printed by Mapping and Charting Establishment RE 7000/5/76/751810M \u00a9 CROWN COPYRIGHT"
   },
   "m_24": {
    "title": "ONC M-24",
@@ -2712,7 +4214,15 @@
    "east": -81.9989,
    "north": 0.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 810.3,
+    "row": 5801.3,
+    "parallel": -8.0,
+    "meridian": -94.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled February 1970. Revised February 1990. (Revision limited to aeronautical information and correction of all CHUM conditions.) / Lithographed By DMAAC 7-90"
   },
   "m_25": {
    "title": "ONC M-25",
@@ -2727,7 +4237,15 @@
    "east": -69.9991,
    "north": 0.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 768.6,
+    "row": 5865.1,
+    "parallel": -8.0,
+    "meridian": -82.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled May 1989. / Lithographed By DMAAC 5-90"
   },
   "m_26": {
    "title": "ONC M-26",
@@ -2742,7 +4260,15 @@
    "east": -57.9983,
    "north": 0.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 754.8,
+    "row": 5793.9,
+    "parallel": -8.0,
+    "meridian": -70.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled March 1966. Revised November 1984. (Revision limited to aeronautical information and correction of all CHUM conditions.) / Lithographed By DMAAC 4-85"
   },
   "m_27": {
    "title": "ONC M-27",
@@ -2757,7 +4283,15 @@
    "east": -45.9983,
    "north": 0.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 760.7,
+    "row": 5763.5,
+    "parallel": -8.0,
+    "meridian": -58.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled February 1965. Revised October 1984. (Revision limited to aeronautical information and correction of CHUM conditions.) / Lithographed By DMAAC 4-85"
   },
   "m_28": {
    "title": "ONC M-28",
@@ -2772,7 +4306,15 @@
    "east": -33.9985,
    "north": 0.0,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 777.2,
+    "row": 5755.1,
+    "parallel": -8.0,
+    "meridian": -46.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. piled January 1989. Revised September 1992. (Revision limited to aeronautical information correction of all CHUM conditions and currency of planimetric data.) \u00a9COPYRIGHT 1993 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "m_29": {
    "title": "ONC M-29",
@@ -2787,7 +4329,15 @@
    "east": -21.9986,
    "north": 2.0006,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 3518.5,
+    "row": 5818.8,
+    "parallel": -6.0,
+    "meridian": -30.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled January 1979. / Lithographed by DMAAC 10-79"
   },
   "n_1": {
    "title": "ONC N-1",
@@ -2798,7 +4348,15 @@
     -8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1339.5,
+    "row": 4599.6,
+    "parallel": -15.0,
+    "meridian": -15.0
+   },
+   "producer": "UK",
+   "imprint": "Published by the Director of Military Survey, Ministry of Defence, United Kingdom 1973 / Compiled by Mapping and Charting Establishment RE 1973 / Printed by MCE (RE) 11/73/722754M / Reprinted by DMAAC 3-76 \u00a9 CROWN COPYRIGHT"
   },
   "n_3": {
    "title": "ONC N-3",
@@ -2813,7 +4371,15 @@
    "east": 18.003,
    "north": -8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 793.8,
+    "row": 5153.0,
+    "parallel": -16.0,
+    "meridian": 6.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled December 1968. Revised January 1984. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) / Lithographed By DMAAC 9-84"
   },
   "n_4": {
    "title": "ONC N-4",
@@ -2828,7 +4394,15 @@
    "east": 30.0029,
    "north": -8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 757.3,
+    "row": 5165.5,
+    "parallel": -16.0,
+    "meridian": 18.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled November 1971. Revised March 1983. (Revisions limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) / Lithographed By DMAAC 5-84"
   },
   "n_5": {
    "title": "ONC N-5",
@@ -2843,7 +4417,15 @@
    "east": 42.0027,
    "north": -8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 789.1,
+    "row": 5163.0,
+    "parallel": -16.0,
+    "meridian": 30.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1973 Revised January 1981. / Lithographed by DMAAC 5-81"
   },
   "n_6": {
    "title": "ONC N-6",
@@ -2858,7 +4440,15 @@
    "east": 54.0026,
    "north": -8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 776.5,
+    "row": 5159.7,
+    "parallel": -16.0,
+    "meridian": 42.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled March 1967. Revised February 1982. (Revision limited to aeronautical information and correction of CHUM conditions.) / Lithographed By DMAAC 7-82"
   },
   "n_7": {
    "title": "ONC N-7",
@@ -2873,7 +4463,15 @@
    "east": 66.0025,
    "north": -8.0001,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1954.3,
+    "row": 5129.5,
+    "parallel": -16.0,
+    "meridian": 56.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled July 1968. Revised September 1983. (Revision limited to aeronautical information.) / Lithographed By DMAAC 2-84"
   },
   "n_10": {
    "title": "ONC N-10",
@@ -2884,7 +4482,15 @@
     -8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 783.9,
+    "row": 5167.9,
+    "parallel": -16.0,
+    "meridian": 86.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Military Forces, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled September 1971 from source material dated 1957 / AHQ/AIR/5108 / PRINTED BY COMMONWEALTH GOVERNMENT PRINTER 1973 / Reprinted by DMAAC 3-74"
   },
   "n_11": {
    "title": "ONC N-11",
@@ -2895,7 +4501,15 @@
     -8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 801.0,
+    "row": 5167.8,
+    "parallel": -16.0,
+    "meridian": 98.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Military Forces, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled Dec 1971 from source material dated 1966 - 1971 / AHQ/AIR/5109 / Reprinted by DMAAC (WPC) 2-74 / PRINTED BY COMMONWEALTH GOVERNMENT PRINTER 1973"
   },
   "n_12": {
    "title": "ONC N-12",
@@ -2906,7 +4520,15 @@
     -8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 3856.3,
+    "row": 3954.4,
+    "parallel": -14.0,
+    "meridian": 115.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Military Forces, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled Jul 1971 from source material dated 1965 - 1969. AHQ/AIR/5002. PRINTED BY COMMONWEALTH GOVERNMENT PRINTER 1973. Lithographed by UP 1-74"
   },
   "n_13": {
    "title": "ONC N-13",
@@ -2917,7 +4539,15 @@
     -8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 854.6,
+    "row": 5260.9,
+    "parallel": -16.0,
+    "meridian": 122.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters support Command, RAAF, Victoria Barracks, Melbourne 3004. Compiled OCT 1971 from source material dated 1948-1970. / DEF/AIR/15069 / Reprinted By DMAAC 12-89"
   },
   "n_14": {
    "title": "ONC N-14",
@@ -2928,7 +4558,15 @@
     -8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 913.7,
+    "row": 5299.2,
+    "parallel": -16.0,
+    "meridian": 134.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Department of Defence, (Air Force Office), DAP-AF AIS) Victoria Barracks, 350 St. Kilda Road, MELBOURNE, Victoria, 3004. Compiled FEB 1985. / DEF/AIR/12962 / Reprinted By DMAAC 3-90 \u00a9 Commonwealth of Australia 1986."
   },
   "n_15": {
    "title": "ONC N-15",
@@ -2939,7 +4577,15 @@
     -8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 823.9,
+    "row": 5238.1,
+    "parallel": -16.0,
+    "meridian": 146.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Military Forces, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled MAY 1972 from source material dated 1951-1971 / AHQ/AIR/5110 / Reprinted by DMAAC 7-74 / PRINTED BY COMMONWEALTH GOVERNMENT PRINTER 1973"
   },
   "n_16": {
    "title": "ONC N-16",
@@ -2950,7 +4596,15 @@
     -8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 831.6,
+    "row": 5178.0,
+    "parallel": -16.0,
+    "meridian": 158.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Military Forces, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled Sep 1971 from source material dated 1947-1969 / AHQ/AIR/5061 / PRINTED BY COMMONWEALTH GOVERNMENT PRINTER 1972 / Lithographed by WPC 5-73"
   },
   "n_17": {
    "title": "ONC N-17",
@@ -2961,7 +4615,15 @@
     -8
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1426.3,
+    "row": 5209.0,
+    "parallel": -16.0,
+    "meridian": 171.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1982. Compiled 1982. Printed by MCE RE 6000/11/82/820083M Copyright \u00a9 HMSO London, 1982"
   },
   "n_18": {
    "title": "ONC N-18",
@@ -2976,7 +4638,15 @@
    "east": -165.999,
    "north": -7.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 763.1,
+    "row": 5245.4,
+    "parallel": -16.0,
+    "meridian": -178.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled March 1976. Revised February 2001. (Revision limited to aeronautical information, correction of CHUM conditions and currency of planimetric data.) / Lithographed by NIMA 04-01"
   },
   "n_19": {
    "title": "ONC N-19",
@@ -2991,7 +4661,15 @@
    "east": -153.9991,
    "north": -7.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1384.2,
+    "row": 5231.8,
+    "parallel": -16.0,
+    "meridian": -165.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled February 1976. Revised November 1989. (Revision limited to aeronautical information and correction of all CHUM conditions.) / Lithographed By DMAAC 6-90"
   },
   "n_20": {
    "title": "ONC N-20",
@@ -3006,7 +4684,15 @@
    "east": -141.9984,
    "north": -7.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 639.8,
+    "row": 5397.3,
+    "parallel": -16.0,
+    "meridian": -154.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1986 / Revised 1986 / Printed by MCE RE 6900/7/86/860334M / Lithographed by DMAAC 3-93 Copyright \u00a9 HMSO London 1986"
   },
   "n_21": {
    "title": "ONC N-21",
@@ -3021,7 +4707,15 @@
    "east": -129.9984,
    "north": -7.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 794.1,
+    "row": 5241.7,
+    "parallel": -16.0,
+    "meridian": -142.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled January 1976. Revised February 1986 (Revision limited to aeronautical information.) / Lithographed By DMAAC 8-86"
   },
   "n_25": {
    "title": "ONC N-25",
@@ -3036,7 +4730,15 @@
    "east": -68.9989,
    "north": -7.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 712.7,
+    "row": 4978.1,
+    "parallel": -16.0,
+    "meridian": -81.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled August 1964. Revised February 1980. / Lithographed by DMAAC 8-80"
   },
   "n_26": {
    "title": "ONC N-26",
@@ -3051,7 +4753,14 @@
    "east": -56.999,
    "north": -7.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 715.1,
+    "row": 5002.4,
+    "parallel": -16.0,
+    "meridian": -69.0
+   },
+   "producer": "unread"
   },
   "n_27": {
    "title": "ONC N-27",
@@ -3066,7 +4775,15 @@
    "east": -44.9992,
    "north": -7.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 727.9,
+    "row": 4969.7,
+    "parallel": -16.0,
+    "meridian": -57.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1964 Revised December 1973. / Lithographed by DMAAC 3-74"
   },
   "n_28": {
    "title": "ONC N-28",
@@ -3081,7 +4798,15 @@
    "east": -32.9983,
    "north": -7.9996,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1342.6,
+    "row": 4991.5,
+    "parallel": -16.0,
+    "meridian": -44.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled November 1972. Revised August 1980. / Lithographed By DMAAC 10-83"
   },
   "p_3": {
    "title": "ONC P-3",
@@ -3096,7 +4821,15 @@
    "east": 17.0028,
    "north": -15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1042.2,
+    "row": 5221.1,
+    "parallel": -24.0,
+    "meridian": 5.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled April 1975. Revised September 1983. (Revisions limited to aeronautical information and correction of CHUM conditions.) / Lithographed By DMAAC 3-84"
   },
   "p_4": {
    "title": "ONC P-4",
@@ -3111,7 +4844,15 @@
    "east": 29.0027,
    "north": -15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1080.0,
+    "row": 5302.6,
+    "parallel": -24.0,
+    "meridian": 17.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1977. / Lithographed by DMAAC 9-77"
   },
   "p_5": {
    "title": "ONC P-5",
@@ -3126,7 +4867,15 @@
    "east": 41.0026,
    "north": -15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1140.6,
+    "row": 5147.1,
+    "parallel": -24.0,
+    "meridian": 29.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri 63118. Compiled November 1971. Revised November 1983. (Revision limited to aeronautical information and corrections of CHUM conditions.) / Lithographed By DMAAC 6-84"
   },
   "p_6": {
    "title": "ONC P-6",
@@ -3141,7 +4890,15 @@
    "east": 53.0025,
    "north": -15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1124.1,
+    "row": 5177.3,
+    "parallel": -24.0,
+    "meridian": 41.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled December 1967. Revised February 1974 / Lithographed by DMAAC 4-74"
   },
   "p_7": {
    "title": "ONC P-7",
@@ -3156,7 +4913,15 @@
    "east": 65.0023,
    "north": -15.9997,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1127.3,
+    "row": 5220.4,
+    "parallel": -24.0,
+    "meridian": 53.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled April 1969. Revised June 1989. (Revision limited to aeronautical information, and correction of all CHUM conditions.) / Lithographed By DMAAC 1-90"
   },
   "p_12": {
    "title": "ONC P-12",
@@ -3167,7 +4932,15 @@
     -16
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1120.5,
+    "row": 5174.9,
+    "parallel": -24.0,
+    "meridian": 112.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Military Forces, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled Oct 1970 from source material dated 1951-1970 / AHQ/AIR/4462 / Reprinted by DMAAC (WPC) 4-73"
   },
   "p_13": {
    "title": "ONC P-13",
@@ -3178,7 +4951,15 @@
     -16
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1106.2,
+    "row": 5217.9,
+    "parallel": -24.0,
+    "meridian": 124.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Military Forces, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled Sep 1971 from source material dated 1947-1971. / AHQ/AIR/5107 / Reprinted by DMAAC 10-74 / PRINTED BY COMMONWEALTH GOVERNMENT PRINTER 1973"
   },
   "p_14": {
    "title": "ONC P-14",
@@ -3189,7 +4970,15 @@
     -16
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1128.3,
+    "row": 5205.7,
+    "parallel": -24.0,
+    "meridian": 136.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF Victoria Barracks, Melbourne, 3004. Compiled Sep 1972 from source material dated 1956-1972. / AHQ/AIR/5567 / PRINTED BY COMMONWEALTH GOVERNMENT PRINTER 1973 / Reprinted by DMAAC 12-74"
   },
   "p_15": {
    "title": "ONC P-15",
@@ -3200,7 +4989,15 @@
     -16
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1115.5,
+    "row": 5200.4,
+    "parallel": -24.0,
+    "meridian": 148.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled Dec 1972 from source material dated 1947-1971. / AHQ/AIR/5105 / Reprinted by DMAAC 10-74 / PRINTED BY COMMONWEALTH GOVERNMENT PRINTER 1973"
   },
   "p_16": {
    "title": "ONC P-16",
@@ -3211,7 +5008,15 @@
     -16
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1109.9,
+    "row": 5172.7,
+    "parallel": -24.0,
+    "meridian": 160.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom,1982 / Compiled 1982 / Printed by MCE RE 7250/2/83/820186M Copyright \u00a9 HMSO London 1982"
   },
   "p_17": {
    "title": "ONC P-17",
@@ -3222,7 +5027,15 @@
     -16
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1111.3,
+    "row": 5190.5,
+    "parallel": -24.0,
+    "meridian": 172.0
+   },
+   "producer": "US",
+   "imprint": "Prepared under the direction of the Department of Defense and published by the Aeronautical Chart and Information Center, U.S. Air Force, St. Louis, Missouri 63118. Compiled October, 1968 from best available source. / Lithographed by ACIC 6-69"
   },
   "p_18": {
    "title": "ONC P-18",
@@ -3237,7 +5050,15 @@
    "east": -163.9987,
    "north": -15.9992,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1153.4,
+    "row": 5208.8,
+    "parallel": -24.0,
+    "meridian": -176.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri 63118. Compiled January 1973. Revised November 1983. (Revision limited to aeronautical information and correction of CHUM conditions.) / Lithographed By DMAAC 2-84"
   },
   "p_19": {
    "title": "ONC P-19",
@@ -3252,7 +5073,15 @@
    "east": -151.9988,
    "north": -15.9992,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1036.1,
+    "row": 5267.0,
+    "parallel": -24.0,
+    "meridian": -164.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled SEPT. 1973 / Lithographed by DMAAC 8-74"
   },
   "p_20": {
    "title": "ONC P-20",
@@ -3267,7 +5096,15 @@
    "east": -139.9989,
    "north": -15.9992,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1014.3,
+    "row": 5258.3,
+    "parallel": -24.0,
+    "meridian": -152.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled August 1973. Revised December 1983. (Revision limited to aeronautical information and corrections of CHUM conditions.) / Lithographed By DMAAC 3-84"
   },
   "p_21": {
    "title": "ONC P-21",
@@ -3282,7 +5119,15 @@
    "east": -127.9991,
    "north": -15.9992,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1067.7,
+    "row": 5262.4,
+    "parallel": -24.0,
+    "meridian": -140.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled August 1973 / Lithographed by DMAAC 9-74"
   },
   "p_26": {
    "title": "ONC P-26",
@@ -3297,7 +5142,15 @@
    "east": -61.9988,
    "north": -15.9992,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1040.5,
+    "row": 4377.9,
+    "parallel": -23.0,
+    "meridian": -74.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled November 1972 Revised April 1981 Revision Limited to Aeronautical Information, correction of all Chum conditions, and currency of planimetric data. / Lithographed By DMAAC 5-82"
   },
   "p_27": {
    "title": "ONC P-27",
@@ -3312,7 +5165,15 @@
    "east": -49.9989,
    "north": -15.9992,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1002.4,
+    "row": 5060.9,
+    "parallel": -24.0,
+    "meridian": -62.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled March 1976. Revised December 1989. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) / Lithographed By DMAAC 8-90"
   },
   "p_28": {
    "title": "ONC P-28",
@@ -3327,7 +5188,15 @@
    "east": -37.9991,
    "north": -15.9992,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 2739.4,
+    "row": 4947.2,
+    "parallel": -24.0,
+    "meridian": -47.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled January 1990. Lithographed By DMAAC 10-90"
   },
   "q_4": {
    "title": "ONC Q-4",
@@ -3342,7 +5211,15 @@
    "east": 25.003,
    "north": -24.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1369.2,
+    "row": 5240.3,
+    "parallel": -32.0,
+    "meridian": 13.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled August 1977. Revised December 1984. (Revision limited to Aeronautical information and correction of CHUM conditions.) / Lithographed By DMAAC 6-85"
   },
   "q_5": {
    "title": "ONC Q-5",
@@ -3357,7 +5234,15 @@
    "east": 37.003,
    "north": -24.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1918.3,
+    "row": 5225.0,
+    "parallel": -32.0,
+    "meridian": 26.0
+   },
+   "producer": "US",
+   "imprint": "...l published by the Defense Mapping Agency ...enter, St. Louis Air Force Station, Missouri ...piled April 1967. Revised February 1983. ...ed to aeronautical information and ... CHUM conditions.) / ... DMAAC 8-83"
   },
   "q_6": {
    "title": "ONC Q-6",
@@ -3372,7 +5257,15 @@
    "east": 49.0028,
    "north": -24.0002,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1385.8,
+    "row": 5182.4,
+    "parallel": -32.0,
+    "meridian": 37.0
+   },
+   "producer": "US",
+   "imprint": "...d by the Defense Mapping ...enter, St. Louis Air Force ...3. Compiled August 1966. ...983. (Revision limited to ...on and correction of CHUM ... / ...7-84"
   },
   "q_12": {
    "title": "ONC Q-12",
@@ -3383,7 +5276,15 @@
     -24
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1913.6,
+    "row": 5190.8,
+    "parallel": -32.0,
+    "meridian": 113.0
+   },
+   "producer": "AUS",
+   "imprint": "...n of the Chief of the General Staff, Australian Army, ... Survey Corps and published by the Aeronautical ...uarters Support Command, RAAF, Victoria Barracks, ... Oct 1973 from source material dated 1952 to 1973 / ...WEALTH GOVERNMENT PRINTER 1974"
   },
   "q_13": {
    "title": "ONC Q-13",
@@ -3394,7 +5295,15 @@
     -24
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1907.1,
+    "row": 5193.4,
+    "parallel": -32.0,
+    "meridian": 125.0
+   },
+   "producer": "AUS",
+   "imprint": "... of the Chief of the General Staff, Australian Army, ...urvey Corps and published by the Aeronautical ...arters Support Command, RAAF, Victoria Barracks, ...C 1973 from source material dated 1962 to 1973 / ...WEALTH GOVERNMENT PRINTER 1974"
   },
   "q_14": {
    "title": "ONC Q-14",
@@ -3405,7 +5314,15 @@
     -24
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 2441.2,
+    "row": 5176.7,
+    "parallel": -32.0,
+    "meridian": 138.0
+   },
+   "producer": "AUS",
+   "imprint": "...ot the Chief of the General Staff, Australian Army, ...rvey Corps and published by the Aeronautical ...arters Support Command, RAAF, Victoria Barracks, ...n Aug 1971 from source material dated 1959 to ... / ...sed Sep 1980. / ...ER OF AUSTRALIA 1980."
   },
   "q_15": {
    "title": "ONC Q-15",
@@ -3416,7 +5333,15 @@
     -24
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1912.1,
+    "row": 5174.6,
+    "parallel": -32.0,
+    "meridian": 149.0
+   },
+   "producer": "AUS",
+   "imprint": "...rection of the Chief of the General Staff, Australian Army, ...lian Survey Corps and published by the Aeronautical ...Headquarters Support Command, RAAF, Victoria Barracks, ...piled Jun 1973 from source material dated 1953-1973. / ... 6-75 / ...NWEALTH GOVERNMENT PRINTER 1974"
   },
   "q_16": {
    "title": "ONC Q-16",
@@ -3427,7 +5352,15 @@
     -24
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1948.8,
+    "row": 5179.0,
+    "parallel": -32.0,
+    "meridian": 161.0
+   },
+   "producer": "AUS",
+   "imprint": "...he direction of the Chief of the General Staff Australian Military ...yal Australian Survey Corps and published by the Aeronautical ...on, Headquarters Support Command, RAAF, Victoria Barracks, ... Compiled September 1971 from source material dated 1959. / ...WEALTH GOVERNMENT PRINTER 1973 / ...74"
   },
   "q_17": {
    "title": "ONC Q-17",
@@ -3438,7 +5371,15 @@
     -24
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1407.1,
+    "row": 5317.5,
+    "parallel": -32.0,
+    "meridian": 172.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled August 1977. / Lithographed by DMAAC 5-79"
   },
   "q_20": {
    "title": "ONC Q-20",
@@ -3453,7 +5394,15 @@
    "east": -134.9995,
    "north": -23.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1007.9,
+    "row": 5270.3,
+    "parallel": -32.0,
+    "meridian": -148.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1976 / Compiled by Mapping and Charting Establishment RE 1976 / Printed by MCE RE 7000/6/76/751866M \u00a9 CROWN COPYRIGHT"
   },
   "q_21": {
    "title": "ONC Q-21",
@@ -3468,7 +5417,15 @@
    "east": -122.9986,
    "north": -23.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1000.6,
+    "row": 4674.8,
+    "parallel": -31.0,
+    "meridian": -136.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1976 / Compiled by Mapping and Charting Establishment RE 1976 / Printed by MCE RE 6000/6/76/751892M \u00a9 CROWN COPYRIGHT"
   },
   "q_23": {
    "title": "ONC Q-23",
@@ -3483,7 +5440,15 @@
    "east": -102.9985,
    "north": -24.0007,
    "limits_from": "nyu",
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 963.9,
+    "row": 5312.2,
+    "parallel": -32.0,
+    "meridian": -116.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1984 / Compiled 1975 / Revised 1984 / Printed by MCE (RE) 5200/8/84/840616M Copyright \u00a9 HMSO London 1984"
   },
   "q_26": {
    "title": "ONC Q-26",
@@ -3498,7 +5463,15 @@
    "east": -68.9989,
    "north": -23.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1296.9,
+    "row": 4959.5,
+    "parallel": -32.0,
+    "meridian": -81.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled September 1972. Revised June 1989. (Revision limited to aeronautical information and correction of all CHUM conditions.) Lithographed By DMAAC 1-90"
   },
   "q_27": {
    "title": "ONC Q-27",
@@ -3513,7 +5486,15 @@
    "east": -56.999,
    "north": -23.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1297.7,
+    "row": 4997.1,
+    "parallel": -32.0,
+    "meridian": -69.0
+   },
+   "producer": "US",
+   "imprint": "...d and published by the Defense Mappping ... Aerospace Center, St. Louis, Missouri. ...d August 1973. Revised November 1990. ...n limited to aeronautical information and ...on of CHUM conditions). / ...ed by DMAAC 05-91"
   },
   "q_28": {
    "title": "ONC Q-28",
@@ -3528,7 +5509,15 @@
    "east": -44.9992,
    "north": -23.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1317.9,
+    "row": 5028.0,
+    "parallel": -32.0,
+    "meridian": -57.0
+   },
+   "producer": "US",
+   "imprint": "... by the Defense Mapping ...nter, St. Louis Air Force ...18. Compiled February ...r 1980 / ...4-81"
   },
   "r_1": {
    "title": "ONC R-1",
@@ -3539,7 +5528,15 @@
     -32
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 970.8,
+    "row": 5362.0,
+    "parallel": -42.0,
+    "meridian": -20.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director General of Military Survey, Ministry of Defence, United Kingdom, 1990 / Recompiled 1989 / Printed by MCE RE 4/90/890618M \u00a9 Crown Copyright 1990"
   },
   "r_4": {
    "title": "ONC R-4",
@@ -3554,7 +5551,15 @@
    "east": 31.0028,
    "north": -31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1109.7,
+    "row": 5279.8,
+    "parallel": -40.0,
+    "meridian": 17.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1967 from source dated August 1966. Revised February 1982. (Revision limited to aeronautical information.) / Lithographed By DMAAC 10-82"
   },
   "r_8": {
    "title": "ONC R-8",
@@ -3565,7 +5570,15 @@
     -32
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 913.1,
+    "row": 5458.7,
+    "parallel": -40.0,
+    "meridian": 70.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director General of Military Survey, Ministry of Defence, United Kingdom, 1990. / Revised 1989 / Printed by MCE RE 1/90/890617M \u00a9 Crown Copyright 1990."
   },
   "r_11": {
    "title": "ONC R-11",
@@ -3576,7 +5589,15 @@
     -32
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1044.0,
+    "row": 5315.6,
+    "parallel": -40.0,
+    "meridian": 113.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Department of Defence, (Air Force Office), Aeronautical Information Service, RAAF, 'Frognall', via CANTERBURY, Victoria, 3126. Compiled September 1982 from source material dated 1966-1981. / DEF/AIR/9474 / Reprinted By DMAAC 1-90"
   },
   "r_12": {
    "title": "ONC R-12",
@@ -3587,7 +5608,15 @@
     -32
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1058.0,
+    "row": 5313.4,
+    "parallel": -40.0,
+    "meridian": 127.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Department of Defence, (Air Force Office), DAP-AF (AIS), Victoria Barracks 350, St Kilda Road, Melbourne, Victoria 3004. Compiled in February 1984 from source material dated 1966-1982. / DEF/AIR/12924 / Reprinted By DMAAC 1-90 \u00a9 Commonwealth of Australia 1985."
   },
   "r_13": {
    "title": "ONC R-13",
@@ -3598,7 +5627,15 @@
     -32
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 2012.8,
+    "row": 5248.8,
+    "parallel": -40.0,
+    "meridian": 143.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Department of Defence, (Air Force Office), DAP-AF (AIS), Victoria Barracks, 350 St Kilda Road, MELBOURNE. Victoria, 3004. Compiled in March 1986 from source material dated 1952-1982. / DEF/AIR/12963 / Reprinted By DMAAC 12-89 \u00a9 Commonwealth of Australia 1988."
   },
   "r_15": {
    "title": "ONC R-15",
@@ -3609,7 +5646,15 @@
     -32
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1095.4,
+    "row": 5299.8,
+    "parallel": -40.0,
+    "meridian": 169.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled August 1968. Revised March 1992. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) / Lithographed by DMAAC 9-92"
   },
   "r_22": {
    "title": "ONC R-22",
@@ -3624,7 +5669,15 @@
    "east": -75.9986,
    "north": -31.9994,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1001.0,
+    "row": 5128.1,
+    "parallel": -40.0,
+    "meridian": -90.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled November 1975. / Lithographed by DMAAC 7-76"
   },
   "r_23": {
    "title": "ONC R-23",
@@ -3639,7 +5692,15 @@
    "east": -61.9986,
    "north": -31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 985.8,
+    "row": 5119.6,
+    "parallel": -40.0,
+    "meridian": -76.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled November 1978. Revised October 1989. (Revision limited to aeronautical information correction of all CHUM conditions and currency of planimetric data). Lithographed By DMAAC 4-90"
   },
   "r_24": {
    "title": "ONC R-24",
@@ -3654,7 +5715,15 @@
    "east": -47.9992,
    "north": -31.9998,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1001.8,
+    "row": 5141.9,
+    "parallel": -40.0,
+    "meridian": -62.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled May 1965. Revised March 1982. (Revision limited to aeronautical information and correction of CHUM conditions.) / Lithographed By DMAAC 9-82"
   },
   "s_5": {
    "title": "ONC S-5",
@@ -3665,7 +5734,15 @@
     -40
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 996.2,
+    "row": 5449.9,
+    "parallel": -48.0,
+    "meridian": 37.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director General of Military Survey, Ministry of Defence, United Kingdom, 1990 / Revised in 1989 / Printed by MCE RE 3/90/890698M \u00a9 Crown Copyright 1990"
   },
   "s_11": {
    "title": "ONC S-11",
@@ -3676,7 +5753,15 @@
     -40
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 993.9,
+    "row": 5379.4,
+    "parallel": -48.0,
+    "meridian": 135.0
+   },
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Military Forces, by the Royal Australian Survey Corps and published by the Aeronautical Information Section, Headquarters Support Command, RAAF, Victoria Barracks, Melbourne, 3004. Compiled November 1969 from sources dated 1962 to 1963 / PRINTED BY COMMONWEALTH GOVERNMENT PRINTER 1970 / AHQ/AIR/4444 / Reprinted by DMAAC (WPC) 3-73"
   },
   "s_13": {
    "title": "ONC S-13",
@@ -3691,7 +5776,15 @@
    "east": 178.4379,
    "north": -40.2358,
    "limits_from": "nyu",
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1023.4,
+    "row": 5382.6,
+    "parallel": -48.0,
+    "meridian": 165.0
+   },
+   "producer": "OTHER",
+   "imprint": "Published by the Department of Lands and Survey For the Ministry of Defence and The Ministry of Transport, Civil Aviation Division. Compiled August 1973. Revised by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri, February 1991. (Revision limited to aeronautical information and correction of all CHUM conditions.) / Lithographed by DMAAC 10-91"
   },
   "s_14": {
    "title": "ONC S-14",
@@ -3702,7 +5795,15 @@
     -40
    ],
    "limits_from": null,
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1184.7,
+    "row": 5412.3,
+    "parallel": -51.0,
+    "meridian": 176.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled January 1979. / Lithographed by DMAAC 10-79"
   },
   "s_21": {
    "title": "ONC S-21",
@@ -3717,7 +5818,15 @@
    "east": -59.9989,
    "north": -40.0003,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 955.2,
+    "row": 5163.4,
+    "parallel": -48.0,
+    "meridian": -76.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled January 1974. Revised JULY 1980 / Lithographed By DMAAC 2-81"
   },
   "t_2": {
    "title": "ONC T-2",
@@ -3728,7 +5837,15 @@
     -48
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1125.2,
+    "row": 5462.4,
+    "parallel": -56.0,
+    "meridian": 4.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director General of Military Survey, Ministry of Defence, United Kingdom, 1990 / Revised 1989 / Printed by MCE RE 3/90/890934M \u00a9 Crown Copyright, 1990"
   },
   "t_6": {
    "title": "ONC T-6",
@@ -3739,7 +5856,15 @@
     -48
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1036.2,
+    "row": 4853.0,
+    "parallel": -55.0,
+    "meridian": 68.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director General of Military Survey, Ministry of Defence, United Kingdom, 1990 / Revised 1989 / Printed by MCE RE 1/90/890619M \u00a9 Crown Copyright 1990"
   },
   "t_11": {
    "title": "ONC T-11",
@@ -3754,7 +5879,15 @@
    "east": 176.0011,
    "north": -47.9995,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1261.2,
+    "row": 5410.6,
+    "parallel": -56.0,
+    "meridian": 158.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled January 1979. / Printed by DMA 09-96"
   },
   "t_18": {
    "title": "ONC T-18",
@@ -3769,7 +5902,15 @@
    "east": -56.083,
    "north": -48.0009,
    "limits_from": "nyu",
-   "crown": false
+   "crown": false,
+   "read": {
+    "column": 1490.5,
+    "row": 5191.4,
+    "parallel": -56.0,
+    "meridian": -75.0
+   },
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled January 1965. Revised February 1985. (Revision limited to aeronautical information and correction of CHUM conditions.) / Lithographed By DMAAC 7-85"
   },
   "u_17": {
    "title": "ONC U-17",
@@ -3780,7 +5921,15 @@
     -56
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1776.9,
+    "row": 5405.6,
+    "parallel": -64.0,
+    "meridian": -76.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director of Military Survey, Ministry of Defence, United Kingdom, 1976 / Compiled by Ordnance Survey in October 1975 / Printed by Mapping and Charting Establishment RE 6000/8/76/751398M \u00a9 CROWN COPYRIGHT"
   },
   "u_18": {
    "title": "ONC U-18",
@@ -3791,7 +5940,15 @@
     -56
    ],
    "limits_from": null,
-   "crown": false
+   "crown": true,
+   "read": {
+    "column": 1437.1,
+    "row": 5500.1,
+    "parallel": -64.0,
+    "meridian": -64.0
+   },
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director General of Military Survey, Ministry of Defence, United Kingdom, 1991. / Recompiled 1990 / Printed by MCE RE 10/91/891649M \u00a9 Crown Copyright 1991"
   }
  }
 }
