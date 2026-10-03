@@ -23,7 +23,10 @@ user asked for this, so the lot can be deleted in one go): `source/sectionals/`
 drawn from those PDFs), `source/ifr-low/healed/` (frame-healed copies, both
 below) and `source/ifr-high/rendered/` (12 sheets, not healed -- see below),
 `source/models/` (upsampler weights), `source/vendor/nunif`, and
-`source/wall-planning/`. Paths come from `scripts/layout.py`; use it rather than
+`source/wall-planning/`. The world-wide VFR layers add a directory apiece
+(`source/onc/`, `source/tpc/`, `source/ofm/`, `source/br-wac/` and the national
+charts), each with whatever stages it has: `rectified/`, `rendered/`,
+`upscaled/`. Paths come from `scripts/layout.py`; use it rather than
 building paths from `REPO`. Tilesets stay at the top level.
 
 The first chart was the FAA U.S. VFR Wall Planning Chart, in
@@ -37,8 +40,8 @@ user chose a manual drop-in; `build_wall_planning.py` checks for the files.
 
 **Wrappers, one per product** (the user asked for these over running stages by
 hand): `build_sectionals.py`, `build_sectionals_tac.py`, `build_ifr_low.py`,
-`build_ifr_high.py`, `build_wall_planning.py`, all thin, running stage scripts through
-`pipeline.py`. The chart wrappers do **not**
+`build_ifr_high.py`, `build_wall_planning.py`, `build_worldwide_vfr.py`, all
+thin, running stage scripts through `pipeline.py`. The chart wrappers do **not**
 re-detect map areas unless `--detect` is passed, because the manifests are
 reviewed and committed. `scripts/setup_repo.py` takes a fresh clone to a working
 venv; it has been run against an existing venv, not from a truly fresh clone.
@@ -595,6 +598,117 @@ Detection lessons, each learnt from a wrong outline:
 - **The Phoenix GeoTIFF has a blank white row through its map** near 35.6 N.
   That is the FAA's file, not the mask; it shows because Phoenix sorts after Las
   Vegas. A better overlap rule is the fix, not a mask.
+
+## World-wide VFR (`worldwide-vfr`)
+
+`build_worldwide_vfr.py`: every VFR chart free to download, on one globe, as a
+**stepped** composite of fifteen layers. The user's up-front decisions: anything
+free to download goes in, each source tagged with its licence, with a
+`--redistributable-only` variant for the public site; the old US military ONC
+(1:1M) and TPC (1:500k) underneath as historical gap fillers; a community chart
+under an official one; the US layer is sectionals plus TACs; rasters upsampled
+like the US ones; branch and PR. What was looked for and not found, country by
+country, is `docs/worldwide-vfr-sources.md`.
+
+- **A series now says who published it and on what terms** (`Licence` in
+  `chart_series.py`). `--redistributable-only` writes `tileset-SERIES-public`
+  and leaves out every layer, and every *sheet*, whose terms do not plainly
+  allow republishing. Unclear terms are not permission: Denmark says nothing
+  either way and is left out.
+- **Terms can differ sheet by sheet** (`Series.flagged`, `licence_of`). ONC and
+  TPC were a joint production. **The library's catalogue credits every sheet to
+  the US, and it is wrong**: read off the scans, of 270 ONC sheets 201 have a
+  plain US imprint, 26 are Australian, 25 British, one New Zealand's, 14 are
+  US-printed "from Department of Energy, Mines and Resources (Canada) WAC
+  series reproduction materials" or the like, and three name nobody. Everything
+  but the 201 is flagged `crown` in the sheet index and stays out of a public
+  build. A NIMA sheet's "Copyright by the United States Government. No
+  copyright claimed under Title 17 U.S.C." is not such a flag.
+- **Stepped mosaics** (`MosaicSource.zoom`, `plan_stepped`, cpu backend only).
+  Each layer is tiled as deep as its own `max_zoom` and no deeper; every level
+  past the shallowest is sparse, takes the quarters the level below has
+  already drawn, and warps only the rest. `fullzoom` in `metadata.json` says
+  where full coverage stops. It is the `sectionals-tac` detail level taken from
+  one step to a staircase.
+- **Fetchers other than the FAA's** are in `scripts/fetchers.py`, chosen by a
+  series' `fetcher`: `links` (an index page, the latest edition **not in the
+  future**, kept under the sheet's own name because Spain puts the year in the
+  file name and Denmark a random id in the path), `urls`, and `ofm`. open
+  flightmaps withdrew its GeoTIFFs in 2019, so `fetch_ofm.py` reads the 512 px
+  z11 tiles out of each region's zip by ranged request and writes them into a
+  GeoTIFF whose block size is the tile size; **Sweden's zip is served from
+  somewhere that answers a ranged request with 200 and the whole file**, which
+  `zipfile` reports as "not a zip file", and is downloaded whole instead.
+- **This GDAL cannot open a PDF** (its driver is built without a reader).
+  `pdf_georef.py` reads the ISO 32000 viewports with `pypdf` and hands
+  `render_pdfs.py` the record `detect_pdf_windows.py` writes for the IFR charts.
+  Taiwan's WKT has a vertical CS appended; cut the horizontal one out of the
+  text, `StripVertical` does not do it.
+
+### Scans: `rectify_charts.py` and `graticule.py`
+
+ONC and TPC are library scans with no georeferencing. Each is registered by the
+graticule printed on it: trace every long line strip by strip, pick the evenly
+spaced ones, label them from a **reading**, take every crossing as a control
+point, and warp through a thin-plate spline. The sheet indexes
+(`scripts/onc_sheets.json`, `tpc_sheets.json`) are what is reviewed and
+committed; the rasters and their map areas are derived.
+
+Each of these was learnt from a wrong result:
+
+- **Scans are not rigid.** One sheet's parallels are 682 px apart at the top and
+  706 at the bottom. Nothing may assume a scan has one scale.
+- **The published indexes cannot be relied on**, and a graticule cannot say
+  which of its lines is which. So the labels are read: `--review DIR` marks a
+  parallel and a meridian on each sheet and shows each **where the line itself
+  stops**, which is where its label is printed. Not where the two cross: an ONC
+  is a rectangle on the paper and the meridian through its corner leans away
+  from the ruled edge. `--imprints` draws the title block too. Readers are
+  agents; `.bench/georef/resolve_readings.py` (scratch, not in the repo) signs
+  their unsigned labels and `--apply` writes them into the index.
+- **A reading names a pixel, not "the first meridian"**: `Reading(column, row,
+  parallel, meridian)`. The survey has changed several times since the first
+  readings and they still mean the same printed lines.
+- **A scan is surveyed as it was when its labels were read** (`surveyed_as`).
+  A survey starts from where the sheet is thought to be; started again from
+  where the reading put it, it picked other lines on sheets north of 64, and
+  the reading was of none of them.
+- **The military grid looks like a graticule** and over open sea is the only
+  other thing on the sheet. The graticule is black and the grid blue (M-16:
+  190-243 against 88-100), so black lines are tried first -- and "black" is
+  measured against the *darkest* lines (95th percentile), because on TPC M-12C
+  the graticule is 13 of 67 traced lines and against the darkest fifth every
+  line was black.
+- **The ruled border of the map is not a meridian** though it falls in with the
+  rhythm: it does not lean as its neighbours say it should (`without_borders`).
+- **A traced line must stop where the line does.** A chain waits ten strips for
+  its line to come back, and past the map's edge what turns up is the stem of a
+  letter in the title (`without_stragglers`).
+- **An end line is dropped as "a rule past the neatline" only if three quarters
+  of the crossing lines stop short of it.** Going by the middle one took three
+  good meridians off ONC P-28, whose parallels are lost under a relief panel.
+- **The map area is graticule cells, not a box** (`map_cells`, `area_of`). Three
+  attempts at finding the borders and fitting a lon/lat box inside them failed:
+  on the wedge beside a ruled border (B-2 reaches 42 E at its south-west corner
+  and 30 E at its north-west), on lines lost before they reach it, and at 72 N
+  on parallels that bow so far they leave by the *top* of the sheet. A cell is
+  map if either line of the graticule was traced at each of its four corners,
+  to within 0.3 of a cell; the manifest is a rectangle per run of cells. Do not
+  go back to fitting borders.
+- **The polar row is polar stereographic**, true to scale at 81 03 as its
+  sheets say (I first read 81 02 off a reduced image). Rows B to U are Lambert
+  conformal with standard parallels 1 20 inside the 8 degree band.
+- **Check a rectification by tiling it**, not by its own report: all 270 ONC
+  sheets reported no problems while a fifth of them were short or overlapping.
+  `build_chart_tileset.py onc --charts source/onc/rectified --max-zoom 5 --out
+  .bench/trial-onc` takes a minute and shows the seams.
+- **Importing numpy commits 0.72 GB in every process on this box** (OpenBLAS
+  thread buffers, 28 threads). `core.lean_workers()` sets
+  `OPENBLAS_NUM_THREADS=1` before a pool starts; `build_mosaic` and
+  `rectify_charts.py` call it. A survey worker peaks at 1.1 GB, from 2.7.
+- **`cmd | tail` hides a failing test from `&&`.** A commit went in with a test
+  failing because the chain saw `tail`'s exit code. Redirect pytest to a file
+  and test `$?`.
 
 ## GPU backend (`--warp gpu`)
 

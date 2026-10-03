@@ -152,7 +152,7 @@ and pass anything else through to `build_chart_tileset.py`.
 
 ---
 
-## The five products
+## The six products
 
 ### VFR sectionals — `tileset-sectionals`
 
@@ -338,6 +338,158 @@ contains slices of border and paper. `--detect-neatline` re-measures it from the
 image: a chromatic bounding box first, since margins are white and only the map
 is coloured, then each edge shrunk until it holds no run of paper-white or
 neatline-black longer than 150 px, map ink being broken up at that scale.
+
+### World-wide VFR — `tileset-worldwide-vfr`
+
+Every VFR chart that can be had **without payment**, on one globe: the
+sectionals and terminal area charts above, with other publishers' charts laid
+around them, and the US military's old world series underneath as a gap filler.
+
+```bash
+.venv/Scripts/python scripts/build_worldwide_vfr.py --workers 16
+.venv/Scripts/python scripts/build_worldwide_vfr.py --workers 16 --redistributable-only
+```
+
+| Layer | Publisher | Covers | Scale | Drawn from | To zoom |
+| --- | --- | --- | --- | --- | --- |
+| `onc` | US Defense Mapping Agency | the world | 1:1,000,000 | library scans, 1961–2001 | z10 |
+| `tpc` | the same | most land | 1:500,000 | library scans, 1966–2004 | z11 |
+| `br-wac` | DECEA | Brazil | 1:1,000,000 | GeoTIFF | z11 |
+| `faa-caribbean` | FAA | Bahamas to the Virgin Islands | 1:1,000,000 | GeoTIFF | z11 |
+| `ofm` | open flightmaps | 18 European regions | 1:500,000 | Web Mercator tiles | z12 |
+| `ro-icao` | ROMATSA | Romania | 1:500,000 | georeferenced vector PDF | z12 |
+| `ee-icao` | EANS | Estonia | 1:500,000 | georeferenced vector PDF | z12 |
+| `lv-icao` | LGS | Latvia | 1:500,000 | georeferenced vector PDF | z12 |
+| `tw-vfr` | CAA, MOTC | Taiwan, Kinmen, Matsu | 1:500,000 | georeferenced vector PDF | z12 |
+| `es-vfr500` | ENAIRE | Spain | 1:500,000 | GeoTIFF | z12 |
+| `dk-icao` | Naviair | Denmark | 1:500,000 | GeoTIFF | z12 |
+| `ch-icao` | swisstopo | Switzerland | 1:500,000 | GeoTIFF | z12 |
+| `dk-250` | Naviair | Copenhagen, Faroe Islands | 1:250,000 | GeoTIFF | z13 |
+| `sectionals` | FAA | United States | 1:500,000 | GeoTIFF | z12 |
+| `tac` | FAA | 34 US terminal areas | 1:250,000 | GeoTIFF | z13 |
+
+Bottom layer first. What was looked for, country by country, and what was not
+found is in [docs/worldwide-vfr-sources.md](docs/worldwide-vfr-sources.md).
+
+- **Free to download is not free to republish.** Each layer records its
+  publisher's terms (`licence` in `chart_series.py`), and they differ: open
+  flightmaps and swisstopo ask only for credit, Spain forbids republication
+  outright, Denmark says nothing either way. `metadata.json` lists every layer
+  with its licence and gives the credit line for the whole tileset.
+  `--redistributable-only` leaves out every layer whose terms do not plainly
+  allow republication and writes `tileset-worldwide-vfr-public` instead. **That
+  is the one for a public site.** Unclear terms are not treated as permission.
+- **Terms can differ sheet by sheet.** The ONC and TPC series were a joint
+  production. Most sheets carry a US imprint and are public domain; the ones
+  the UK, Australia, New Zealand or Poland produced are not. **The library's
+  catalogue credits every sheet to the US**, so the imprint was read off each
+  scan: of the 270 ONC sheets 201 are plainly American, 26 Australian, 25
+  British, one New Zealand's, 14 printed by the US "from Department of Energy,
+  Mines and Resources (Canada) WAC series reproduction materials" or the like,
+  and three name nobody. The sheet index flags all but the 201 (`crown`), a
+  public build leaves them out, and `metadata.json` describes the series once
+  for each of its terms.
+- **The historical layers are decades old and are never to be navigated by.**
+  They are there because most of the planet has no current chart that is free.
+  `metadata.json` marks them `historical`.
+- **A stepped pyramid.** The layers run from 1:1,000,000 to 1:250,000, and
+  tiling all of it at the finest sheets' zoom would magnify the coarse ones
+  sixteenfold over most of the planet. So each layer is tiled only as deep as
+  its own zoom, and every level past the shallowest holds just the tiles a
+  layer that earns it reaches. It is the sectionals-with-TACs detail level taken
+  from one step to a staircase: `metadata.json` reports `fullzoom` 10 and
+  `maxzoom` 13, and a viewer asking for a tile a level does not have falls back
+  to the stretched parent. Each level takes what the level below already drew
+  and warps only the rest, so a fine sheet is never minified fourfold to fill a
+  tile its own level has already made.
+- **A community chart sits under an official one** where both are free, and the
+  FAA's own charts are over everything they reach.
+- `--layers NAME ...` builds from some of the layers, for a trial or while
+  another is still downloading.
+
+#### Fetching from publishers that are not the FAA
+
+Everyone publishes differently. `scripts/fetchers.py` has one function for each
+way, chosen by a series' `fetcher`:
+
+- `links` reads an index page for links matching a pattern and takes the current
+  edition of each sheet: the latest **that is not in the future**, because
+  Latvia posts its next chart early just as the FAA does. The file is kept under
+  the *sheet's* name. Spain puts the year in the file name and Denmark a random
+  media id in the path, so the URL changes with every edition while the sheet
+  does not, and the reviewed map-area manifest has to go on naming the same
+  file.
+- `urls` takes fixed addresses.
+- `ofm` fetches open flightmaps' tiles. There is no GeoTIFF to download — it was
+  withdrawn in 2019 — so the raster is put back together from the published
+  tiles: only the wanted layer, size and zoom are fetched out of each region's
+  zip, by one ranged request, and written into a GeoTIFF whose block size is the
+  tile size. A 512 px z11 tile is pixel for pixel four 256 px z12 tiles, so
+  nothing is resampled. Sweden's zip is served from somewhere that ignores
+  ranged requests, and is downloaded whole.
+
+Every fetch is conditional on what the server offers now, identifies itself
+honestly, and waits between files where a series asks it to.
+
+#### Charts that are georeferenced PDFs
+
+Romania, Estonia, Latvia and Taiwan publish vector PDFs with the registration
+written into the file. `scripts/pdf_georef.py` reads it and hands
+`render_pdfs.py` the same record `detect_pdf_windows.py` writes for the FAA's
+IFR charts, so they are drawn from vector at 600 dpi and nothing is upsampled.
+**This project's GDAL cannot open a PDF** — its PDF driver is built without a
+reader — so the dictionaries are read with `pypdf`.
+
+#### Scans, and the graticule
+
+The ONC and TPC sheets are library scans of paper charts with no georeferencing
+at all. `scripts/rectify_charts.py` registers each by the graticule printed on
+it (`scripts/graticule.py`):
+
+1. **Trace.** Each printed line is followed across the scan, strip by strip.
+2. **Pick.** The graticule is the set of traced lines that are evenly spaced,
+   among the lines printed in black.
+3. **Label.** A graticule cannot say which of its lines is which, because it
+   looks the same one interval along, and the published sheet indexes cannot
+   be relied on to say it either: one gives TPC E-2A as beginning at 1° 52' W,
+   and the sheet begins at 1° W. So the labels are read off the sheet.
+   `--review DIR` marks one parallel and one meridian on every sheet and shows
+   each where it stops at the edge of the map, which is where its label is
+   printed, six sheets to a page; `--apply` writes what was read into
+   `scripts/onc_sheets.json` and `scripts/tpc_sheets.json`, which are what is
+   reviewed and committed. A reading names its lines by the pixel where they
+   cross, so it goes on meaning the same printed lines if a later survey finds
+   a line more or fewer. A sheet is rectified only once it has a reading.
+4. **Tie.** Every crossing of a meridian and a parallel is a control point, a
+   hundred or two to a sheet, and the scan is warped through a thin-plate spline
+   tied down at all of them.
+5. **Keep what is map.** The map area is the cells of the graticule that were
+   found at all four corners.
+
+Things about these scans that cost time to find out:
+
+- **They are not rigid.** A scanner's feed slips. On one sheet the parallels are
+  682 px apart at the top and 706 px at the bottom, a 3.5% stretch that no
+  projection explains. Nothing assumes a scan has one scale.
+- **The military grid looks like a graticule.** It is ruled in blue beside
+  parallels in black, and over open sea there is nothing else on the sheet.
+  Left to the spacing alone the survey took the grid for the graticule on
+  sheets that are all ocean. The two differ in ink: on ONC M-16 the graticule
+  is 190–243 dark and the grid 88–100.
+- **The map is not a box of meridians and parallels.** An ONC is a rectangle on
+  the paper. Its west border is ruled straight up from the south-west corner
+  while the meridian through that corner leans away into the map: B-2 reaches
+  42° E at its south-west corner and 30° E at its north-west. At 72° N the
+  parallels bow so far that they leave by the top of the sheet and not by the
+  side. Three attempts at finding the borders and fitting a box inside them
+  failed on one or the other, which is why the map area is cells.
+- **The polar row is on another projection**: polar stereographic, true to
+  scale at 81° 03', as its sheets say. The rest are Lambert conformal conic
+  with standard parallels 1° 20' inside each 8° band.
+- **A rectification's own report says little.** All 270 ONC sheets reported no
+  problems while a fifth of them came out short or overlapping. Tiling them at
+  a low zoom takes a minute and shows the seams:
+  `build_chart_tileset.py onc --charts source/onc/rectified --max-zoom 5 --out .bench/trial-onc`.
 
 ---
 
