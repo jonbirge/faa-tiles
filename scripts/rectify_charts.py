@@ -369,7 +369,10 @@ def work(task):
         if reading is None and not trust_index:
             return stem, {"skipped": "no reading; run --review, read the labels, and --apply"}
         sheet = sheet_for(stem, entry, index)
-        registration = graticule.register(read_scan(Path(scan)), sheet, reading)
+        # Surveyed as the review surveyed it, before there was a reading.
+        unread = sheet_for(stem, {k: v for k, v in entry.items() if k != "read"}, index)
+        registration = graticule.register(read_scan(Path(scan)), sheet, reading,
+                                          surveyed_as=unread)
         if len(registration.control) < 9:
             return stem, {"failed": "; ".join(registration.problems)}
         limits = limits_of(registration)

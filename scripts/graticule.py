@@ -981,11 +981,19 @@ def survey(rgb: np.ndarray, sheet: Sheet, log=None) -> Survey:
 
 
 def register(rgb: np.ndarray, sheet: Sheet, reading: Reading | None = None,
-             log=None) -> Registration:
+             log=None, surveyed_as: Sheet | None = None) -> Registration:
     """Find a scanned sheet's graticule and label it: from ``reading`` if one
-    is given, from the sheet's nominal limits if not."""
+    is given, from the sheet's nominal limits if not.
+
+    ``surveyed_as`` is what was known of the sheet when its reading was taken,
+    if that was less than ``sheet`` says now. A survey starts from where the
+    sheet is thought to be -- how far apart its lines should be, how far they
+    may lean -- and a reading names lines of the survey it was taken from. On
+    a sheet at 70 north, surveyed again from where the reading put it, the
+    survey picked other lines, and the reading was of none of them.
+    """
     say = log or (lambda *_: None)
-    found = survey(rgb, sheet, log)
+    found = survey(rgb, surveyed_as or sheet, log)
     labelled_by, measured, problems = put_values(found, sheet, reading)
     parallels = [line for line, _ in found.parallels if line.value is not None]
     meridians = [line for line, _ in found.meridians if line.value is not None]

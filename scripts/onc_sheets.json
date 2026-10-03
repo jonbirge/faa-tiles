@@ -41,10 +41,10 @@
    "limits_from": "nyu",
    "crown": false,
    "read": {
-    "column": 2994.5,
-    "row": 4891.7,
+    "column": 3098.9,
+    "row": 4928.6,
     "parallel": 81.0,
-    "meridian": 49.0
+    "meridian": 50.0
    },
    "producer": "US",
    "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled JANUARY 1974. Lithographed by DMAAC 5-74"
@@ -87,10 +87,10 @@
    "limits_from": "nyu",
    "crown": false,
    "read": {
-    "column": 1193.7,
-    "row": 4757.8,
+    "column": 1391.1,
+    "row": 4822.2,
     "parallel": 73.0,
-    "meridian": 4.0
+    "meridian": 5.0
    },
    "producer": "US",
    "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled April 1973 Revised June 1982 (Revision limited to aeronautical information) Lithographed by DMAAC 8-82"
@@ -217,10 +217,10 @@
    "limits_from": "nyu",
    "crown": false,
    "read": {
-    "column": 1212.0,
-    "row": 4711.5,
-    "parallel": 73.0,
-    "meridian": -52.0
+    "column": 1622.9,
+    "row": 4107.5,
+    "parallel": 74.0,
+    "meridian": -51.0
    },
    "producer": "US",
    "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled March 1968. Reprinted by WPC 2-76"

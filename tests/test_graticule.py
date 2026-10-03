@@ -339,6 +339,17 @@ def test_a_reading_well_out_shows_in_the_shape_of_a_pixel(scan):
     assert any("not the graticule" in problem for problem in problems)
 
 
+def test_a_scan_is_surveyed_as_it_was_when_its_labels_were_read(scan, monkeypatch):
+    seen = []
+    real = g.survey
+    monkeypatch.setattr(g, "survey", lambda rgb, sheet, log=None: seen.append(sheet) or
+                        real(rgb, sheet, log))
+    before = scan.sheet()
+    after = g.Sheet("drawn", CRS, INTERVAL, PIXEL * 1.02, (WEST, SOUTH))
+    registered = g.register(scan.rgb, after, scan.reading(), surveyed_as=before)
+    assert seen == [before] and registered.sheet is after
+
+
 def test_a_reading_of_nowhere_in_particular_is_refused(scan):
     between = scan.pixel([(1.75, 54.25)])[0]
     with pytest.raises(ValueError, match="nearest one surveyed"):
