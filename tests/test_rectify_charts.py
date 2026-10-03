@@ -162,7 +162,8 @@ def test_the_last_line_lost_before_the_edge_takes_its_cells_and_no_others():
     kept = south.along > south.along[0] + 800
     south.along, south.across = south.along[kept], south.across[kept]
     after = rectify.area_of(registration)
-    assert 0 < before["cells"] - after["cells"] <= 4
+    # 800 px of the line, where a cell is some 130 px wide.
+    assert 0 < before["cells"] - after["cells"] <= 7
     assert not _covered(after, WEST + INTERVAL / 2, SOUTH + INTERVAL / 2)
     assert _covered(after, WEST + INTERVAL / 2, SOUTH + 1.5 * INTERVAL)
 
