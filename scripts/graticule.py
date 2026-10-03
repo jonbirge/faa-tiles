@@ -132,6 +132,9 @@ OUT_OF_SQUARE = 0.06
 # under half a degree), and there are this many lines to say so.
 LEAN_SCATTER = 0.008
 MIN_TO_JUDGE_LEAN = 5
+# The share of the crossing lines, in percent, that have to stop short of an
+# end line for it to be a rule past the neatline and not a line of the map.
+FURTHEST = 25
 # How far the crossing a reading names may be from the nearest surveyed line,
 # in intervals, and still be that line.
 READING_REACH = 0.3
@@ -251,6 +254,10 @@ class Survey:
     # As measured, before deciding: side -> (intervals past the end line,
     # pixels short of the edge of the scan).
     stops: dict
+    # The ruled border of the map on each side that has one that is not a line
+    # of the graticule: a traced line, lying as the lines of that side's own
+    # family do (a west border as a meridian does).
+    rules: dict = field(default_factory=dict)
 
     def end_line(self, side: str) -> Line:
         """The graticule line nearest a side of the map."""
@@ -761,7 +768,10 @@ def beyond(picked, others: list[Line], at_start: bool, extent: int, coarse: int)
         step = abs(next_line.at(along) - here) / abs(next_number - end_number)
         away.append((here - stop if at_start else stop - here) / step)
         short.append(stop if at_start else extent - stop)
-    return float(np.median(away)), float(np.median(short))
+    # And how far the lines that go furthest go, a quarter of them: what says
+    # whether any of them get as far as the end line at all.
+    return (float(np.median(away)), float(np.median(short)),
+            float(np.percentile(away, 100 - FURTHEST)))
 
 
 def neatlines(picked, reference: float, measured, traced: list[Line]):
@@ -778,16 +788,22 @@ def neatlines(picked, reference: float, measured, traced: list[Line]):
     there. A picked line the crossing lines stop *inside* is a rule past the
     neatline that fell in with the rhythm, and is dropped.
 
-    Returns ``(found, kept)``: ``found`` maps True (the start) and False (the
-    end) to intervals outside the end line, for the ends that have a neatline;
-    ``kept`` is the picked lines inside the neatlines.
+    Returns ``(found, kept, rules)``: ``found`` maps True (the start) and
+    False (the end) to intervals outside the end line, for the ends that have
+    a neatline; ``kept`` is the picked lines inside the neatlines; ``rules``
+    maps the same keys to the traced line that is the neatline, where it is
+    not the end line of the graticule itself.
     """
-    found = {}
-    for at_start, (away, short) in zip((True, False), measured):
+    found, ruled = {}, {}
+    for at_start, (away, short, furthest) in zip((True, False), measured):
         if short < MARGIN or len(picked) < 2:
             continue                    # the lines run off the scan here
         end_line, neighbour = (picked[0], picked[1]) if at_start else (picked[-1], picked[-2])
-        if away < -ON_THE_LINE:
+        # Dropped only if hardly a crossing line reaches it. Most of ONC
+        # P-28's parallels are lost in its western third, under a relief
+        # panel, and going by where the middle one stopped took three good
+        # meridians off the sheet.
+        if furthest < -ON_THE_LINE:
             rest = picked[1:] if at_start else picked[:-1]
             return neatlines(rest, reference, _shifted(measured, at_start, end_line, rest), traced)
         if away <= ON_THE_LINE:
@@ -801,7 +817,8 @@ def neatlines(picked, reference: float, measured, traced: list[Line]):
         if rules:
             rule = min(rules, key=lambda line: abs(line.at(reference) - expected_at))
             found[at_start] = abs(rule.at(reference) - end_line[0].at(reference)) / step
-    return found, picked
+            ruled[at_start] = rule
+    return found, picked, ruled
 
 
 def _shifted(measured, at_start, end_line, rest):
@@ -811,8 +828,8 @@ def _shifted(measured, at_start, end_line, rest):
     dropped = abs(new_end[1] - end_line[1])
     start, end = measured
     if at_start:
-        return (start[0] + dropped, start[1]), end
-    return start, (end[0] + dropped, end[1])
+        return (start[0] + dropped, start[1], start[2] + dropped), end
+    return start, (end[0] + dropped, end[1], end[2] + dropped)
 
 
 SIDES = {"parallel": ("north", "south"), "meridian": ("west", "east")}
@@ -967,22 +984,24 @@ def survey(rgb: np.ndarray, sheet: Sheet, log=None) -> Survey:
     }
     say("the crossing lines stop, in intervals past the end line and pixels short of the "
         "edge: " + ", ".join(f"{name} {away:+.2f} {short:.0f}"
-                             for name, (away, short) in stops.items()))
+                             for name, (away, short, _) in stops.items()))
 
-    neatline = {}
-    found, parallels = neatlines(parallels, along_x, (stops["north"], stops["south"]),
-                                 traced_rows)
+    neatline, rules = {}, {}
+    found, parallels, ruled = neatlines(parallels, along_x, (stops["north"], stops["south"]),
+                                        traced_rows)
     neatline.update({("north" if at_start else "south"): away for at_start, away in found.items()})
-    found, meridians = neatlines(meridians, along_y, (stops["west"], stops["east"]),
-                                 traced_columns)
+    rules.update({("north" if at_start else "south"): rule for at_start, rule in ruled.items()})
+    found, meridians, ruled = neatlines(meridians, along_y, (stops["west"], stops["east"]),
+                                        traced_columns)
     neatline.update({("west" if at_start else "east"): away for at_start, away in found.items()})
+    rules.update({("west" if at_start else "east"): rule for at_start, rule in ruled.items()})
     if len(parallels) < 2 or len(meridians) < 2:
         raise ValueError("fewer than two graticule lines of a family lie inside the neatlines")
     say("neatlines, in intervals outside the end line: "
         + (", ".join(f"{side} {away:.2f}" for side, away in neatline.items()) or "none"))
     return Survey(width=width, height=height, coarse=coarse, parallels=parallels,
                   meridians=meridians, along_x=along_x, along_y=along_y, neatline=neatline,
-                  stops=stops)
+                  stops=stops, rules=rules)
 
 
 def register(rgb: np.ndarray, sheet: Sheet, reading: Reading | None = None,

@@ -218,45 +218,27 @@ def _value_at(lines, along: float, across: float) -> float:
                  / (places[1] - places[0]))
 
 
-def _steady(x, y):
-    """A line through points some of which are wild: the middle one of the
-    slopes between every two, and of what is left over."""
-    x, y = np.asarray(x, float), np.asarray(y, float)
-    if len(x) < 4 or np.ptp(x) == 0:
-        return 0.0, float(np.median(y))
-    i, j = np.triu_indices(len(x), 1)
-    apart = x[j] != x[i]
-    slope = float(np.median((y[j] - y[i])[apart] / (x[j] - x[i])[apart]))
-    return slope, float(np.median(y - slope * x))
-
-
 def limits_of(registration: graticule.Registration) -> dict:
     """A sheet's map area as limits in degrees: the largest box of meridians
     and parallels that is map all over.
 
-    On a side the map runs off the scan, that is the last line of the
-    graticule. On a side with a margin it is where the lines crossing that
-    side stop, which need not be on a line of the graticule, or the same all
-    the way along: an ONC is a rectangle on the paper, ruled straight up from
-    its south-west corner, and the meridian through that corner leans away
-    into the map, so that the sheet reaches a quarter of a degree further west
-    at its north edge than at its south. The box has to stop at the corner
-    meridian. What is west of it is a wedge of map at one end and of paper at
+    On a side the map runs off the scan, or ends at a line of the graticule,
+    that is the line. Otherwise the map ends at a ruled border, and the border
+    is a straight line across the scan whatever the graticule does under it.
+    An ONC is a rectangle on the paper: its west border runs straight up from
+    the south-west corner while the meridian through that corner leans away
+    into the map, so that B-2 reaches 42 E at its south-west corner and 30 E
+    at its north-west; and its north border is straight while the parallels
+    bow. A box of meridians and parallels has to stop where the border reaches
+    least: at the corner. What is outside it is map at one end and paper at
     the other, and the sheet next door has the map.
 
-    Where the lines stop is measured a line at a time. Mostly they stop on a
-    line of the graticule, and the middle one of them says which: that is the
-    limit, and a line lost under type that stops early does not move it. Where
-    they do not, a steady line is put through the stops; a stop well off it
-    is a line that was lost early; and the limit is the furthest in of the
-    stops that are left and of the line read at the box's far corners, drawn
-    in to the next line of the graticule. Drawn in, because an edge that is
-    not on a line is a ruled border, and the sheets of these series are laid
-    out on the graticule with their borders outside it: ONC B-2's west edge
-    follows the 42nd meridian up from the south-west corner and then a rule
-    to 30 E at the north, its stops read 40.6 at 73 N and westward from
-    there, and the box has to stop at 42, where the sheet next door begins.
-    What is drawn in is the overlap.
+    The border is a line the survey traced (``Survey.rules``), and is read
+    where it meets the box's two far sides; the limit is the one further in. A
+    limit that comes out on a line of the graticule, as a corner's does, is
+    that line's value. Where a side has a margin and no border was traced,
+    the limit is the next line of the graticule in from where the lines
+    crossing that side mostly stop: less than there may be, and all map.
     """
     found = registration.survey
     size = registration.pixel_size
@@ -268,59 +250,63 @@ def limits_of(registration: graticule.Registration) -> dict:
     meridians, parallels = registration.meridians, registration.parallels
     half = found.coarse / 2
 
-    def margin(side):
-        return side in found.neatline or found.stops[side][1] >= graticule.MARGIN
-
-    def stops(side):
-        """Where each line that crosses ``side`` stops there, as ``(pixel
-        along the line, value where it stops)``."""
-        crossing, across = ((parallels, meridians) if side in ("west", "east")
-                            else (meridians, parallels))
-        out = []
-        for line in crossing:
-            along = (line.along[0] - half if side in ("west", "north")
-                     else line.along[-1] + half)
-            out.append((along, _value_at(across, line.at(along), along)))
-        return out
-
     def limit(side, low, high):
         """The limit on ``side`` of a box reaching from ``low`` to ``high``
         the other way."""
-        lines = meridians if side in ("west", "east") else parallels
+        lines, crossing = ((meridians, parallels) if side in ("west", "east")
+                           else (parallels, meridians))
         inward = 1 if side in ("west", "south") else -1
-        end = min(line.value for line in lines) if inward > 0 else max(
-            line.value for line in lines)
+        values = [line.value for line in lines]
+        end = min(values) if inward > 0 else max(values)
         per = per_lon if side in ("west", "east") else per_lat
-        if not margin(side):
+
+        def within(edge):
+            """Not past the last line of the graticule that was labelled."""
+            return max(edge, end) if inward > 0 else min(edge, end)
+
+        rule = found.rules.get(side)
+        if rule is not None:
+            at = []
+            reach = float(rule.across.mean())
+            # Of the lines traced as far as the border: one that was lost
+            # short of it says where it would have met it only by guesswork.
+            reaching = [line for line in crossing
+                        if line.covers(reach, 2 * graticule.CROSSING_SUPPORT)] or crossing
+            for value in (low, high):
+                line = min(reaching, key=lambda candidate: abs(candidate.value - value))
+                # Where the border and this line cross: the border gives its
+                # across from its along, which are the line's along and across
+                # the other way about.
+                across = float(rule.across.mean())
+                for _ in range(8):
+                    across = rule.at(line.at(across))
+                at.append(_value_at(lines, line.at(across), across))
+            edge = max(at) if inward > 0 else min(at)
+            nearest = round(edge / interval) * interval
+            if abs(edge - nearest) <= graticule.ON_THE_LINE * interval:
+                return within(nearest) + inward * INSET * per
+            return within(edge + inward * half * per) + inward * INSET * per
+        if side in found.neatline or found.stops[side][1] < graticule.MARGIN:
+            # The end line is the neatline, or the map runs off the scan.
             return end + inward * INSET * per
-        stopped = stops(side)
-        usual = float(np.median([where for _, where in stopped]))
+        first = side in ("west", "north")
+        stopped = [_value_at(lines, line.at(along), along) for line, along in (
+            (line, line.along[0] - half if first else line.along[-1] + half)
+            for line in crossing)]
+        usual = float(np.median(stopped))
         nearest = round(usual / interval) * interval
-        if abs(usual - nearest) <= graticule.ON_THE_LINE * interval:
-            return nearest + inward * INSET * per
-        values = np.array([line.value for line in
-                           (parallels if side in ("west", "east") else meridians)])
-        wheres = np.array([where for _, where in stopped])
-        slope, offset = _steady(values, wheres)
-        off = wheres - (slope * values + offset)
-        scatter = max(3 * float(np.median(np.abs(off - np.median(off)))), 2 * half * per)
-        kept = list(wheres[np.abs(off) <= scatter]) + [slope * low + offset,
-                                                        slope * high + offset]
-        edge = float(max(kept) if inward > 0 else min(kept))
-        nearest = round(edge / interval) * interval
-        if abs(edge - nearest) <= graticule.ON_THE_LINE * interval:
-            return nearest + inward * INSET * per
-        drawn_in = (math.ceil if inward > 0 else math.floor)(edge / interval) * interval
-        return drawn_in + inward * INSET * per
+        if abs(usual - nearest) > graticule.ON_THE_LINE * interval:
+            nearest = (math.ceil if inward > 0 else math.floor)(usual / interval) * interval
+        return within(nearest) + inward * INSET * per
 
     lats = [line.value for line in parallels]
     lons = [line.value for line in meridians]
     south, north = limit("south", min(lons), max(lons)), limit("north", min(lons), max(lons))
-    west = limit("west", max(south, min(lats)), min(north, max(lats)))
-    east = limit("east", max(south, min(lats)), min(north, max(lats)))
-    # Again, now that it is known how far east and west the box goes.
-    south = limit("south", max(west, min(lons)), min(east, max(lons)))
-    north = limit("north", max(west, min(lons)), min(east, max(lons)))
+    for _ in range(2):
+        # Each pair again, now that it is known how far the box goes the
+        # other way.
+        west, east = limit("west", south, north), limit("east", south, north)
+        south, north = limit("south", west, east), limit("north", west, east)
     return {"west": round(west, 5), "east": round(east, 5),
             "south": round(south, 5), "north": round(north, 5)}
 
