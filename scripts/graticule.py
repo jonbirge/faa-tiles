@@ -652,10 +652,15 @@ def commonest_spacing(positions, step: float) -> float:
 
 
 def black(lines: list[Line]) -> list[Line]:
-    """The lines printed in black: as dark, nearly, as the darkest are."""
+    """The lines printed in black: as dark, nearly, as the darkest are.
+
+    The darkest, not the darker ones: TPC M-12C is open sea ruled every 10 km
+    with a grid, and of the 67 long lines traced down it 13 are the graticule.
+    Measured against the darkest fifth, every line on it was black.
+    """
     if not lines:
         return []
-    darkest = np.percentile([line.ink for line in lines], 80)
+    darkest = np.percentile([line.ink for line in lines], 95)
     return [line for line in lines if line.ink >= BLACK * darkest]
 
 

@@ -245,6 +245,14 @@ def test_meridians_that_lean_as_a_cone_has_them_are_all_kept(scan):
     assert len(g.without_borders(taken)) == len(taken)
 
 
+def test_black_is_as_dark_as_the_darkest_however_few_they_are():
+    """On a sheet ruled with a fine grid the graticule is one line in five."""
+    along = np.arange(16.0, 3000.0, 32.0)
+    lines = [g.Line(along, np.full(len(along), 100.0 * i), ink=50.0) for i in range(54)]
+    lines += [g.Line(along, np.full(len(along), 690.0 * i + 40), ink=230.0) for i in range(13)]
+    assert [line.ink for line in g.black(lines)] == [230.0] * 13
+
+
 def test_the_lines_carry_the_values_that_were_read(registered):
     parallels = [line.value for line in registered.parallels]
     meridians = [line.value for line in registered.meridians]
