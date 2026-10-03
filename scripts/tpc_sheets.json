@@ -31,14 +31,15 @@
    "east": 69.0025,
    "north": 83.5001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1696.0,
     "row": 5670.8,
     "parallel": 80.5,
     "meridian": 36.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled June 1988. Lithographed By DMAAC 10-88"
   },
   "b-1a": {
    "title": "TPC B-1A",
@@ -53,14 +54,15 @@
    "east": 32.0017,
    "north": 80.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1971.1,
     "row": 6664.8,
     "parallel": 76.0,
     "meridian": 10.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled May 1986. Lithographed By DMAAC 2-87"
   },
   "b-1d": {
    "title": "TPC B-1D",
@@ -98,14 +100,15 @@
    "east": 60.9997,
    "north": 80.0004,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 4674.6,
     "row": 6199.8,
     "parallel": 76.5,
     "meridian": 49.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled June 1989. Revised August 2001. (Revision limited to aeronautical information and correction of CHUM conditions.) Lithographed by NIMA 9-01"
   },
   "b-2b": {
    "title": "TPC B-2B",
@@ -120,14 +123,15 @@
    "east": 80.0014,
    "north": 80.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2069.4,
     "row": 5904.7,
     "parallel": 76.5,
     "meridian": 61.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled August 1989. Revised January 1997. (Revision limited to aeronautical information and correction of all CHUM conditions.) Printed by NIMA 7-97 \u00a9COPYRIGHT 1997 BY THE UNITED STATES GOVERNMENT NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "b-2c": {
    "title": "TPC B-2C",
@@ -188,14 +192,15 @@
    "east": 99.0012,
    "north": 80.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 6886.6,
     "row": 6095.6,
     "parallel": 76.5,
     "meridian": 93.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled August 1989. Revised November 1996. (Revision limited to aeronautical information and correction of all CHUM conditions.) Lithographed by NIMA 6-98 \u00a9COPYRIGHT 1998 BY THE UNITED STATES GOVERNMENT NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "b-3b": {
    "title": "TPC B-3B",
@@ -210,14 +215,15 @@
    "east": 118.0007,
    "north": 80.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2157.0,
     "row": 6037.1,
     "parallel": 76.5,
     "meridian": 99.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled March 1989. Revised March 1997. (Revision limited to aeronautical information, and correction of all CHUM conditions.) Lithographed by NIMA 8-97 \u00a9COPYRIGHT 1997 BY THE UNITED STATES GOVERNMENT NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "b-3c": {
    "title": "TPC B-3C",
@@ -278,14 +284,15 @@
    "east": 159.0012,
    "north": 80.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2112.5,
     "row": 5953.4,
     "parallel": 76.5,
     "meridian": 137.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled August 1989, Revised December 1996. (Revision limited to Aeronautical information and correction of CHUM conditions.) Reprinted by NIMA 1-99 \u00a9COPYRIGHT 1997 BY THE UNITED STATES GOVERNMENT NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "b-4c": {
    "title": "TPC B-4C",
@@ -357,14 +364,15 @@
    "east": -12.9987,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2012.1,
     "row": 6707.3,
     "parallel": 68.0,
     "meridian": -26.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled July 1986. Lithographed By DMAAC 3-87"
   },
   "c-1b": {
    "title": "TPC C-1B",
@@ -379,14 +387,15 @@
    "east": 0.0001,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2206.8,
     "row": 6750.7,
     "parallel": 68.0,
     "meridian": -13.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defens[e Mapping] Agency Aerospace Center, St. Louis[, Missouri.] Compiled July 1985 Lithographed By DMAAC 11-85"
   },
   "c-1d": {
    "title": "TPC C-1D",
@@ -539,14 +548,15 @@
    "east": 63.0009,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1771.5,
     "row": 5897.7,
     "parallel": 68.5,
     "meridian": 49.5
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled November 1967. Revised March 1984. (Revision limited to aeronautical information.) Lithographed by DMAAC 3-93"
   },
   "c-3c": {
    "title": "TPC C-3C",
@@ -607,14 +617,15 @@
    "east": 77.0014,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1727.6,
     "row": 6694.8,
     "parallel": 68.0,
     "meridian": 63.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled October 1988. Lithographed By DMAAC 3-89"
   },
   "c-4b": {
    "title": "TPC C-4B",
@@ -629,14 +640,15 @@
    "east": 91.0008,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1562.9,
     "row": 6730.8,
     "parallel": 68.0,
     "meridian": 77.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled March 1989. Revised June 2003. (Revision limited to aeronautical information, correction of CHUM conditions and currency of planimetric data. Printed by NGA 01-04"
   },
   "c-4c": {
    "title": "TPC C-4C",
@@ -697,14 +709,15 @@
    "east": 105.0003,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1816.0,
     "row": 5909.4,
     "parallel": 68.5,
     "meridian": 91.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled (February 1989). Lithographed By DMAAC 7-89"
   },
   "c-5b": {
    "title": "TPC C-5B",
@@ -719,14 +732,15 @@
    "east": 119.0014,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1771.0,
     "row": 6656.2,
     "parallel": 68.0,
     "meridian": 105.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Compiled February 1989. Revised April 2002. (Revision limited to aeronautical information, correction of CHUM conditions and currency of planimetric data. Lithographed by NIMA 10-02"
   },
   "c-5c": {
    "title": "TPC C-5C",
@@ -787,14 +801,15 @@
    "east": 133.0005,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 4130.8,
     "row": 6851.4,
     "parallel": 68.0,
     "meridian": 123.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled July 1989. Reprinted by NIMA 9-98"
   },
   "c-6b": {
    "title": "TPC C-6B",
@@ -809,14 +824,15 @@
    "east": 147.0006,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1716.7,
     "row": 6717.1,
     "parallel": 68.0,
     "meridian": 133.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled February 1990. Reprinted by NIMA 1-99"
   },
   "c-6c": {
    "title": "TPC C-6C",
@@ -831,14 +847,15 @@
    "east": 147.0011,
    "north": 68.0004,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1586.7,
     "row": 5449.6,
     "parallel": 65.0,
     "meridian": 134.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled FEBRUARY 1990 Lithographed By DMAAC 9-90"
   },
   "c-6d": {
    "title": "TPC C-6D",
@@ -968,14 +985,15 @@
    "east": 180.0,
    "north": 71.9999,
    "limits_from": "mun",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1625.1,
     "row": 6800.2,
     "parallel": 68.0,
     "meridian": 175.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled February 1968. Revised October 1982. (Revision limited to aeronautical information and correction of CHUM conditions.) Lithographed By DMAAC 10-89"
   },
   "c-8b": {
    "title": "TPC C-8B",
@@ -990,14 +1008,15 @@
    "east": -156.9996,
    "north": 72.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1790.8,
     "row": 6681.5,
     "parallel": 68.0,
     "meridian": -171.5
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled June 1966 (NOS). Revised June 1993 (NOS). (Revision limited to aeronautical information.) Lithographed by DMAAC 7-94 \u00a9COPYRIGHT 1994 BY THE UNITED STATES GOVERNMENT NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "c-8c": {
    "title": "TPC C-8C",
@@ -1939,14 +1958,15 @@
    "east": -161.9994,
    "north": 64.0001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1022.7,
     "row": 5901.8,
     "parallel": 60.0,
     "meridian": -173.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "[Prepare]d and published by the Defense Mapping [Agency] Aerospace Center, St. Louis, Missouri. [Base inf]ormation Compiled June 1969 (NOS). [Revised] May 1993 (NOS). (Revision limited [to aeron]autical information.) [Litho]graphed by DMAAC 9-94 [\u00a9COPYRIG]HT 1994 BY THE UNITED STATES GOVERNMENT NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "d-11a": {
    "title": "TPC D-11A",
@@ -1961,14 +1981,15 @@
    "east": -150.9989,
    "north": 64.0001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1610.3,
     "row": 5940.8,
     "parallel": 60.0,
     "meridian": -161.5
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled July 1969 (NOS). Revised June 1994 (NOS). (Revisions limited to aeronautical information.) Reprinted by NIMA 1-99"
   },
   "d-11b": {
    "title": "TPC D-11B",
@@ -1983,14 +2004,15 @@
    "east": -140.9989,
    "north": 64.0001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1308.5,
     "row": 5905.9,
     "parallel": 60.0,
     "meridian": -151.5
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled June 1966 (NOS). Revised March 1990 (NOS). (Revision limited to aeronautical information.) Reprinted by NIMA 1-99"
   },
   "d-11c": {
    "title": "TPC D-11C",
@@ -2005,14 +2027,15 @@
    "east": -140.9989,
    "north": 60.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1451.1,
     "row": 6441.7,
     "parallel": 57.0,
     "meridian": -151.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "[P]repared and published by Defense Mapping [A]gency Aerospace Center, St. Louis, Missouri. [B]ase information compiled June 1966 (NOS). [R]evised March 1990 (NOS). (Revision limited to [a]eronautical information.) Printed by DMA 03-96"
   },
   "d-11d": {
    "title": "TPC D-11D",
@@ -2046,14 +2069,15 @@
     64
    ],
    "limits_from": null,
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1318.4,
     "row": 5715.3,
     "parallel": 60.0,
     "meridian": -141.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base Information Compiled June 1966 (NOS). Revised March 1989 (NOS). (Revision limited to aeronautical information.) Lithographed By DMAAC 1-90"
   },
   "d-12d": {
    "title": "TPC D-12D",
@@ -2186,7 +2210,8 @@
     "parallel": 54.0,
     "meridian": 7.0
    },
-   "producer": "unread"
+   "producer": "UK",
+   "imprint": "Produced under the direction of the Director General of Military Survey, Ministry of Defence, United Kingdom, 1994. Revised 1994 Printed by Military Survey (UK) 12/94/910920 M \u00a9 Crown Copyright 1994."
   },
   "e-2c": {
    "title": "TPC E-2C",
@@ -2408,14 +2433,15 @@
    "east": 43.0003,
    "north": 52.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2448.2,
     "row": 6012.7,
     "parallel": 48.0,
     "meridian": 36.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, 3200 South Second Street, St. Louis, Missouri 63118-3399. Compiled November 1964. Revised May 1993. (Revision limited to aeronautical information and correction of all CHUM conditions.) Lithographed by DMAAC 1-94 \u00a9COPYRIGHT 1994 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "e-5a": {
    "title": "TPC E-5A",
@@ -3369,14 +3395,15 @@
    "east": 43.0003,
    "north": 48.0004,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1395.6,
     "row": 4615.3,
     "parallel": 45.0,
     "meridian": 35.5
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled October 1967. Revised November 1991. (Revision limited to aeronautical information, correction of all CHUM conditions and currency of planimetric data.) Lithographed by DMAAC 10-92"
   },
   "f-4b": {
    "title": "TPC F-4B",
@@ -3989,14 +4016,15 @@
    "east": 139.0001,
    "north": 44.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 624.0,
     "row": 6133.6,
     "parallel": 40.0,
     "meridian": 131.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled July 1988. Lithographed By DMAAC 2-89"
   },
   "f-11a": {
    "title": "TPC F-11A",
@@ -4049,14 +4077,15 @@
    "east": -108.9996,
    "north": 49.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2031.8,
     "row": 4461.3,
     "parallel": 46.0,
     "meridian": -116.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "[...]d published by the Defense Mapping [... Aero]space Center, St. Louis, Missouri. [...]on compiled June 1969 (NOS). Revised [... (N]OS). (Revision limited to aeronautical [...]"
   },
   "f-16c": {
    "title": "TPC F-16C",
@@ -4071,14 +4100,15 @@
    "east": -108.9996,
    "north": 44.5001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 5016.9,
     "row": 6564.7,
     "parallel": 40.0,
     "meridian": -113.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "[...] the Defense Mapping [...]. Louis, Missouri. Base [...]ber 1967 (USC & GS). [...]. (Revision limited to [...]"
   },
   "f-16d": {
    "title": "TPC F-16-D",
@@ -4093,14 +4123,15 @@
    "east": -116.9994,
    "north": 44.5001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1733.7,
     "row": 6568.3,
     "parallel": 40.0,
     "meridian": -124.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "[...] the Defense Mapping [...]. Louis, Missouri. Base [...]ember 1967 (NOS). [...]). (Revision limited to [...] Lithographed by DMACSC 1-95 [...]TED STATES GOVERNMENT. [...]NDER TITLE 17 U.S.C."
   },
   "f-17a": {
    "title": "TPC F-17A",
@@ -4115,14 +4146,15 @@
    "east": -100.9995,
    "north": 48.0004,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2011.1,
     "row": 5892.0,
     "parallel": 45.0,
     "meridian": -108.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled June 1969 (NOS). Revised May 1988 (NOS). (Revision limited to aeronautical information only). Lithographed By DMAAC 1-89"
   },
   "f-17b": {
    "title": "TPC F-17B",
@@ -4137,14 +4169,15 @@
    "east": -92.9995,
    "north": 49.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 7092.0,
     "row": 5883.9,
     "parallel": 45.0,
     "meridian": -95.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "[Prepa]red and published by the Defense Mapping [Agenc]y Aerospace Center, St. Louis, Missouri. [Base i]nformation compiled June 1969 (NOS). Revised [... 1]993 (NOS). (Revision limited to aeronautical [inform]ation). [Lithog]raphed by DMAAC 9-94 [\u00a9COPY]RIGHT 1994 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "f-17c": {
    "title": "TPC F-17C",
@@ -4159,14 +4192,15 @@
    "east": -92.9996,
    "north": 44.5001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1690.1,
     "row": 6531.7,
     "parallel": 40.0,
     "meridian": -100.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "[...] the Defense Mapping [...] St. Louis, Missouri. Base [...] 1969 (NOS). Revised [... Re]vision limited to [...]"
   },
   "f-17d": {
    "title": "TPC F-17D",
@@ -4211,14 +4245,15 @@
    "east": -76.9997,
    "north": 44.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1723.2,
     "row": 6054.8,
     "parallel": 40.0,
     "meridian": -84.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled May 1969 (NOS). Revised January 1991 (NOS). (Revision limited to Aeronautical information.) Lithographed by DMAAC 05-92"
   },
   "f-18d": {
    "title": "TPC F-18D",
@@ -4256,14 +4291,15 @@
    "east": -68.9995,
    "north": 48.0004,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1991.0,
     "row": 6074.1,
     "parallel": 44.0,
     "meridian": -76.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information Compiled February 1969 (NOS). Revised July 1990 (NOS). (Revision limited to Aeronautical Information). Lithographed by DMAAC 09-91"
   },
   "f-19b": {
    "title": "TPC F-19B",
@@ -4454,14 +4490,15 @@
    "east": 18.0007,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 3228.9,
     "row": 6146.6,
     "parallel": 36.0,
     "meridian": 13.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled November 1962. Revised March 1995. (Revision limited to aeronautical information and correction of all CHUM conditions). Printed by DMA 10-95 \u00a9 COPYRIGHT 1995 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "g-2c": {
    "title": "TPC G-2C",
@@ -4682,7 +4719,8 @@
     "parallel": 33.0,
     "meridian": 32.0
    },
-   "producer": "unread"
+   "producer": "UK",
+   "imprint": "Produced by Military Survey, Ministry of Defence, United Kingdom, 1998 Revised 1989. Partial Revision 1997 Printed by Military Survey (UK) 9/98/970195 M \u00a9 Crown Copyright 1998"
   },
   "g-5a": {
    "title": "TPC G-5A",
@@ -5348,14 +5386,15 @@
    "east": -110.9994,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1168.9,
     "row": 5776.3,
     "parallel": 36.0,
     "meridian": -118.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled January 1968 (NOS). Revised March 1993 (NOS). (Revision limited to aeronautical information and correction of all CHUM conditions.) Lithographed by DMAAC 3-94 \u00a9 COPYRIGHT 1994 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "g-18c": {
    "title": "TPC G-18C",
@@ -5416,14 +5455,15 @@
    "east": -103.9992,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1177.2,
     "row": 5729.1,
     "parallel": 36.0,
     "meridian": -111.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled June 1974 (NOS). Revised November 1987 (NOS). (Revision limited to aeronautical information.) Lithographed By DMAAC 12-90"
   },
   "g-19b": {
    "title": "TPC G-19B",
@@ -5438,14 +5478,15 @@
    "east": -96.9994,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1195.3,
     "row": 4557.8,
     "parallel": 37.0,
     "meridian": -104.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled November 1967 (NOS). Revised September 1988 (NOS). (Revision limited to aeronautical information.) Lithographed By DMAAC 9-89"
   },
   "g-19c": {
    "title": "TPC G-19C",
@@ -5460,14 +5501,15 @@
    "east": -101.9998,
    "north": 36.0001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 920.9,
     "row": 5233.1,
     "parallel": 32.5,
     "meridian": -109.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled January 1967 (NOS). Revised September 1990 (NOS). (Revision limited to aeronautical information.) Lithographed by DMAAC 08-91"
   },
   "g-19d": {
    "title": "TPC G-19D",
@@ -5482,14 +5524,15 @@
    "east": -108.9998,
    "north": 35.667,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2030.7,
     "row": 5992.4,
     "parallel": 31.5,
     "meridian": -115.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "[... publis]hed by the Defense Mapping [... C]enter, St. Louis, Missouri. Base [... compile]d January 1968 (NOS). Revised [... (Revisio]n limited to aeronautical [... cor]rection of all CHUM conditions. [...]A 10-95 [... T]HE UNITED STATES GOVERNMENT. [... CL]AIMED UNDER TITLE 17 U.S.C."
   },
   "g-20a": {
    "title": "TPC G-20A",
@@ -5534,14 +5577,15 @@
    "east": -87.9996,
    "north": 36.0001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2193.0,
     "row": 4852.9,
     "parallel": 33.0,
     "meridian": -94.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information Compiled November 1967 (NOS). Revised January 1990 (NOS) (Revision limited to aeronautical information.) Lithographed by DMAAC 05-91"
   },
   "g-20d": {
    "title": "TPC G-20D",
@@ -5579,14 +5623,15 @@
    "east": -78.9998,
    "north": 40.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 2398.3,
     "row": 5303.2,
     "parallel": 36.5,
     "meridian": -84.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Base information compiled December 1969 (NOS). Revised October 1993 (NOS). (Revision limited to aeronautical information.) Printed by DMA 01-96 \u00a9COPYRIGHT 1996 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "g-21b": {
    "title": "TPC G-21B",
@@ -6252,7 +6297,8 @@
     "parallel": 24.0,
     "meridian": 47.5
    },
-   "producer": "unread"
+   "producer": "UK",
+   "imprint": "Produced by Military Survey, Ministry of Defence, United Kingdom, 1998 Limited revision 1998 Printed by Military Survey (UK) 10/98/961279M \u00a9 Crown Copyright 1998"
   },
   "h-6d": {
    "title": "TPC H-6D",
@@ -6911,14 +6957,15 @@
    "east": -108.9999,
    "north": 28.0002,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1087.7,
     "row": 4549.8,
     "parallel": 25.0,
     "meridian": -115.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled August 1986 Printed by DMA 10-95"
   },
   "h-23a": {
    "title": "TPC H-23A",
@@ -6956,14 +7003,15 @@
    "east": -97.0001,
    "north": 32.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1159.4,
     "row": 3841.8,
     "parallel": 29.5,
     "meridian": -103.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the National Imagery and Mapping Agency. Base information compiled January 1967 (NOS). Revised February 2000. (Revision limited to aeronautical information and correction of CHUM conditions.) Printed by NIMA 10-00 \u00a9COPYRIGHT 2000 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "h-23c": {
    "title": "TPC H-23C",
@@ -6978,14 +7026,15 @@
    "east": -96.9993,
    "north": 28.0001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1131.1,
     "row": 5894.2,
     "parallel": 24.0,
     "meridian": -103.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information Compiled May 1975. Revised September 1990. (Revisions limited to aeronautical information and correction of CHUM conditions.) Reprinted by NIMA 9-98"
   },
   "h-23d": {
    "title": "TPC H-23D",
@@ -8303,14 +8352,15 @@
    "east": -90.9992,
    "north": 20.0004,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1632.3,
     "row": 5301.4,
     "parallel": 16.5,
     "meridian": -96.5
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "[Prepared] and published by the Defense Mapping [Agency] Aerospace Center, St. Louis, Missouri. [Compile]d April 1987. [Lithograph]ed By DMAAC 12-87"
   },
   "j-26a": {
    "title": "TPC J-26A",
@@ -8624,14 +8674,15 @@
    "east": -10.9993,
    "north": 12.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1541.8,
     "row": 5993.6,
     "parallel": 8.0,
     "meridian": -16.5
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency, St. Louis, Missouri. Compiled April 1985. Revised February 1995. (Revision limited to aeronautical information, and correction of all CHUM conditions.) Lithographed By DMA 10-95 \u00a9 COPYRIGHT 1995 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "k-2a": {
    "title": "TPC K-2A",
@@ -8968,14 +9019,15 @@
    "east": 43.0006,
    "north": 12.0003,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1515.8,
     "row": 4607.7,
     "parallel": 9.0,
     "meridian": 37.5
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency, St. Louis, Missouri. Compiled September 1982. Revised February 1995. (Revision limited to aeronautical information.) Printed by DMA 10-95 \u00a9 COPYRIGHT 1995 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "k-5d": {
    "title": "TPC K-5D",
@@ -9565,14 +9617,15 @@
    "east": -87.9993,
    "north": 16.0001,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 1514.1,
     "row": 4649.3,
     "parallel": 13.0,
     "meridian": -93.5
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled March 1970. Revised January 1982. (Revision limited to aeronautical information and correction of CHUM conditions.) Reprinted by NIMA 11-98"
   },
   "k-25b": {
    "title": "TPC K-25B",
@@ -10318,7 +10371,8 @@
     "parallel": 4.0,
     "meridian": 108.5
    },
-   "producer": "unread"
+   "producer": "UK",
+   "imprint": "Published by the Director of Military Survey, Ministry of Defence, United Kingdom 1972. Revised by Ordnance Survey in 1972. Printed for the Director of Military Survey, Ministry of Defence, United Kingdom by Ordnance Survey. 6/72/8753/OS Lithographed by DMAAC 10-94 \u00a9 CROWN COPYRIGHT."
   },
   "l-11b": {
    "title": "TPC L-11B",
@@ -11279,7 +11333,8 @@
     "parallel": -8.0,
     "meridian": 97.5
    },
-   "producer": "unread"
+   "producer": "AUS",
+   "imprint": "Prepared under the direction of the Chief of the General Staff, Australian Army, by the Royal Australian Survey Corps and published by the Department of Defence, (Air Force Office) DAF-AF (AIS) Victoria Barracks, 350 St Kilda Road, MELBOURNE, Victoria 3004. Prepared from Tactical Pilotage Chart M-10D Edition 1, with Aeronautical Revision in July 1989. Printed by DMA 6-95"
   },
   "m-11a": {
    "title": "TPC M-11A",
@@ -11385,7 +11440,8 @@
     "parallel": -4.0,
     "meridian": 122.0
    },
-   "producer": "unread"
+   "producer": "UK",
+   "imprint": "Published by the Director of Military Survey, Ministry of Defence, United Kingdom 1972 Compiled by Ordnance Survey in 1971 Printed for the Director of Military Survey, Ministry of Defence, United Kingdom by Ordnance Survey Reprinted By DMAAC 1-88 \u00a9 CROWN COPYRIGHT"
   },
   "m-12b": {
    "title": "TPC M-12B",
@@ -11430,7 +11486,8 @@
     "parallel": -8.0,
     "meridian": 128.0
    },
-   "producer": "unread"
+   "producer": "US, from foreign material",
+   "imprint": "Prepared under the direction of the Department of Defence from reproduction material for TPC M-12CG EDITION 1 DMS, by the Aeronautical Chart and Information Center, U.S. Air Force, St. Louis, Missouri 63118. Lithographed By DMAAC 3-86"
   },
   "m-12d": {
    "title": "TPC M-12D",
@@ -11445,14 +11502,14 @@
    "east": 127.0007,
    "north": -3.9998,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 1363.2,
     "row": 5964.0,
     "parallel": -8.0,
     "meridian": 121.5
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defence from reproduction material for TPC M-12DG EDITION 1 DMS, by the Aeronautical Chart and Information Center, U.S. Air Force, St. Louis, Missouri 63118. Lithographed By DMAAC 4-85"
   },
   "m-13b": {
@@ -12325,7 +12382,8 @@
     "parallel": -12.0,
     "meridian": 116.0
    },
-   "producer": "unread"
+   "producer": "UK",
+   "imprint": "Published by the Director of Military Survey, Ministry of Defence, United Kingdom 1972 Produced by Ordnance Survey in 1971 Printed for the Director of Military Survey, Ministry of Defence, United Kingdom by Ordnance Survey 1972 4/72/8634/OS Reprinted By DMAAC 2-90 \u00a9 CROWN COPYRIGHT"
   },
   "n-13a": {
    "title": "TPC N-13A",
@@ -12581,14 +12639,15 @@
    "east": -74.9993,
    "north": -7.9996,
    "limits_from": "nyu",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 581.8,
     "row": 4512.0,
     "parallel": -12.0,
     "meridian": -81.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled (July 1986). Revised (January 1993). Lithographed by DMAAC 4-93 \u00a9COPYRIGHT 1993 BY THE UNITED STATES GOVERNMENT. NO COPYRIGHT CLAIMED UNDER TITLE 17 U.S.C."
   },
   "n-25b": {
    "title": "TPC N-25B",
@@ -13346,14 +13405,15 @@
    "east": 180.0,
    "north": -16.0001,
    "limits_from": "mun",
-   "crown": true,
+   "crown": false,
    "read": {
     "column": 974.4,
     "row": 4609.9,
     "parallel": -19.0,
     "meridian": 176.0
    },
-   "producer": "unread"
+   "producer": "US",
+   "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled June 1991. Lithographed by DMAAC 12-91"
   },
   "p-26a": {
    "title": "TPC P-26A",

@@ -62,14 +62,14 @@
    "east": -36.0,
    "north": 84.0,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 2992.8,
     "row": 4822.5,
     "parallel": 81.0,
     "meridian": -91.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled April 1968. Revised February 1987 (NOS). (Revision limited to aeronautical information and correction of all CHUM conditions.) Lithographed By DMAAC 10-90"
   },
   "b_1": {
@@ -173,14 +173,14 @@
     80
    ],
    "limits_from": null,
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 1210.5,
     "row": 4730.8,
     "parallel": 73.0,
     "meridian": -128.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled August 1969. Revised January 1986 (Revisions limited to aeronautical information and correction of all CHUM conditions.) Lithographed By DMAAC 8-90"
   },
   "b_8": {
@@ -441,14 +441,14 @@
    "east": -105.0033,
    "north": 68.2752,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 1233.4,
     "row": 4925.2,
     "parallel": 65.0,
     "meridian": -132.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from the Department of Energy, Mines, and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base data corrected to March 1984. Revised by DMAAC December 1984. (Revision limited to aeronautical information.) Lithographed By DMAAC 6-85"
   },
   "c_11": {
@@ -464,14 +464,14 @@
    "east": -79.9987,
    "north": 68.2765,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 1086.2,
     "row": 5592.6,
     "parallel": 64.0,
     "meridian": -106.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "[Prep]ared under the direction of the Department of [Def]ense from Department of Energy, Mines and [Reso]urces (Canada) WAC series reproduction [mat]erials and published by the Defense Mapping [Age]ncy Aerospace Center, St. Louis Air Force [Stati]on, Missouri 63118. [...] data corrected February 1971"
   },
   "c_12": {
@@ -487,14 +487,14 @@
    "east": -58.0235,
    "north": 68.2765,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 1414.5,
     "row": 5696.8,
     "parallel": 64.0,
     "meridian": -79.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC Series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri Compiled March 1972. Revised May 1985. (Revision limited to aeronautical information and correction [...]"
   },
   "c_13": {
@@ -801,14 +801,14 @@
    "east": -97.9979,
    "north": 64.0009,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 578.0,
     "row": 5651.3,
     "parallel": 56.0,
     "meridian": -120.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Base data corrected to January 1973. Lithographed by WPC 2-74"
   },
   "d_14": {
@@ -824,14 +824,14 @@
    "east": -75.9979,
    "north": 64.0009,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 1773.4,
     "row": 5828.8,
     "parallel": 56.0,
     "meridian": -95.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared from Department of Energy, Mines and Resources (CANADA) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base data corrected April 1973. Revised June 1989. (Revision limited to aeronautical information and correction of CHUM conditions). Reprinted By DMAAC 1-90"
   },
   "d_15": {
@@ -1184,14 +1184,14 @@
    "east": -114.0037,
    "north": 55.9928,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 1454.1,
     "row": 5253.5,
     "parallel": 49.0,
     "meridian": -130.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base data corrected to November 1980. Revised by DMAAC, May 1991. (Revision limited to aeronautical information and correction of CHUM conditions.) Lithographed by DMAAC 09-91"
   },
   "e_16": {
@@ -1207,14 +1207,14 @@
    "east": -95.9998,
    "north": 56.0009,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 1422.4,
     "row": 5829.8,
     "parallel": 48.0,
     "meridian": -113.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Compiled August 1974. Revised July 1983. (Revisions limited to aeronautical information and correction of CHUM conditions.) Lithographed By DMAAC 3-84"
   },
   "e_17": {
@@ -1230,14 +1230,14 @@
    "east": -83.9974,
    "north": 56.0009,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 1203.0,
     "row": 5844.7,
     "parallel": 48.0,
     "meridian": -104.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Base information compiled April 1973. Revised October 1976. Lithographed by DMAAC 2-77"
   },
   "e_18": {
@@ -1276,14 +1276,14 @@
    "east": -58.5006,
    "north": 56.0009,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 1668.7,
     "row": 5072.7,
     "parallel": 49.0,
     "meridian": -68.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri Base date corrected to March 1980. Revised by DMAAC July 1983. (Revision limited to aeronautical information and correction of CHUM conditions.) Lithographed By DMAAC 2-84"
   },
   "f_1": {
@@ -1636,14 +1636,14 @@
     48
    ],
    "limits_from": null,
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 570.0,
     "row": 5842.5,
     "parallel": 40.0,
     "meridian": -61.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Base data corrected to February 1973. Lithographed by DMAAC 7-75"
   },
   "f_22": {
@@ -1659,14 +1659,14 @@
    "east": -58.4998,
    "north": 51.0009,
    "limits_from": "nyu",
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 729.5,
     "row": 5211.0,
     "parallel": 44.0,
     "meridian": -69.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared under the direction of the Department of Defense from Department of Energy, Mines and Resources (Canada) WAC series reproduction materials and published by the Defense Mapping Agency Aerospace Center, St. Louis Air Force Station, Missouri 63118. Compiled March 1980. (Revision limited to Aeronautical Information only.) Lithographed By DMAAC 8-82"
   },
   "g_1": {
@@ -4153,14 +4153,14 @@
     0
    ],
    "limits_from": null,
-   "crown": false,
+   "crown": true,
    "read": {
     "column": 771.9,
     "row": 5838.9,
     "parallel": -8.0,
     "meridian": 169.0
    },
-   "producer": "US",
+   "producer": "US, from foreign material",
    "imprint": "Prepared and published by the Defense Mapping Agency Aerospace Center, St. Louis, Missouri. Base information compiled 1975 (UK). Revised January 1990. (Revision limited to aeronautical information and correction of CHUM conditions.)"
   },
   "m_17": {
