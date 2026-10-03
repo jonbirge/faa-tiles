@@ -200,13 +200,18 @@ def consistent(control: np.ndarray, project) -> np.ndarray:
     return kept
 
 
+REACH = 0.3
+MIN_REACH = 80.0
+
+
 def map_cells(registration: graticule.Registration):
     """The cells of a sheet's graticule that are map, as ``(lons, lats,
     cells)``: the values of its meridians and of its parallels, a line for
     every interval whether it was traced or not, and ``cells[i, j]`` true for
     the cell whose south-west corner is ``(lons[i], lats[j])``.
 
-    A cell is map if the graticule was found at all four of its corners. That
+    A cell is map if the graticule was found at all four of its corners: if a
+    meridian or a parallel was traced there, or to within a label's width. That
     is all that can be said for certain of a scan, and it is enough. The map
     is not a box of meridians and parallels: an ONC is a rectangle on the
     paper, its west border ruled straight up from the south-west corner while
@@ -232,11 +237,26 @@ def map_cells(registration: graticule.Registration):
     meridians = {round((line.value - lons[0]) / interval): line for line in registration.meridians}
     parallels = {round((line.value - lats[0]) / interval): line for line in registration.parallels}
     nodes = np.zeros((len(lons), len(lats)), bool)
+    # A line counts as reaching a corner it stops this far short of, as a share
+    # of the way to the next line. Lines stop short of a sheet's edge by the
+    # width of a label or a run of ticks, and with none allowed the first
+    # trial had a cell missing at half the corners in it. More, and a cell
+    # the border cuts through is let in with its paper.
+    reach = (REACH * _spacing(found.meridians, found.along_y),
+             REACH * _spacing(found.parallels, found.along_x))
     for i, meridian in meridians.items():
         for j, parallel in parallels.items():
-            at = graticule.crossing(parallel, meridian)
-            nodes[i, j] = (at is not None and 0 <= at[0] < found.width
-                           and 0 <= at[1] < found.height)
+            column = float(meridian.across.mean())
+            for _ in range(6):
+                row = parallel.at(column)
+                column = meridian.at(row)
+            # One of the two traced there is enough: a printed line of the
+            # graticule is map where it is. J-25's 16th parallel is lost under
+            # a relief panel west of 94 W, and the meridians it should cross
+            # there come down to it all the same.
+            nodes[i, j] = (0 <= column < found.width and 0 <= row < found.height
+                           and (parallel.covers(column, max(MIN_REACH, reach[0]))
+                                or meridian.covers(row, max(MIN_REACH, reach[1]))))
     for _ in range(2):
         for axis in (0, 1):
             for line in (nodes if axis == 0 else nodes.T):

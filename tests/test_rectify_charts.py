@@ -154,18 +154,35 @@ def test_a_line_lost_before_the_edge_is_made_up_from_the_lines_either_side():
     assert rectify.area_of(registration) == before
 
 
-def test_the_last_line_lost_before_the_edge_takes_its_cells_and_no_others():
+def test_one_line_traced_at_a_corner_is_enough():
+    """The south parallel lost for 800 px: the meridians come down to where
+    it should be all the same, and a printed line of the graticule is map."""
     scan = Scan(seed=7)
     registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
     before = rectify.area_of(registration)
     south = min(registration.parallels, key=lambda line: line.value)
     kept = south.along > south.along[0] + 800
     south.along, south.across = south.along[kept], south.across[kept]
+    assert rectify.area_of(registration) == before
+
+
+def test_a_corner_neither_line_reaches_takes_its_cells_and_no_others():
+    scan = Scan(seed=7)
+    registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
+    before = rectify.area_of(registration)
+    south = min(registration.parallels, key=lambda line: line.value)
+    kept = south.along > south.along[0] + 800
+    south.along, south.across = south.along[kept], south.across[kept]
+    # And the meridians that should have met it there stop a cell and a half
+    # short: nothing of the graticule was found in that corner of the sheet.
+    for meridian in sorted(registration.meridians, key=lambda line: line.value)[:7]:
+        short = meridian.along < meridian.along[-1] - 330
+        meridian.along, meridian.across = meridian.along[short], meridian.across[short]
     after = rectify.area_of(registration)
-    # 800 px of the line, where a cell is some 130 px wide.
-    assert 0 < before["cells"] - after["cells"] <= 7
+    assert 0 < before["cells"] - after["cells"] <= 14
     assert not _covered(after, WEST + INTERVAL / 2, SOUTH + INTERVAL / 2)
-    assert _covered(after, WEST + INTERVAL / 2, SOUTH + 1.5 * INTERVAL)
+    assert _covered(after, WEST + INTERVAL / 2, SOUTH + 2.5 * INTERVAL)
+    assert _covered(after, WEST + 7.5 * INTERVAL, SOUTH + INTERVAL / 2)
 
 
 def test_crossings_measured_on_the_wrong_line_are_left_out():
