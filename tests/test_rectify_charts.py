@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import graticule  # noqa: E402
 import rectify_charts as rectify  # noqa: E402
-from test_graticule import CRS, INTERVAL, PIXEL, SOUTH, WEST, Scan  # noqa: E402
+from test_graticule import CRS, INTERVAL, PAPER, PIXEL, SOUTH, WEST, Scan  # noqa: E402
 
 gdal.UseExceptions()
 
@@ -30,7 +30,7 @@ def _rectified(tmp_path, scan):
     jpeg = tmp_path / "drawn.jpg"
     Image.fromarray(scan.rgb).save(jpeg, quality=95)
     registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
-    limits = rectify.limits_of(registration)
+    limits = rectify.area_of(registration)["limits"]
     out = tmp_path / "drawn.tif"
     done = rectify.rectify(jpeg, out, registration, limits)
     return gdal.Open(str(out)), limits, registration, done
@@ -90,7 +90,12 @@ def test_a_rectified_scan_is_in_the_sheets_own_projection(tmp_path):
     assert raster.RasterCount == 3
 
 
-def test_the_map_area_is_the_graticules(tmp_path):
+def _covered(area, lon, lat):
+    return any(r["lonlat"][0][0] <= lon <= r["lonlat"][1][0]
+               and r["lonlat"][0][1] <= lat <= r["lonlat"][2][1] for r in area["include"])
+
+
+def test_the_map_area_is_the_cells_the_graticule_was_found_round(tmp_path):
     """From the neatline where there is one to the last graticule line where
     the map runs off the scan, drawn in by a few pixels."""
     _, limits, registration, _ = _rectified(tmp_path, Scan(seed=7))
@@ -100,35 +105,66 @@ def test_the_map_area_is_the_graticules(tmp_path):
     last_parallel = max(line.value for line in registration.parallels)
     assert last_meridian - step < limits["east"] < last_meridian
     assert last_parallel - step < limits["north"] < last_parallel
+    # A plain sheet is one rectangle to each row of cells, and nearly all of
+    # the cells there could be: the scan is a little out of square, and the
+    # last cell of a row or two is off the edge of it.
+    area = rectify.area_of(registration)
+    rows, columns = round((last_parallel - SOUTH) / INTERVAL), round((last_meridian - WEST) / INTERVAL)
+    assert len(area["include"]) == rows
+    assert 0.95 * rows * columns <= area["cells"] <= rows * columns
 
 
-def test_the_map_area_of_a_square_map_stops_at_the_corner_meridian():
+def test_the_map_area_of_a_square_map_has_the_wedge_where_the_wedge_is_map():
     """An ONC is a rectangle on the paper. West of the meridian through its
-    south-west corner there is map at the north edge and paper at the south,
-    and a box of meridians and parallels cannot have the one without the
-    other."""
+    south-west corner there is map at the north edge and paper at the south:
+    cells at the top, and none at the bottom."""
     scan = Scan(seed=16, square=True, margin_west=420)
     registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
     assert registration.ok
-    # The parallels were followed into the wedge, past the corner meridian...
-    north = registration.parallels[0]
-    assert north.value == max(line.value for line in registration.parallels)
-    corner_meridian = scan.pixel([(WEST, north.value)])[0][0]
-    assert north.along[0] < corner_meridian - 40
-    # ...and the box stops at it.
-    limits = rectify.limits_of(registration)
-    assert WEST < limits["west"] < WEST + 0.02
-    assert SOUTH < limits["south"] < SOUTH + 0.02
+    area = rectify.area_of(registration)
+    # The paper beside the south-west corner is not in it...
+    assert not _covered(area, WEST - INTERVAL / 2, SOUTH + INTERVAL / 2)
+    assert _covered(area, WEST + INTERVAL / 2, SOUTH + INTERVAL / 2)
+    # ...and nothing in it is paper: every corner of every rectangle is map.
+    for rectangle in area["include"]:
+        for lon, lat in rectangle["lonlat"]:
+            column, row = scan.pixel([(lon, lat)])[0]
+            assert scan.rgb[int(row), int(column)].max() < PAPER - 5 or \
+                (scan.rgb[int(row) - 3:int(row) + 4, int(column) - 3:int(column) + 4] != PAPER).any()
 
 
-def test_a_line_lost_before_the_edge_does_not_draw_the_map_area_in():
+def test_a_line_lost_between_two_places_it_was_found_leaves_no_hole():
     scan = Scan(seed=7)
     registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
-    before = rectify.limits_of(registration)
+    before = rectify.area_of(registration)
     lost = registration.parallels[2]
-    kept = lost.along > lost.along[0] + 400
+    middle = (lost.along > 900) & (lost.along < 1500)
+    lost.along, lost.across = lost.along[~middle], lost.across[~middle]
+    assert rectify.area_of(registration) == before
+
+
+def test_a_line_lost_before_the_edge_is_made_up_from_the_lines_either_side():
+    """The meridians it should have crossed were found above it and below."""
+    scan = Scan(seed=7)
+    registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
+    before = rectify.area_of(registration)
+    lost = registration.parallels[2]
+    kept = lost.along > lost.along[0] + 800
     lost.along, lost.across = lost.along[kept], lost.across[kept]
-    assert rectify.limits_of(registration) == before
+    assert rectify.area_of(registration) == before
+
+
+def test_the_last_line_lost_before_the_edge_takes_its_cells_and_no_others():
+    scan = Scan(seed=7)
+    registration = graticule.register(scan.rgb, scan.sheet(), scan.reading())
+    before = rectify.area_of(registration)
+    south = min(registration.parallels, key=lambda line: line.value)
+    kept = south.along > south.along[0] + 800
+    south.along, south.across = south.along[kept], south.across[kept]
+    after = rectify.area_of(registration)
+    assert 0 < before["cells"] - after["cells"] <= 4
+    assert not _covered(after, WEST + INTERVAL / 2, SOUTH + INTERVAL / 2)
+    assert _covered(after, WEST + INTERVAL / 2, SOUTH + 1.5 * INTERVAL)
 
 
 def test_crossings_measured_on_the_wrong_line_are_left_out():

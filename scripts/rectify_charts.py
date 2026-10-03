@@ -200,115 +200,94 @@ def consistent(control: np.ndarray, project) -> np.ndarray:
     return kept
 
 
-def _value_at(lines, along: float, across: float) -> float:
-    """The longitude at a pixel, from the meridians either side of it -- or
-    the latitude, from the parallels. ``lines`` are labelled lines of one
-    family; ``along`` and ``across`` are the pixel in their terms. Past the end
-    lines it carries on as the last two were going."""
-    at = sorted((line.at(along), line.value) for line in lines)
-    places = np.array([p for p, _ in at])
-    values = np.array([v for _, v in at])
-    if across < places[0]:
-        places, values = places[:2], values[:2]
-    elif across > places[-1]:
-        places, values = places[-2:], values[-2:]
-    else:
-        return float(np.interp(across, places, values))
-    return float(values[0] + (across - places[0]) * (values[1] - values[0])
-                 / (places[1] - places[0]))
+def map_cells(registration: graticule.Registration):
+    """The cells of a sheet's graticule that are map, as ``(lons, lats,
+    cells)``: the values of its meridians and of its parallels, a line for
+    every interval whether it was traced or not, and ``cells[i, j]`` true for
+    the cell whose south-west corner is ``(lons[i], lats[j])``.
 
+    A cell is map if the graticule was found at all four of its corners. That
+    is all that can be said for certain of a scan, and it is enough. The map
+    is not a box of meridians and parallels: an ONC is a rectangle on the
+    paper, its west border ruled straight up from the south-west corner while
+    the meridian through that corner leans away into the map, so that B-2
+    reaches 42 E at its south-west corner and 30 E at its north-west; and at
+    72 north its parallels bow so far that they leave by the top of the sheet
+    and not by the side. Three attempts at finding the borders and fitting a
+    box inside them came to grief on one or the other. The cells need no
+    borders found. The wedge west of the corner meridian is cells at the top
+    and none at the bottom, and the sheet next door has the rest.
 
-def limits_of(registration: graticule.Registration) -> dict:
-    """A sheet's map area as limits in degrees: the largest box of meridians
-    and parallels that is map all over.
-
-    On a side the map runs off the scan, or ends at a line of the graticule,
-    that is the line. Otherwise the map ends at a ruled border, and the border
-    is a straight line across the scan whatever the graticule does under it.
-    An ONC is a rectangle on the paper: its west border runs straight up from
-    the south-west corner while the meridian through that corner leans away
-    into the map, so that B-2 reaches 42 E at its south-west corner and 30 E
-    at its north-west; and its north border is straight while the parallels
-    bow. A box of meridians and parallels has to stop where the border reaches
-    least: at the corner. What is outside it is map at one end and paper at
-    the other, and the sheet next door has the map.
-
-    The border is a line the survey traced (``Survey.rules``), and is read
-    where it meets the box's two far sides; the limit is the one further in. A
-    limit that comes out on a line of the graticule, as a corner's does, is
-    that line's value. Where a side has a margin and no border was traced,
-    the limit is the next line of the graticule in from where the lines
-    crossing that side mostly stop: less than there may be, and all map.
+    A corner where a line was lost under type is filled in if the graticule
+    was found on the same line either side of it.
     """
+    interval = registration.sheet.interval
     found = registration.survey
+
+    def values(lines):
+        low, high = min(line.value for line in lines), max(line.value for line in lines)
+        return [low + k * interval for k in range(round((high - low) / interval) + 1)]
+
+    lons, lats = values(registration.meridians), values(registration.parallels)
+    meridians = {round((line.value - lons[0]) / interval): line for line in registration.meridians}
+    parallels = {round((line.value - lats[0]) / interval): line for line in registration.parallels}
+    nodes = np.zeros((len(lons), len(lats)), bool)
+    for i, meridian in meridians.items():
+        for j, parallel in parallels.items():
+            at = graticule.crossing(parallel, meridian)
+            nodes[i, j] = (at is not None and 0 <= at[0] < found.width
+                           and 0 <= at[1] < found.height)
+    for _ in range(2):
+        for axis in (0, 1):
+            for line in (nodes if axis == 0 else nodes.T):
+                there = np.flatnonzero(line)
+                if len(there):
+                    line[there[0]:there[-1] + 1] = True
+    cells = nodes[:-1, :-1] & nodes[1:, :-1] & nodes[:-1, 1:] & nodes[1:, 1:]
+    return lons, lats, cells
+
+
+def area_of(registration: graticule.Registration) -> dict:
+    """A sheet's map area for the manifest: :func:`map_cells` as rectangles
+    in lon/lat, a row of cells at a time, with the limits that hold them all.
+
+    The outside of the area is drawn in by INSET pixels, off the ink of a
+    neatline; rectangles that meet inside it are left meeting.
+    """
+    lons, lats, cells = map_cells(registration)
+    if not cells.any():
+        raise ValueError("the graticule was not found at all four corners of any cell")
     size = registration.pixel_size
     pixel = float(np.nanmean(size)) if np.isfinite(size).any() else 100.0
-    lat = float(np.mean([line.value for line in registration.parallels]))
-    per_lat = pixel / 111_000.0
-    per_lon = per_lat / max(0.1, math.cos(math.radians(lat)))
-    interval = registration.sheet.interval
-    meridians, parallels = registration.meridians, registration.parallels
-    half = found.coarse / 2
-
-    def limit(side, low, high):
-        """The limit on ``side`` of a box reaching from ``low`` to ``high``
-        the other way."""
-        lines, crossing = ((meridians, parallels) if side in ("west", "east")
-                           else (parallels, meridians))
-        inward = 1 if side in ("west", "south") else -1
-        values = [line.value for line in lines]
-        end = min(values) if inward > 0 else max(values)
-        per = per_lon if side in ("west", "east") else per_lat
-
-        def within(edge):
-            """Not past the last line of the graticule that was labelled."""
-            return max(edge, end) if inward > 0 else min(edge, end)
-
-        rule = found.rules.get(side)
-        if rule is not None:
-            at = []
-            reach = float(rule.across.mean())
-            # Of the lines traced as far as the border: one that was lost
-            # short of it says where it would have met it only by guesswork.
-            reaching = [line for line in crossing
-                        if line.covers(reach, 2 * graticule.CROSSING_SUPPORT)] or crossing
-            for value in (low, high):
-                line = min(reaching, key=lambda candidate: abs(candidate.value - value))
-                # Where the border and this line cross: the border gives its
-                # across from its along, which are the line's along and across
-                # the other way about.
-                across = float(rule.across.mean())
-                for _ in range(8):
-                    across = rule.at(line.at(across))
-                at.append(_value_at(lines, line.at(across), across))
-            edge = max(at) if inward > 0 else min(at)
-            nearest = round(edge / interval) * interval
-            if abs(edge - nearest) <= graticule.ON_THE_LINE * interval:
-                return within(nearest) + inward * INSET * per
-            return within(edge + inward * half * per) + inward * INSET * per
-        if side in found.neatline or found.stops[side][1] < graticule.MARGIN:
-            # The end line is the neatline, or the map runs off the scan.
-            return end + inward * INSET * per
-        first = side in ("west", "north")
-        stopped = [_value_at(lines, line.at(along), along) for line, along in (
-            (line, line.along[0] - half if first else line.along[-1] + half)
-            for line in crossing)]
-        usual = float(np.median(stopped))
-        nearest = round(usual / interval) * interval
-        if abs(usual - nearest) > graticule.ON_THE_LINE * interval:
-            nearest = (math.ceil if inward > 0 else math.floor)(usual / interval) * interval
-        return within(nearest) + inward * INSET * per
-
-    lats = [line.value for line in parallels]
-    lons = [line.value for line in meridians]
-    south, north = limit("south", min(lons), max(lons)), limit("north", min(lons), max(lons))
-    for _ in range(2):
-        # Each pair again, now that it is known how far the box goes the
-        # other way.
-        west, east = limit("west", south, north), limit("east", south, north)
-        south, north = limit("south", west, east), limit("north", west, east)
-    return {"west": round(west, 5), "east": round(east, 5),
-            "south": round(south, 5), "north": round(north, 5)}
+    d_lat = INSET * pixel / 111_000.0
+    d_lon = d_lat / max(0.1, math.cos(math.radians(float(np.mean(lats)))))
+    include = []
+    for j in range(cells.shape[1]):
+        row = cells[:, j]
+        below = cells[:, j - 1] if j > 0 else np.zeros_like(row)
+        above = cells[:, j + 1] if j + 1 < cells.shape[1] else np.zeros_like(row)
+        i = 0
+        while i < len(row):
+            if not row[i]:
+                i += 1
+                continue
+            start = i
+            while i < len(row) and row[i]:
+                i += 1
+            west, east = lons[start] + d_lon, lons[i] - d_lon
+            # Drawn in at the bottom or the top only where nothing of the area
+            # is beyond: a run that meets another keeps meeting it.
+            south = lats[j] + (0 if below[start:i].any() else d_lat)
+            north = lats[j + 1] - (0 if above[start:i].any() else d_lat)
+            include.append({"lonlat": [[round(west, 5), round(south, 5)],
+                                       [round(east, 5), round(south, 5)],
+                                       [round(east, 5), round(north, 5)],
+                                       [round(west, 5), round(north, 5)]]})
+    lon_of = [point[0] for item in include for point in item["lonlat"]]
+    lat_of = [point[1] for item in include for point in item["lonlat"]]
+    return {"limits": {"west": min(lon_of), "south": min(lat_of),
+                       "east": max(lon_of), "north": max(lat_of)},
+            "include": include, "cells": int(cells.sum())}
 
 
 def rectify(scan: Path, out: Path, registration: graticule.Registration, limits: dict) -> dict:
@@ -361,10 +340,12 @@ def work(task):
                                           surveyed_as=unread)
         if len(registration.control) < 9:
             return stem, {"failed": "; ".join(registration.problems)}
-        limits = limits_of(registration)
+        area = area_of(registration)
+        limits = area["limits"]
         done = rectify(Path(scan), Path(out), registration, limits)
         return stem, {
-            **done, "limits": limits, "labelled_by": list(registration.labelled_by),
+            **done, "limits": limits, "include": area["include"], "cells": area["cells"],
+            "labelled_by": list(registration.labelled_by),
             "distortion_rms": round(registration.distortion_rms, 1),
             "distortion_max": round(registration.distortion_max, 1),
             "rotation": round(registration.rotation, 3),
@@ -798,7 +779,7 @@ def main(argv=None) -> int:
         out = out_dir / f"{stem}.tif"
         current = (out.is_file() and out.stat().st_mtime >= scan.stat().st_mtime
                    and report.get(stem, {}).get("read") == index["sheets"][stem].get("read")
-                   and "limits" in report.get(stem, {}))
+                   and "include" in report.get(stem, {}))
         if args.force or not current:
             tasks.append((stem, str(scan), str(out), index["sheets"][stem], index,
                           args.trust_index))
@@ -821,7 +802,7 @@ def main(argv=None) -> int:
 
     report_path.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n",
                            encoding="utf-8", newline="\n")
-    areas = {f"{stem}.tif": {"limits": outcome["limits"]}
+    areas = {f"{stem}.tif": {"limits": outcome["limits"], "include": outcome["include"]}
              for stem, outcome in sorted(report.items())
              if "limits" in outcome and (out_dir / f"{stem}.tif").is_file()}
     areas_path.write_text(json.dumps(areas, indent=1) + "\n", encoding="utf-8", newline="\n")
