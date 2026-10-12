@@ -379,6 +379,11 @@ minutes on six workers. z10 is the last full level (431,677 tiles); z11 has
 the sectionals' and TACs' own: this build reads their prepared sheets and does
 not redo them.
 
+`tileset-worldwide-vfr-public` is **1,935,939 tiles, 18.7 GB**, built in 164
+minutes from the 808 sheets that may be republished: 201 of the 270 ONC sheets
+and 494 of the 636 TPC, open flightmaps, Switzerland, Taiwan and the FAA's own.
+It leaves out Brazil, Spain, Denmark, Romania, Estonia and Latvia.
+
 - **Free to download is not free to republish.** Each layer records its
   publisher's terms (`licence` in `chart_series.py`), and they differ: open
   flightmaps and swisstopo ask only for credit, Spain forbids republication

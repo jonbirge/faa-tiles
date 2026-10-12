@@ -981,7 +981,9 @@ were checked against the real tilesets.
   `tileset-worldwide-vfr/` is the sixth, built 2026-10-11: **21.8 GB, 2,237,531
   tiles** from 1,082 sheets in 184.6 min on six workers (z10 full at 431,677;
   z11 990,108; z12 604,474; z13 63,685). `tileset-worldwide-vfr-public/` is the
-  same build held to what may be republished, and is the one for the site.
+  same build held to what may be republished, and is the one for the site:
+  **18.7 GB, 1,935,939 tiles** from 808 sheets in 164.0 min. The two together
+  left E: with 9 GB free.
   **Six workers, and nothing else running**: this box sits at ~23 GB of commit
   with nothing of ours loaded, the build went to within 2.7 GB of the limit,
   and Claude Code stops background jobs when memory runs critically short --
