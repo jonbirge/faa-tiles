@@ -138,8 +138,14 @@ def _cropped(source: Path, bbox):
                      cutlineSRS=ds.GetProjection(), resampleAlg="near")
 
 
+LOSSLESS = ["COMPRESS=LZW", "PREDICTOR=2", "TILED=YES", "BIGTIFF=YES", "NUM_THREADS=ALL_CPUS"]
+# For sheets that were JPEG scans to begin with: a tenth the size.
+LOSSY = ["COMPRESS=JPEG", "JPEG_QUALITY=92", "PHOTOMETRIC=YCBCR", "TILED=YES", "BIGTIFF=YES",
+         "NUM_THREADS=ALL_CPUS"]
+
+
 def upsample_raster(source, out, model, *, bbox=None, window=None, block=256, overlap=16,
-                    limit=0, quiet=False) -> Path:
+                    limit=0, quiet=False, lossy=False) -> Path:
     """Write a 2x upsampled GeoTIFF of ``source``.
 
     Optionally cropped: ``bbox`` is a rectangle in the source CRS (resampled
@@ -148,7 +154,7 @@ def upsample_raster(source, out, model, *, bbox=None, window=None, block=256, ov
     to source pixel ``(x0 + u / 2, y0 + v / 2)``.
 
     ``model`` is a callable taking and returning (3, H, W) arrays, as returned by
-    :func:`load_model`.
+    :func:`load_model`. ``lossy`` writes the output JPEG-compressed.
     """
     source, out = Path(source), Path(out)
     if window is not None:
@@ -168,8 +174,7 @@ def upsample_raster(source, out, model, *, bbox=None, window=None, block=256, ov
     out.parent.mkdir(parents=True, exist_ok=True)
     dst = gdal.GetDriverByName("GTiff").Create(
         str(out), w * SCALE, h * SCALE, 3, gdal.GDT_Byte,
-        options=["COMPRESS=LZW", "PREDICTOR=2", "TILED=YES", "BIGTIFF=YES",
-                 "NUM_THREADS=ALL_CPUS"])
+        options=LOSSY if lossy else LOSSLESS)
     dst.SetGeoTransform(gt)
     dst.SetProjection(src.GetProjection())
 

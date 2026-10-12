@@ -88,6 +88,14 @@ def test_page_has_a_background_map_under_the_charts():
     assert "removeAll" not in PAGE
 
 
+def test_page_credits_whoever_the_tileset_says_to():
+    """A tileset of several publishers' charts names them in its metadata, and
+    most of their licences ask to be named. The credit is text, not markup."""
+    assert "meta.attribution" in PAGE
+    assert "new Cesium.Credit(creditOf(tileset), false)" in PAGE
+    assert "element.textContent = text" in PAGE
+
+
 def test_page_uses_the_unsnapped_extent_and_handles_the_antimeridian():
     # The same two rules as the tester; see CLAUDE.md for the failures they fix.
     assert "meta.data_bounds || meta.bounds" in PAGE

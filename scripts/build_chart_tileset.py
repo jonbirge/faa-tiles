@@ -27,14 +27,21 @@ paints in reverse, putting the earliest name on top; each series sets its own
 default (on for the IFR series), and ``--no-reverse-order`` overrides it. Either way
 it is a placeholder for a smarter rule, not a considered choice.
 
-A **composite** series (``sectionals-tac``) paints several series into one
-tileset. Its members keep their own downloads, stages and reviewed manifests,
+A **composite** series (``sectionals-tac``, ``worldwide-vfr``) paints several
+series into one tileset. Its members keep their own downloads, stages and reviewed manifests,
 so nothing is fetched or prepared twice; the composite only says which order
 they paint in -- every sheet of one layer is below every sheet of the next --
 and which of them earn the detail level. That level is one zoom past
 ``--max-zoom``, holding only the tiles the finer sheets reach: it gives the
 terminal area charts their own resolution without quadrupling the mosaic that
 surrounds them. ``--no-detail`` builds a plain uniform pyramid instead.
+
+``worldwide-vfr`` is a **stepped** composite, which takes that one step further:
+its layers run from charts at 1:1,000,000 to charts at 1:250,000, so each is
+tiled only as deep as its own ``max_zoom`` and every level past the shallowest
+holds just the tiles a layer that earns it reaches. Its layers come from many
+publishers on different terms, recorded per layer in ``metadata.json``;
+``--redistributable-only`` leaves out the ones that may not be republished.
 
 Tiles are lossy WebP q90 unless the series sets ``lossless`` (both IFR series do);
 ``--[no-]lossless`` overrides it.
@@ -77,10 +84,20 @@ def check_stages(chart_series) -> None:
     The chain starts at whatever the series downloads: the GeoTIFFs, or the PDFs
     for a series that draws its own rasters from them.
     """
-    if chart_series.pdf_scale:
+    if chart_series.scan_suffix:
+        # The downloads are scans, and not every scan registers. The sheets are
+        # the ones that did: those with a map area beside their rasters.
+        if not chart_series.manifest.is_file():
+            raise SystemExit(f"no sheet of {chart_series.name} has been rectified; run "
+                             f"scripts/rectify_charts.py {chart_series.name} first")
+        areas = json.loads(chart_series.manifest.read_text(encoding="utf-8"))
+        names = sorted(n for n in areas if chart_series.wants_tif(n))
+        previous = {n: chart_series.directory / (Path(n).stem + chart_series.scan_suffix)
+                    for n in names}
+    elif chart_series.pdf_scale:
         # Nothing but PDFs is downloaded, so the sheet list comes from the
         # reviewed registration rather than from a directory of GeoTIFFs.
-        manifest = json.loads(chart_series.pdf_manifest.read_text(encoding="utf-8"))
+        manifest = chart_series.pdf_entries()
         names = sorted(n for n in manifest if chart_series.wants_tif(n))
         previous = {n: chart_series.pdf_directory / manifest[n]["pdf"] for n in names}
     else:
@@ -97,13 +114,18 @@ def check_stages(chart_series) -> None:
         previous = {n: after / n for n in names}
 
 
-def sources(chart_series, directory: Path, manifest: dict, detail: bool = False) -> list[MosaicSource]:
+def sources(chart_series, directory: Path, manifest: dict, detail: bool = False,
+            zoom: int | None = None) -> list[MosaicSource]:
     # The series' patterns and exclusions apply here too: they are not normally
     # downloaded, but an older download may have left unwanted sheets behind.
     charts = sorted(p for p in directory.glob("*.tif") if chart_series.wants_tif(p.name))
     if not charts:
         raise SystemExit(
             f"no GeoTIFFs in {directory}; run scripts/fetch_charts.py {chart_series.name} first")
+    if chart_series.whole_image:
+        # Nothing to mask: the publisher's raster is map from edge to edge, or
+        # carries its own alpha where it is not.
+        return [MosaicSource(p, detail=detail, zoom=zoom) for p in charts]
     missing = [p.name for p in charts if p.name not in manifest]
     if missing:
         raise SystemExit(
@@ -113,11 +135,73 @@ def sources(chart_series, directory: Path, manifest: dict, detail: bool = False)
     # Map areas are recorded against the downloaded GeoTIFFs, so their pixel
     # polygons scale with a series that tiles renders drawn at a multiple of it.
     return [MosaicSource(p, MapArea.from_dict(manifest[p.name], chart_series.pixel_scale),
-                         detail=detail)
+                         detail=detail, zoom=zoom)
             for p in charts]
 
 
-def layers(chart_series, args) -> list[MosaicSource]:
+def painted_members(chart_series, redistributable_only: bool = False, only_layers=None):
+    """The series a build paints, in paint order, as ``(kept, left out)``.
+
+    ``redistributable_only`` leaves out every member whose licence does not
+    allow publishing tiles derived from it, which is how a tileset meant for a
+    public site is built from the same downloads as the full one. (A member
+    some of whose *sheets* are under other terms is kept here, and loses those
+    sheets in :func:`layers`.)
+    ``only_layers`` names the layers to paint and drops the rest unremarked:
+    it is for a trial, or for building while a layer is still downloading.
+    """
+    members = chart_series.members
+    if only_layers:
+        unknown = sorted(set(only_layers) - {m.name for m in members})
+        if unknown:
+            raise SystemExit(f"{chart_series.name} has no layer named {', '.join(unknown)}; "
+                             f"its layers are {', '.join(m.name for m in members)}")
+        members = tuple(m for m in members if m.name in only_layers)
+    if not redistributable_only:
+        return members, ()
+    kept = tuple(m for m in members if m.licence.redistributable)
+    return kept, tuple(m for m in members if not m.licence.redistributable)
+
+
+def layer_metadata(chart_series, members, sheets_by_layer) -> dict:
+    """Who published each layer and on what terms, for metadata.json.
+
+    ``attribution`` is the credit line for the whole tileset: each distinct
+    attribution once, in paint order.
+    """
+    described, credits = [], []
+    for member in members:
+        # A series some of whose sheets are under other terms is described
+        # once for each: the series' own first, under its own name.
+        by_licence = {member.licence: []}
+        for sheet in sheets_by_layer.get(member.name, []):
+            by_licence.setdefault(member.licence_of(sheet), []).append(sheet)
+        flags = {licence: flag for flag, licence in member.flagged}
+        for licence, sheets in by_licence.items():
+            if not sheets:
+                continue
+            described.append({
+                "name": member.name + (f"-{flags[licence]}" if licence in flags else ""),
+                "title": member.title,
+                "publisher": member.publisher,
+                "licence": licence.name,
+                "licence_url": licence.url,
+                "redistributable": licence.redistributable,
+                "attribution": licence.attribution,
+                "historical": member.historical,
+                "sheets": sheets,
+            })
+            if licence.attribution and licence.attribution not in credits:
+                credits.append(licence.attribution)
+    return {
+        "layers": described,
+        "attribution": "; ".join(credits),
+        "redistributable": all(layer["redistributable"] for layer in described),
+    }
+
+
+def layers(chart_series, args, members=None, sheets_by_layer=None,
+           redistributable_only: bool = False) -> list[MosaicSource]:
     """Every sheet to paint, in paint order, across a series' layers.
 
     A plain series is one layer of its own sheets; a composite is its members in
@@ -125,27 +209,45 @@ def layers(chart_series, args) -> list[MosaicSource]:
     so a layer that is already downloaded and prepared is simply reused. Paint
     order runs within a layer first: all of one series' sheets sit below all of
     the next's, whatever their names.
+
+    ``sheets_by_layer``, if given, is filled with the sheet names each layer
+    contributes. ``redistributable_only`` leaves out the sheets that are under
+    terms of their own which do not allow republishing.
     """
     chosen: list[MosaicSource] = []
-    for member in chart_series.members:
-        manifest = json.loads(member.manifest.read_text(encoding="utf-8"))
+    for member in (chart_series.members if members is None else members):
+        manifest = ({} if member.whole_image
+                    else json.loads(member.manifest.read_text(encoding="utf-8")))
         if args.charts:
             directory = args.charts
         else:
             directory = member.build_directory
             check_stages(member)
+        # In a stepped composite each layer earns tiles as deep as its own
+        # max_zoom and no deeper.
         sheets = sources(member, directory, manifest,
-                         detail=member.name in chart_series.detail_layers)
+                         detail=member.name in chart_series.detail_layers,
+                         zoom=member.max_zoom if chart_series.stepped else None)
         if args.only:
             sheets = [s for s in sheets if any(Path(s.path).name.startswith(n) for n in args.only)]
+        if redistributable_only and member.flagged:
+            closed = [s for s in sheets
+                      if not member.licence_of(Path(s.path).name).redistributable]
+            if closed:
+                print(f"layer {member.name}: leaving out {len(closed)} sheet(s) under "
+                      f"{member.licence_of(Path(closed[0].path).name).name}", flush=True)
+                sheets = [s for s in sheets if s not in closed]
         reverse = member.reverse_order if args.reverse_order is None else args.reverse_order
         if reverse:
             sheets.reverse()
         if sheets:
             print(f"layer {member.name}: {len(sheets)} sheet{'s' if len(sheets) != 1 else ''} in "
                   f"{'reverse ' if reverse else ''}file-name order, "
-                  f"{Path(sheets[-1].path).name} on top", flush=True)
+                  f"{Path(sheets[-1].path).name} on top"
+                  + (f", to z{member.max_zoom}" if chart_series.stepped else ""), flush=True)
         chosen.extend(sheets)
+        if sheets_by_layer is not None:
+            sheets_by_layer[member.name] = [Path(s.path).name for s in sheets]
     if not chosen:
         # sources() has already refused an empty directory, so the only way to
         # get here is a filter that matched nothing.
@@ -198,19 +300,44 @@ def main(argv=None) -> int:
     ap.add_argument("--reverse-order", action=argparse.BooleanOptionalAction, default=None,
                     help="paint sheets in reverse file-name order, so the earliest name is on "
                          "top where sheets overlap (default: the series' setting)")
+    ap.add_argument("--layers", nargs="+", metavar="LAYER",
+                    help="paint only these layers of a composite, in the composite's own "
+                         "order: for a trial, or while another layer is still downloading")
+    ap.add_argument("--redistributable-only", action="store_true",
+                    help="leave out every layer whose licence does not allow publishing "
+                         "tiles derived from it (chart_series.py records which), for a "
+                         "tileset that is going on a public site. Writes to "
+                         "tileset-SERIES-public unless --out says otherwise.")
     ap.add_argument("--resume", action="store_true", help="keep tiles already written")
     ap.add_argument("--overwrite", action="store_true", help="replace an existing tileset")
     args = ap.parse_args(argv)
     chart_series = series(args.series)
-    out = args.out or chart_series.tileset
+    out = args.out or (chart_series.public_tileset if args.redistributable_only
+                       else chart_series.tileset)
 
     if args.charts and chart_series.is_composite:
         raise SystemExit(f"--charts cannot stand in for {chart_series.name}'s layers "
                          f"({', '.join(chart_series.layers)}), which read separate directories")
-    chosen = layers(chart_series, args)
+    members, left_out = painted_members(chart_series, args.redistributable_only, args.layers)
+    if left_out:
+        print("redistributable only; leaving out: "
+              + ", ".join(f"{m.name} ({m.licence.name})" for m in left_out), flush=True)
+    if not members:
+        raise SystemExit(f"no layer of {chart_series.name} is redistributable")
+    sheets_by_layer: dict[str, list[str]] = {}
+    chosen = layers(chart_series, args, members, sheets_by_layer, args.redistributable_only)
 
     max_zoom = args.max_zoom if args.max_zoom is not None else chart_series.max_zoom
     detail_zoom = args.detail_zoom if args.detail_zoom is not None else chart_series.detail_zoom
+    if chart_series.stepped:
+        if args.warp != "cpu":
+            raise SystemExit(f"{chart_series.name} is a stepped mosaic, which only the cpu "
+                             "backend builds")
+        if args.min_zoom > min(s.zoom for s in chosen):
+            raise SystemExit("--min-zoom is past the shallowest layer's zoom")
+        detail_zoom = 0
+        print("stepped: each layer is tiled to its own zoom, and levels past the "
+              f"shallowest (z{min(min(s.zoom, max_zoom) for s in chosen)}) are sparse", flush=True)
     if not args.detail or not any(s.detail for s in chosen):
         detail_zoom = 0
     elif detail_zoom and detail_zoom <= max_zoom:
@@ -234,6 +361,7 @@ def main(argv=None) -> int:
         resampling=args.resampling, tolerance=args.warp_tolerance,
         workers=args.workers, resume=args.resume, overwrite=args.overwrite,
         title=chart_series.title,
+        extra_metadata=layer_metadata(chart_series, members, sheets_by_layer),
     )
     print(result.summary())
     print(f"preview it with:  .venv/Scripts/cesiumtiles-serve {out.parent}")

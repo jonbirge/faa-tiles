@@ -187,6 +187,17 @@ window.viewer = viewer;
 
 let layer = null;
 
+// A tileset built from several publishers' charts says whom to credit, in its
+// metadata; most of their licences ask for it. It goes with the chart's name
+// into Cesium's own data-attribution list, beside the background map's.
+function creditOf(tileset) {
+  const meta = tileset.meta;
+  const text = [meta.name || tileset.dir, meta.attribution].filter(Boolean).join(": ");
+  const element = document.createElement("span");
+  element.textContent = text;          // a credit is HTML; this is not
+  return element.innerHTML;
+}
+
 // Switching charts never moves the camera, so two can be compared in place.
 function show(tileset) {
   const meta = tileset.meta;
@@ -201,7 +212,7 @@ function show(tileset) {
     tileWidth: meta.tilesize || 256,
     tileHeight: meta.tilesize || 256,
     hasAlphaChannel: meta.format !== "jpeg",
-    credit: new Cesium.Credit(meta.name || tileset.dir, false),
+    credit: new Cesium.Credit(creditOf(tileset), false),
   });
   if (layer) viewer.imageryLayers.remove(layer, true);
   layer = new Cesium.ImageryLayer(provider);

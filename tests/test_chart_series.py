@@ -1,4 +1,4 @@
-"""How each FAA chart series is described, and where its stages read and write.
+"""How each chart series is described, and where its stages read and write.
 
 ``scripts/`` is not a package, so it goes on the path the way the scripts do.
 """
@@ -215,11 +215,37 @@ def test_every_series_has_its_own_directories():
 
 
 def test_every_series_names_a_detector_or_is_a_composite():
-    """A composite detects nothing itself; every layer it paints must."""
+    """A composite detects nothing itself; every layer it paints must, unless
+    its publisher's raster is already map from edge to edge."""
     for s in SERIES.values():
-        assert bool(s.detector) is not s.is_composite
         if s.is_composite:
-            assert all(m.detector for m in s.members)
+            assert not s.detector and not s.whole_image and not s.scan_suffix
+        else:
+            assert _ways_to_a_map_area(s) == 1, s.name
+
+
+@pytest.mark.parametrize("name", ["ro-icao", "tw-vfr", "ee-icao", "lv-icao"])
+def test_charts_that_carry_their_own_georeferencing_are_drawn_from_it(name):
+    s = series(name)
+    assert s.geopdf and s.fetcher == "links"
+    # 300 dpi twice over: 21 m a pixel at 1:500,000, which z12 minifies.
+    assert (s.pdf_dpi, s.pdf_scale, s.pixel_scale, s.max_zoom) == (300, 2, 2, 12)
+    # Nothing to register them against and nothing to upsample: they are
+    # rendered, and the build tiles the renders.
+    assert [script for script, _ in s.stages] == ["render_pdfs.py"]
+    assert s.build_directory == s.render_directory
+    assert not s.upsample_scale and not s.scan_suffix
+
+
+def test_the_key_map_on_a_page_is_not_a_sheet():
+    assert "world" not in series("tw-vfr").pdf_viewports
+    assert series("ro-icao").pdf_viewports == ("Layers",)
+
+
+def _ways_to_a_map_area(s) -> int:
+    """A series' map areas are detected in its sheets, or are the whole of
+    them, or -- for scans -- are their graticules'. One of the three."""
+    return sum((bool(s.detector), s.whole_image, bool(s.scan_suffix)))
 
 
 def test_terminal_area_charts_keep_only_the_chart_itself():
@@ -264,3 +290,140 @@ def test_only_the_finer_layer_earns_the_detail_level():
 def test_a_plain_series_has_no_detail_level():
     for name in ("sectionals", "ifr-low", "ifr-high", "tac"):
         assert series(name).detail_zoom == 0 and not series(name).detail_layers
+
+
+# -- series from other publishers, and the world-wide composite ------------
+
+WORLD = "worldwide-vfr"
+
+
+def test_the_worldwide_composite_is_stepped_and_paints_the_faa_last():
+    world = series(WORLD)
+    assert world.is_composite and world.stepped
+    names = [m.name for m in world.members]
+    # The FAA's own charts are what the rest is laid around, so they are on top.
+    assert names[-2:] == ["sectionals", "tac"]
+    # A community chart sits under an official one of the same country.
+    assert names.index("ofm") < names.index("ch-icao")
+    assert names.index("ofm") < names.index("dk-icao")
+    # Coarse under fine.
+    assert names.index("dk-icao") < names.index("dk-250")
+    # The decades-old scans are underneath everything current.
+    assert names[:2] == ["onc", "tpc"]
+    assert world.max_zoom == max(m.max_zoom for m in world.members)
+
+
+def test_a_composite_of_a_composite_is_taken_apart_into_its_sheets_series():
+    import dataclasses
+    import chart_series
+    nested = dataclasses.replace(series(WORLD), name="nested",
+                                 layers=("faa-caribbean", "sectionals-tac"))
+    chart_series.SERIES["nested"] = nested
+    try:
+        assert [m.name for m in nested.members] == ["faa-caribbean", "sectionals", "tac"]
+    finally:
+        del chart_series.SERIES["nested"]
+
+
+@pytest.mark.parametrize("name", [m.name for m in series(WORLD).members])
+def test_every_layer_says_who_published_it_and_on_what_terms(name):
+    s = series(name)
+    assert s.publisher and s.licence.name and s.licence.url
+    # Attribution is what a viewer shows; a layer without one cannot be credited.
+    assert s.licence.attribution
+    # A licence that is not plainly open says why, for whoever reviews it.
+    if not s.licence.redistributable:
+        assert s.licence.note
+
+
+def test_only_terms_that_were_read_and_allow_it_are_redistributable():
+    allowed = {m.name for m in series(WORLD).members if m.licence.redistributable}
+    assert allowed == {"onc", "tpc", "faa-caribbean", "ofm", "tw-vfr", "ch-icao", "sectionals",
+                       "tac"}
+
+
+@pytest.mark.parametrize("name", [m.name for m in series(WORLD).members])
+def test_a_layer_has_one_way_to_its_map_areas(name):
+    assert _ways_to_a_map_area(series(name)) == 1
+
+
+@pytest.mark.parametrize("name", ["ofm", "ch-icao", "dk-icao", "dk-250", "es-vfr500", "br-wac",
+                                  "onc", "tpc", "ro-icao", "tw-vfr", "ee-icao", "lv-icao"])
+def test_other_publishers_series_name_a_fetcher_and_what_it_needs(name):
+    s = series(name)
+    assert s.fetcher in ("links", "urls", "ofm")
+    if s.fetcher == "links":
+        assert s.index_url and "(?P<sheet>" in s.link_pattern
+    if s.fetcher == "urls":
+        assert s.urls and all(s.wants_tif(u.rsplit("/", 1)[-1]) for u in s.urls)
+    if s.fetcher == "ofm":
+        assert s.regions and all(s.wants_tif(f"{r}.tif") for r in s.regions)
+
+
+def test_the_faa_caribbean_charts_are_a_sibling_of_the_sectionals():
+    s = series("faa-caribbean")
+    assert s.fetcher == "faa" and s.files_path == "Caribbean/"
+    assert s.wants_zip("Caribbean_1_VFR.zip") and not s.wants_zip("Caribbean.zip")
+    assert s.wants_tif("Caribbean 2 VFR Chart.tif")
+
+
+@pytest.mark.parametrize("name, zoom", [
+    ("faa-caribbean", 11), ("br-wac", 11), ("ofm", 12), ("ch-icao", 12),
+    ("dk-icao", 12), ("es-vfr500", 12), ("dk-250", 13), ("onc", 10), ("tpc", 11),
+    ("ro-icao", 12), ("tw-vfr", 12), ("ee-icao", 12), ("lv-icao", 12),
+])
+def test_other_publishers_max_zoom(name, zoom):
+    """Each matches where its prepared sheets stop holding detail: 1:1,000,000
+    sheets upsampled reach z11.8, 1:500,000 ones z12.4, 1:250,000 ones z13 as
+    downloaded, and open flightmaps' tiles are z12 exactly. The scans are
+    coarser than their scale: about 160 dpi, a level short of a 300 dpi sheet."""
+    assert series(name).max_zoom == zoom
+
+
+def test_a_public_build_never_lands_on_the_full_tileset():
+    world = series(WORLD)
+    assert world.public_tileset != world.tileset
+    assert world.public_tileset.name == "tileset-worldwide-vfr-public"
+
+
+@pytest.mark.parametrize("name", ["onc", "tpc"])
+def test_scanned_series_are_registered_before_anything_else(name):
+    s = series(name)
+    assert s.historical and s.scan_suffix == ".jpg"
+    # Scan -> rectified -> upsampled, and the build tiles the last.
+    assert [script for script, _ in s.stages] == ["rectify_charts.py", "upsample_charts.py"]
+    assert s.input_directory("rectify_charts.py") == s.directory
+    assert s.input_directory("upsample_charts.py") == s.rectified_directory
+    # What is reviewed and committed is the sheet index; the map areas are
+    # measured on the rectified rasters and live beside them.
+    assert s.sheet_index.parent.name == "scripts" and s.sheet_index.name == f"{name}_sheets.json"
+    assert s.manifest == s.rectified_directory / "areas.json"
+    # Hundreds of sheets that were JPEGs to begin with.
+    assert s.lossy_intermediates
+
+
+@pytest.mark.parametrize("name, wanted", [
+    ("https://maps.lib.utexas.edu/maps/tpc/txu-pclmaps-oclc-22834566_e-2a.jpg", "e-2a"),
+    ("http://maps.lib.utexas.edu/maps/tpc/txu-pclmaps-oclc-22834566_f-16-d.jpg", "f-16-d"),
+    ("http://maps.lib.utexas.edu/maps/tpc/txu-pclmaps-oclc-22834566_g-18r.jpg", "g-18r"),
+    # A second copy of a sheet, filed under a regional collection.
+    ("http://maps.lib.utexas.edu/maps/middle_east_and_asia/txu-oclc-8322829-h_7b.jpg", None),
+    ("http://maps.lib.utexas.edu/maps/onc/txu-pclmaps-oclc-8322829_e_2.jpg", None),
+])
+def test_tpc_link_pattern(name, wanted):
+    import re
+    match = re.fullmatch(series("tpc").link_pattern, name, re.IGNORECASE)
+    assert (match.group("sheet") if match else None) == wanted
+    if wanted:
+        assert series("tpc").wants_tif(f"{wanted}.tif")
+
+
+def test_a_sheet_index_is_committed_for_each_scanned_series():
+    import json
+    for name in ("onc", "tpc"):
+        index = json.loads(series(name).sheet_index.read_text(encoding="utf-8"))
+        assert index["interval"] in (0.5, 1.0) and index["pixel_size"] > 0
+        for stem, entry in index["sheets"].items():
+            assert series(name).wants_tif(f"{stem}.tif"), stem
+            south, north = entry["band"]
+            assert north - south == 8 and -64 <= south <= 80

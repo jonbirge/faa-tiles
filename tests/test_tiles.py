@@ -551,3 +551,27 @@ def test_lossless_webp_settings_round_trip_exactly(tmp_path):
     visible = rgba[:, :, 3] > 0
     assert np.array_equal(back[visible], rgba[visible])
     assert np.array_equal(back[:, :, 3], rgba[:, :, 3])
+
+
+def test_workers_are_started_without_a_thread_pool_each(monkeypatch):
+    """numpy sets up a buffer for every thread its linear algebra might use as
+    it is imported: 0.72 GB of commit charge a process on 28 threads, which is
+    most of what a pool of workers cost before it had done anything."""
+    import os
+    import subprocess
+    import sys
+
+    from cesiumtiles import core
+
+    monkeypatch.delenv(core.BLAS_THREADS, raising=False)
+    core.lean_workers()
+    assert os.environ[core.BLAS_THREADS] == "1"
+    # What a process started now is told, which is how a worker comes by it.
+    told = subprocess.run([sys.executable, "-c",
+                           f"import os; print(os.environ.get({core.BLAS_THREADS!r}))"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+    assert told == "1"
+    # Someone who has set it has their reasons.
+    monkeypatch.setenv(core.BLAS_THREADS, "4")
+    core.lean_workers()
+    assert os.environ[core.BLAS_THREADS] == "4"

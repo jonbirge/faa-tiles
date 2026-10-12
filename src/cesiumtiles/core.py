@@ -172,6 +172,26 @@ def _scan_tiles(tile_dir: Path, suffix: str):
 # to METHOD=4. Measured on 256 random z13 IFR tiles with 22 encoder threads:
 # METHOD=4 1,356 tiles/s at 2.29 KB, METHOD=2 2,715 tiles/s at 2.24 KB -- twice
 # as fast and no larger, which matters because encoding is what bounds a build.
+BLAS_THREADS = "OPENBLAS_NUM_THREADS"
+
+
+def lean_workers() -> None:
+    """Have the processes started from here on import numpy without a thread
+    pool for its linear algebra. Call it before starting a pool of workers.
+
+    numpy's OpenBLAS sets up a buffer for every thread it might use as it is
+    imported, and on this project's 28-thread machine that is **0.72 GB of
+    commit charge in every process**, before it has been asked for anything:
+    measured, 0.74 GB after ``import numpy`` against 0.02 GB with one thread.
+    Sixteen render workers is 11.5 GB of it. None of the workers here does
+    linear algebra worth a second thread -- they composite, filter and fit the
+    odd polynomial -- so nothing is lost. The process calling this has
+    imported numpy already and is not affected, and a setting that is already
+    in the environment is left as it is.
+    """
+    os.environ.setdefault(BLAS_THREADS, "1")
+
+
 LOSSLESS_WEBP = ["LOSSLESS=TRUE", "METHOD=2"]
 
 

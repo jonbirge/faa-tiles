@@ -83,20 +83,27 @@ def main(argv=None) -> int:
         # and resampling raw palette indices would blend them into nonsense.
         rgb = gdal.Open(str(source))
         expand = rgb.RasterCount == 1 and rgb.GetRasterBand(1).GetRasterColorTable() is not None
+        # A fourth band is alpha or a spare; the model takes three. What is map
+        # and what is not comes from the reviewed manifest, not from alpha.
+        extra = rgb.RasterCount > 3
         del rgb
         read_from = source
         vrt = out_dir / (name + ".rgb.vrt")
         if expand:
             gdal.Translate(str(vrt), str(source), format="VRT", rgbExpand="rgb")
             read_from = vrt
+        elif extra:
+            gdal.Translate(str(vrt), str(source), format="VRT", bandList=[1, 2, 3])
+            read_from = vrt
 
         part = out_dir / (name + ".part.tif")
-        upsample_raster(read_from, part, model, quiet=True)
+        upsample_raster(read_from, part, model, quiet=True,
+                        lossy=chart_series.lossy_intermediates)
         part.replace(target)
         vrt.unlink(missing_ok=True)
         elapsed = time.monotonic() - started
         print(f"  [{i}/{len(todo)}] {name}: {(time.monotonic() - t0) / 60:.1f} min"
-              f"{' (palette expanded)' if expand else ''}"
+              f"{' (palette expanded)' if expand else ' (first three bands)' if extra else ''}"
               f", {elapsed / 60:.0f} min so far, ~{elapsed / i * (len(todo) - i) / 60:.0f} min left",
               flush=True)
     print(f"upsampled in {(time.monotonic() - started) / 60:.1f} min")
