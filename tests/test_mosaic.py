@@ -577,3 +577,14 @@ def test_extra_metadata_is_added_and_cannot_replace_what_was_measured(tmp_path):
         build_mosaic([MosaicSource(red)], tmp_path / "never", max_zoom=7, workers=1, quiet=True,
                      extra_metadata={"tiles": 0})
     assert not (tmp_path / "never").exists()
+
+
+def test_a_sheet_in_degrees_is_as_fine_as_its_pixels_are_on_the_ground(tmp_path):
+    """Not as fine as its pixel size would be in metres: one such sheet had a
+    whole tileset report its sources as reaching z30."""
+    from cesiumtiles.mosaic import MosaicSource, prepare_sources
+
+    # 256 px across one degree at 45 north: about 435 m of latitude a pixel.
+    sheet = _solid(tmp_path / "degrees.tif", (10.0, 44.5, 11.0, 45.5), (200, 0, 0))
+    (prepared,) = prepare_sources([MosaicSource(sheet)])
+    assert 7 <= prepared.native_zoom <= 9

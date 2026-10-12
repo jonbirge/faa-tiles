@@ -298,6 +298,9 @@ class MapArea:
         )
 
 
+METRES_PER_DEGREE = 111_320.0
+
+
 @dataclass(frozen=True)
 class MosaicSource:
     path: Path
@@ -435,6 +438,15 @@ def _prepare(source: MosaicSource) -> PreparedSource | None:
     # The finest Mercator resolution a source needs is where it is nearest the
     # equator: a ground metre spans 1/cos(latitude) Mercator metres.
     ground = math.hypot(gt[1], gt[4])
+    if src_srs.IsGeographic():
+        # A pixel in degrees, which is not a size on the ground until it is
+        # put somewhere. Taken as metres it is a hundred-thousandth of one,
+        # and a tileset with one such sheet in it reported its sources as
+        # reaching z30.
+        (lon0, lat0), (lon1, lat1) = pixels_to_lonlat([(width / 2, height / 2),
+                                                       (width / 2 + 1, height / 2 + 1)])
+        ground = math.hypot((lon1 - lon0) * math.cos(math.radians(lat0)),
+                            lat1 - lat0) * METRES_PER_DEGREE / math.sqrt(2)
     nearest_equator = min(abs(y_to_lat(min_y)), abs(y_to_lat(max_y))) if min_y * max_y > 0 else 0.0
     native = WEB_MERCATOR.zoom_for_resolution(ground / math.cos(math.radians(nearest_equator)))
 
