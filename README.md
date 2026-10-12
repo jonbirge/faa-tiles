@@ -41,6 +41,7 @@ come from their own package indexes — checks the imports load, makes
 .venv/Scripts/python scripts/build_ifr_low.py          # IFR enroute low           z13, lossless
 .venv/Scripts/python scripts/build_ifr_high.py         # IFR enroute high          z12, lossless
 .venv/Scripts/python scripts/build_wall_planning.py    # VFR wall planning chart   z11
+.venv/Scripts/python scripts/build_worldwide_vfr.py --workers 6   # every free VFR chart   z10 to z13, stepped
 .venv/Scripts/cesiumtiles-serve .                      # http://127.0.0.1:8000/
 ```
 
@@ -56,6 +57,7 @@ an RTX 4070 SUPER, writing to a local SSD:
 | sectionals + TACs | + 678 MB | + ~12 GB upsampled | 12 min (GPU) | 26 min |
 | IFR low | 130 MB of PDFs | 5.2 GB rendered + healed | ~100 min | 31 min |
 | IFR high | 61 MB of PDFs | 1.9 GB rendered | 6 min | 14 min |
+| world-wide VFR | + ~22 GB of scans and charts | + ~50 GB rectified and upsampled | ~4 h, and the labels to read | 185 min |
 | wall planning | manual drop-in | ~2 GB | 1 min (GPU) | 3 min |
 
 Without an NVIDIA GPU the upsampling stages run on the CPU at about 1/35 the
@@ -370,6 +372,12 @@ around them, and the US military's old world series underneath as a gap filler.
 
 Bottom layer first. What was looked for, country by country, and what was not
 found is in [docs/worldwide-vfr-sources.md](docs/worldwide-vfr-sources.md).
+
+Built on 2026-10-11 from 1,082 sheets: **2,237,531 tiles, 21.8 GB**, in 185
+minutes on six workers. z10 is the last full level (431,677 tiles); z11 has
+990,108, z12 604,474 and z13 63,685. The world-wide rows above are on top of
+the sectionals' and TACs' own: this build reads their prepared sheets and does
+not redo them.
 
 - **Free to download is not free to republish.** Each layer records its
   publisher's terms (`licence` in `chart_series.py`), and they differ: open
@@ -795,7 +803,7 @@ Model weights for the upsampler download on first use, into `source/models/`.
 ## Tests
 
 ```bash
-.venv/Scripts/python -m pytest      # 261 tests, ~40 s
+.venv/Scripts/python -m pytest      # 445 tests
 ```
 
 Everything runs against small synthetic rasters built in a temp directory; none
@@ -809,6 +817,19 @@ them to agree.
 
 ## Still open
 
+- **The scanned world series have gaps at their seams.** About one TPC sheet in
+  six stops half a degree short on its east side and a few ONC sheets a degree
+  short, where the last line of the graticule beside the edge of the scan was
+  not traced; the layer underneath shows through. Fifteen TPC sheets are not
+  built at all: fourteen whose labels could not be read in three passes (most
+  are of the US, under the FAA's own charts) and J-19C, printed at a slant. A
+  cell-and-a-bit past the last traced line could be recovered by carrying the
+  graticule on to the edge of the scan.
+- **Sources that were found and not built.** Slovakia publishes a tile cache;
+  Austria, the Czech Republic, the Netherlands, Mexico and others publish PDFs
+  with no georeferencing, which the graticule method would register; Iceland,
+  the UAE, Bulgaria, Lithuania, Georgia and Hungary want a registration or an
+  agreement first. See `docs/worldwide-vfr-sources.md`.
 - **Overlap order is a placeholder.** Sheets are painted in file-name order
   (reversed for IFR), which is arbitrary, and it shows: the FAA's Phoenix
   GeoTIFF has a blank white row through its map near 35.6 N, and Phoenix sorts
@@ -885,6 +906,7 @@ scripts/
     build_ifr_low.py
     build_ifr_high.py
     build_wall_planning.py
+    build_worldwide_vfr.py
     build_vfr_tileset.py    the single-chart pipeline the last one drives
     pipeline.py             what the wrappers share: run stages in order
     chart_series.py         each FAA chart series, described once
@@ -897,6 +919,12 @@ scripts/
     upsample_charts.py      2x super-resolution over a series
     upsample.py             the upsampler itself, block by block
     heal_frames.py          paint over frame rules so sheets join
+    fetchers.py             downloads from publishers that are not the FAA
+    fetch_ofm.py            open flightmaps' tiles, read out of their zips
+    pdf_georef.py           the registration a georeferenced PDF carries
+    rectify_charts.py       register scanned sheets by their graticules, and warp them
+    graticule.py            find and label a scan's graticule
+    *_sheets.json           reviewed, committed readings of the scanned sheets
     *_areas.json            reviewed, committed map areas
 source/                     every download and intermediate (gitignored)
 src/geotransfer/
@@ -917,7 +945,7 @@ www/
     update_tilesets.sh      writes tilesets.json beside it
 .githooks/
     post-merge              after a pull, delete local branches of merged PRs
-tests/                      261 tests, all on synthetic rasters
+tests/                      445 tests, all on synthetic rasters
 CLAUDE.md                   orientation notes, gotchas and measurements
 ```
 

@@ -104,7 +104,7 @@ stay green and current, and keeping it that way is part of every change:
 - Keep the test count and runtime quoted below accurate when they change.
 
 ```bash
-.venv/Scripts/python -m pytest                        # 261 tests, ~40s
+.venv/Scripts/python -m pytest                        # 445 tests (261 took ~40s; not re-timed)
 .venv/Scripts/cesiumtiles SOURCE OUT [--bbox W S E N] # build a tileset
 .venv/Scripts/cesiumtiles-serve tileset               # preview on :8000
 ```
@@ -706,6 +706,14 @@ Each of these was learnt from a wrong result:
   thread buffers, 28 threads). `core.lean_workers()` sets
   `OPENBLAS_NUM_THREADS=1` before a pool starts; `build_mosaic` and
   `rectify_charts.py` call it. A survey worker peaks at 1.1 GB, from 2.7.
+- **Still short**: about one TPC sheet in six stops half a degree short on
+  its east side and a few ONC sheets a degree, where the last graticule line
+  beside the scan's edge was not traced (TPC D-4C's 66 E, 300 px from the edge,
+  plain to see and not found). North and south limits match the catalogue on
+  98% of sheets. Fifteen TPC sheets are not built: fourteen unread after three
+  passes, and J-19C, a Hawaii sheet printed at a slant.
+- **`du` over a tileset takes many minutes** (two million files) and competes
+  with a running build for the disk. Read sizes off `metadata.json`.
 - **`cmd | tail` hides a failing test from `&&`.** A commit went in with a test
   failing because the chain saw `tail`'s exit code. Redirect pytest to a file
   and test `$?`.
@@ -970,3 +978,11 @@ were checked against the real tilesets.
   `tileset-sectionals-tac/` joined them on 2026-09-20: **5.93 GB, 568,218 tiles**,
   z0-z12 full plus a sparse z13 of 58,872 tiles over the 34 TACs (against 380,238
   at z12), tiled in 26.5 min. `tileset-ifr-high/` is the fifth product.
+  `tileset-worldwide-vfr/` is the sixth, built 2026-10-11: **21.8 GB, 2,237,531
+  tiles** from 1,082 sheets in 184.6 min on six workers (z10 full at 431,677;
+  z11 990,108; z12 604,474; z13 63,685). `tileset-worldwide-vfr-public/` is the
+  same build held to what may be republished, and is the one for the site.
+  **Six workers, and nothing else running**: this box sits at ~23 GB of commit
+  with nothing of ours loaded, the build went to within 2.7 GB of the limit,
+  and Claude Code stops background jobs when memory runs critically short --
+  it stopped the TPC upsample three times before the page file was raised.
